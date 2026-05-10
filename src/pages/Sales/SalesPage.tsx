@@ -277,9 +277,9 @@ export default function SalesPage() {
                         </button>
                       </div>
                     </div>
-                    {restricted && (
-                      <div className={`text-xs px-1 ${remaining! <= 0 ? 'text-red-600' : 'text-yellow-600'}`}>
-                        ⚠ Número restringido — Disponible: C$ {Math.max(0, remaining!)}
+                    {restricted && remaining !== null && (
+                      <div className={`text-xs px-1 ${remaining <= 0 ? 'text-red-600' : 'text-yellow-600'}`}>
+                        ⚠ Número restringido — Disponible: C$ {Math.max(0, remaining)}
                       </div>
                     )}
                   </div>

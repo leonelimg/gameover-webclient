@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { AxiosError } from 'axios';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -18,16 +19,22 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
-    // Simulate async auth
-    await new Promise((r) => setTimeout(r, 400));
-
-    const success = login(username, password);
-    if (success) {
-      navigate('/dashboard');
-    } else {
-      setError('Usuario o contraseña incorrectos.');
+    try {
+      const success = await login(username, password);
+      if (success) {
+        navigate('/dashboard');
+      } else {
+        setError('Usuario o contraseña incorrectos.');
+      }
+    } catch (err) {
+      if (err instanceof AxiosError && err.response?.data?.message) {
+        setError(err.response.data.message as string);
+      } else {
+        setError('Error de conexión. Verifica que el servidor esté activo.');
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -78,7 +85,7 @@ export default function LoginPage() {
           </form>
 
           <p className="text-center text-xs text-slate-400 mt-6">
-            Credenciales de demo: <strong>admin</strong> / <strong>admin123</strong>
+            Credenciales demo: <strong>admin</strong> / <strong>admin123</strong>
           </p>
         </div>
       </div>

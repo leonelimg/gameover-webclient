@@ -369,7 +369,7 @@ export default function DrawsPage() {
                   <span className="text-sm text-slate-500">Límite: C$ {rn.limit}</span>
                 </div>
                 <button
-                  onClick={() => removeRestrictedNumber(rnDraw!, rn.number)}
+                  onClick={() => rnDraw && removeRestrictedNumber(rnDraw, rn.number)}
                   className="text-red-500 hover:text-red-700"
                 >
                   <Trash2 size={14} />
