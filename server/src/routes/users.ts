@@ -5,7 +5,9 @@ import { prisma } from '../config/prisma.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { param } from '../middleware/params.js';
-import { UserRole, UserStatus } from '@prisma/client';
+
+const USER_ROLES = ['admin', 'asociado', 'vendedor'] as const;
+const USER_STATUSES = ['activo', 'bloqueado', 'archivado'] as const;
 
 const router = Router();
 router.use(authenticate);
@@ -15,7 +17,7 @@ const createUserSchema = z.object({
   username: z.string().min(3).max(30),
   email: z.string().email(),
   phone: z.string().optional(),
-  role: z.nativeEnum(UserRole),
+  role: z.enum(USER_ROLES),
   password: z.string().min(6),
   planId: z.string().optional(),
   parentId: z.string().optional(),
@@ -25,7 +27,7 @@ const updateUserSchema = z.object({
   fullName: z.string().min(2).optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
-  role: z.nativeEnum(UserRole).optional(),
+  role: z.enum(USER_ROLES).optional(),
   planId: z.string().nullable().optional(),
   parentId: z.string().nullable().optional(),
 });
@@ -35,7 +37,7 @@ const changePasswordSchema = z.object({
 });
 
 const changeStatusSchema = z.object({
-  status: z.nativeEnum(UserStatus),
+  status: z.enum(USER_STATUSES),
 });
 
 const safeSelect = {

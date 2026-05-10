@@ -4,10 +4,10 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
-import { db } from '@/utils/db';
-import { generateId, generateTicketCode, formatCurrency, formatDateTime, isDrawOpen } from '@/utils/helpers';
-import { Draw, Ticket, TicketLine } from '@/types';
+import { generateId, formatCurrency, formatDateTime, isDrawOpen } from '@/utils/helpers';
+import { Draw, Ticket } from '@/types';
 import { useAuth } from '@/context/AuthContext';
+import { drawsApi, ticketsApi, reportsApi, CreateTicketPayload, TopNumber } from '@/services/api';
 
 interface SaleLine {
   id: string;
@@ -16,36 +16,16 @@ interface SaleLine {
   isNicaEspecial: boolean;
 }
 
-function getTopNumbers(tickets: Ticket[], drawId: string) {
-  const map: Record<string, number> = {};
-  tickets
-    .filter((t) => t.drawId === drawId)
-    .forEach((t) => t.lines.forEach((l) => {
-      map[l.number] = (map[l.number] ?? 0) + l.amount;
-    }));
-  return Object.entries(map)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([number, total]) => ({ number, total }));
-}
-
-function getSoldForNumber(tickets: Ticket[], drawId: string, number: string) {
-  return tickets
-    .filter((t) => t.drawId === drawId)
-    .flatMap((t) => t.lines)
-    .filter((l) => l.number === number)
-    .reduce((sum, l) => sum + l.amount, 0);
-}
-
 export default function SalesPage() {
   const { user } = useAuth();
 
-  const [draws, setDraws] = useState<Draw[]>(() => db.getDraws());
-  const [tickets, setTickets] = useState<Ticket[]>(() => db.getTickets());
+  const [draws, setDraws] = useState<Draw[]>([]);
+  const [topNumbers, setTopNumbers] = useState<TopNumber[]>([]);
+  const [drawTickets, setDrawTickets] = useState<Ticket[]>([]);
 
   const openDraws = draws.filter((d) => isDrawOpen(d.openTime, d.closeTime));
 
-  const [selectedDrawId, setSelectedDrawId] = useState(openDraws[0]?.id ?? '');
+  const [selectedDrawId, setSelectedDrawId] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [lines, setLines] = useState<SaleLine[]>([
     { id: generateId(), number: '', amount: '', isNicaEspecial: false },
@@ -53,14 +33,30 @@ export default function SalesPage() {
   const [error, setError] = useState('');
   const [lastTicket, setLastTicket] = useState<Ticket | null>(null);
   const [printMode, setPrintMode] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    setDraws(db.getDraws());
-    setTickets(db.getTickets());
+    drawsApi.list().then((list) => {
+      setDraws(list);
+      const firstOpen = list.find((d) => isDrawOpen(d.openTime, d.closeTime));
+      if (firstOpen) setSelectedDrawId(firstOpen.id);
+    }).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (!selectedDrawId) {
+      setTopNumbers([]);
+      setDrawTickets([]);
+      return;
+    }
+    reportsApi.topNumbers(selectedDrawId, 10).then(setTopNumbers).catch(() => {});
+    ticketsApi.list({ drawId: selectedDrawId }).then(setDrawTickets).catch(() => {});
+  }, [selectedDrawId]);
+
   const selectedDraw = draws.find((d) => d.id === selectedDrawId);
-  const topNumbers = selectedDraw ? getTopNumbers(tickets, selectedDraw.id) : [];
+
+  const getSoldForNumber = (number: string) =>
+    drawTickets.flatMap((t) => t.lines).filter((l) => l.number === number).reduce((sum, l) => sum + l.amount, 0);
 
   const total = lines.reduce((sum, l) => sum + (parseFloat(l.amount) || 0), 0);
 
@@ -77,7 +73,7 @@ export default function SalesPage() {
     setLines(lines.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   };
 
-  const handleSell = () => {
+  const handleSell = async () => {
     setError('');
 
     if (!selectedDraw) {
@@ -92,55 +88,37 @@ export default function SalesPage() {
       setError('El nombre del cliente es requerido.');
       return;
     }
-
     for (const line of lines) {
       if (!line.number.trim() || !line.amount || parseFloat(line.amount) <= 0) {
         setError('Todos los números y montos deben ser válidos.');
         return;
       }
-
-      // Check restricted number limits
-      const restricted = selectedDraw.restrictedNumbers.find(
-        (rn) => rn.number === line.number.trim()
-      );
-      if (restricted) {
-        const alreadySold = getSoldForNumber(tickets, selectedDraw.id, line.number.trim());
-        const thisAmount = parseFloat(line.amount);
-        if (alreadySold + thisAmount > restricted.limit) {
-          setError(
-            `El número ${line.number} ha alcanzado su límite de venta (C$ ${restricted.limit}). Vendido: C$ ${alreadySold}.`
-          );
-          return;
-        }
-      }
     }
 
-    // Build ticket
-    const ticketLines: TicketLine[] = lines.map((l) => ({
-      number: l.number.trim(),
-      amount: parseFloat(l.amount),
-      isNicaEspecial: l.isNicaEspecial,
-    }));
-
-    const ticket: Ticket = {
-      id: generateId(),
-      code: generateTicketCode(),
+    const payload: CreateTicketPayload = {
       drawId: selectedDraw.id,
-      sellerId: user!.id,
-      associateId: user!.parentId ?? user!.id,
       customerName: customerName.trim(),
-      lines: ticketLines,
-      total: ticketLines.reduce((s, l) => s + l.amount, 0),
-      createdAt: new Date().toISOString(),
+      lines: lines.map((l) => ({
+        number: l.number.trim(),
+        amount: parseFloat(l.amount),
+        isNicaEspecial: l.isNicaEspecial,
+      })),
     };
 
-    const nextTickets = [...tickets, ticket];
-    setTickets(nextTickets);
-    db.saveTickets(nextTickets);
-
-    setLastTicket(ticket);
-    setCustomerName('');
-    setLines([{ id: generateId(), number: '', amount: '', isNicaEspecial: false }]);
+    setSubmitting(true);
+    try {
+      const ticket = await ticketsApi.create(payload);
+      setLastTicket(ticket);
+      setCustomerName('');
+      setLines([{ id: generateId(), number: '', amount: '', isNicaEspecial: false }]);
+      reportsApi.topNumbers(selectedDrawId, 10).then(setTopNumbers).catch(() => {});
+      ticketsApi.list({ drawId: selectedDrawId }).then(setDrawTickets).catch(() => {});
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setError(msg ?? 'Error al registrar la venta. Intenta de nuevo.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handlePrint = () => {
@@ -227,9 +205,7 @@ export default function SalesPage() {
                 const restricted = selectedDraw?.restrictedNumbers.find(
                   (rn) => rn.number === line.number.trim()
                 );
-                const sold = restricted && selectedDraw
-                  ? getSoldForNumber(tickets, selectedDraw.id, line.number.trim())
-                  : 0;
+                const sold = restricted ? getSoldForNumber(line.number.trim()) : 0;
                 const remaining = restricted ? restricted.limit - sold : null;
 
                 return (
@@ -304,7 +280,7 @@ export default function SalesPage() {
               className="flex-1"
               size="lg"
               onClick={handleSell}
-              disabled={!selectedDrawId}
+              disabled={!selectedDrawId || submitting}
             >
               <ShoppingCart size={18} />
               Registrar Venta
@@ -346,18 +322,12 @@ export default function SalesPage() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-slate-500">Tickets vendidos</span>
-                    <span className="font-medium">
-                      {tickets.filter((t) => t.drawId === selectedDraw.id).length}
-                    </span>
+                    <span className="font-medium">{drawTickets.length}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Total recaudado</span>
                     <span className="font-bold text-green-700">
-                      {formatCurrency(
-                        tickets
-                          .filter((t) => t.drawId === selectedDraw.id)
-                          .reduce((s, t) => s + t.total, 0)
-                      )}
+                      {formatCurrency(drawTickets.reduce((s, t) => s + t.total, 0))}
                     </span>
                   </div>
                 </div>

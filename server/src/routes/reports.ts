@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { prisma } from '../config/prisma.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 
+type Stats = { totalSales: number; ticketCount: number };
+
 const router = Router();
 router.use(authenticate, authorize('admin', 'asociado'));
 
@@ -47,7 +49,7 @@ router.get('/top-numbers', async (req, res) => {
     where: ticketWhere,
     select: { id: true },
   });
-  const ticketIds = tickets.map((t) => t.id);
+  const ticketIds = tickets.map((t: { id: string }) => t.id);
 
   const grouped = await prisma.ticketLine.groupBy({
     by: ['number'],
@@ -57,7 +59,7 @@ router.get('/top-numbers', async (req, res) => {
     take: parseInt(limit, 10),
   });
 
-  const result = grouped.map((g) => ({
+  const result = grouped.map((g: { number: string; _sum: { amount: number | null } }) => ({
     number: g.number,
     total: g._sum.amount ?? 0,
   }));
@@ -78,19 +80,22 @@ router.get('/hierarchy', async (req, res) => {
     },
   });
 
-  // Fetch ticket aggregates per associate
+  // Aggregate direct sales by seller, then roll up through the user tree.
   const ticketWhere: Record<string, unknown> = {};
   if (drawId) ticketWhere['drawId'] = drawId;
 
   const aggregates = await prisma.ticket.groupBy({
-    by: ['associateId'],
+    by: ['sellerId'],
     where: ticketWhere,
     _sum: { total: true },
     _count: { id: true },
   });
 
-  const statsMap = new Map(
-    aggregates.map((a) => [a.associateId, { totalSales: a._sum.total ?? 0, ticketCount: a._count.id }])
+  const statsMap = new Map<string, Stats>(
+    aggregates.map((a: { sellerId: string; _sum: { total: number | null }; _count: { id: number } }): [string, Stats] => [
+      a.sellerId,
+      { totalSales: a._sum.total ?? 0, ticketCount: a._count.id },
+    ])
   );
 
   // Build tree recursively
@@ -105,11 +110,11 @@ router.get('/hierarchy', async (req, res) => {
 
   function buildTree(parentId: string | null): TreeNode[] {
     return users
-      .filter((u) => (parentId === null ? !u.parentId : u.parentId === parentId))
-      .map((u) => {
+      .filter((u: NodeUser) => (parentId === null ? !u.parentId : u.parentId === parentId))
+      .map((u: NodeUser) => {
         const children = buildTree(u.id);
         const direct = statsMap.get(u.id) ?? { totalSales: 0, ticketCount: 0 };
-        const childTotals = children.reduce(
+        const childTotals = children.reduce<Stats>(
           (acc, c) => ({
             totalSales: acc.totalSales + c.totalSales,
             ticketCount: acc.ticketCount + c.ticketCount,
@@ -125,19 +130,20 @@ router.get('/hierarchy', async (req, res) => {
       });
   }
 
-  // For asociados show only their subtree
+  // For asociados show only their subtree; for admins show the full tree
   let tree: TreeNode[];
   if (req.user!.role === 'asociado') {
-    const root = users.find((u) => u.id === req.user!.sub);
+    const root = users.find((u: NodeUser) => u.id === req.user!.sub);
     if (!root) { res.json([]); return; }
     const children = buildTree(root.id);
     const direct = statsMap.get(root.id) ?? { totalSales: 0, ticketCount: 0 };
-    const childTotals = children.reduce(
+    const childTotals = children.reduce<Stats>(
       (acc, c) => ({ totalSales: acc.totalSales + c.totalSales, ticketCount: acc.ticketCount + c.ticketCount }),
       { totalSales: 0, ticketCount: 0 }
     );
     tree = [{ user: root, totalSales: direct.totalSales + childTotals.totalSales, ticketCount: direct.ticketCount + childTotals.ticketCount, children }];
   } else {
+    // Admin: return all root-level users (no parent) so they see full hierarchy
     tree = buildTree(null);
   }
 

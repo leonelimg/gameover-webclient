@@ -3,56 +3,15 @@ import { ChevronDown, ChevronRight, BarChart3 } from 'lucide-react';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
-import { db } from '@/utils/db';
 import { formatCurrency, formatDate } from '@/utils/helpers';
-import { User } from '@/types';
-import { useAuth } from '@/context/AuthContext';
-
-interface AssociateNode {
-  user: User;
-  children: AssociateNode[];
-  totalSales: number;
-  ticketCount: number;
-}
-
-function buildTree(users: User[], parentId: string | undefined): AssociateNode[] {
-  return users
-    .filter((u) => u.parentId === parentId && u.role !== 'vendedor')
-    .map((u) => ({
-      user: u,
-      children: buildTree(users, u.id),
-      totalSales: 0,
-      ticketCount: 0,
-    }));
-}
-
-function enrichNode(
-  node: AssociateNode,
-  tickets: ReturnType<typeof db.getTickets>,
-  drawId: string
-): { totalSales: number; ticketCount: number } {
-  const directTickets = tickets.filter(
-    (t) => t.associateId === node.user.id && (!drawId || t.drawId === drawId)
-  );
-  let totalSales = directTickets.reduce((s, t) => s + t.total, 0);
-  let ticketCount = directTickets.length;
-
-  for (const child of node.children) {
-    const childStats = enrichNode(child, tickets, drawId);
-    totalSales += childStats.totalSales;
-    ticketCount += childStats.ticketCount;
-  }
-
-  node.totalSales = totalSales;
-  node.ticketCount = ticketCount;
-  return { totalSales, ticketCount };
-}
+import { drawsApi, reportsApi, HierarchyNode, ReportSummary, TopNumber } from '@/services/api';
+import { Draw, Ticket } from '@/types';
 
 function TreeRow({
   node,
   depth = 0,
 }: {
-  node: AssociateNode;
+  node: HierarchyNode;
   depth?: number;
 }) {
   const [expanded, setExpanded] = useState(depth === 0);
@@ -98,54 +57,27 @@ function TreeRow({
 }
 
 export default function ReportsPage() {
-  const { user } = useAuth();
-
-  const [draws] = useState(() => db.getDraws());
-  const [tickets] = useState(() => db.getTickets());
-  const [users] = useState(() => db.getUsers());
+  const [draws, setDraws] = useState<Draw[]>([]);
   const [selectedDrawId, setSelectedDrawId] = useState('');
 
-  const [tree, setTree] = useState<AssociateNode[]>([]);
-  const [globalStats, setGlobalStats] = useState({ total: 0, tickets: 0 });
+  const [summary, setSummary] = useState<ReportSummary>({ ticketCount: 0, totalSales: 0, userCount: 0, drawCount: 0 });
+  const [tree, setTree] = useState<HierarchyNode[]>([]);
+  const [topNumbers, setTopNumbers] = useState<TopNumber[]>([]);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
 
+  // Load draws once
   useEffect(() => {
-    // Build hierarchy starting from admins or the current associate
-    let rootNodes: AssociateNode[];
-    if (user?.role === 'admin') {
-      rootNodes = buildTree(users, undefined);
-      // Also add direct associates with no parent
-    } else {
-      rootNodes = [
-        {
-          user: user!,
-          children: buildTree(users, user!.id),
-          totalSales: 0,
-          ticketCount: 0,
-        },
-      ];
-    }
+    drawsApi.list().then(setDraws).catch(() => {});
+  }, []);
 
-    let total = 0;
-    let ticketCount = 0;
-    for (const node of rootNodes) {
-      const stats = enrichNode(node, tickets, selectedDrawId);
-      total += stats.totalSales;
-      ticketCount += stats.ticketCount;
-    }
-    setTree(rootNodes);
-    setGlobalStats({ total, tickets: ticketCount });
-  }, [users, tickets, selectedDrawId, user]);
-
-  // Top numbers per draw
-  const numberMap: Record<string, number> = {};
-  tickets
-    .filter((t) => !selectedDrawId || t.drawId === selectedDrawId)
-    .forEach((t) => t.lines.forEach((l) => {
-      numberMap[l.number] = (numberMap[l.number] ?? 0) + l.amount;
-    }));
-  const topNumbers = Object.entries(numberMap)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10);
+  // Reload report data whenever the selected draw changes
+  useEffect(() => {
+    const drawId = selectedDrawId || undefined;
+    reportsApi.summary(drawId).then(setSummary).catch(() => {});
+    reportsApi.hierarchy(drawId).then(setTree).catch(() => {});
+    reportsApi.topNumbers(drawId).then(setTopNumbers).catch(() => {});
+    reportsApi.recentTickets(drawId).then(setTickets).catch(() => {});
+  }, [selectedDrawId]);
 
   return (
     <div className="space-y-6">
@@ -178,21 +110,19 @@ export default function ReportsPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-4">
           <p className="text-sm text-slate-500 mb-1">Total Ventas</p>
-          <p className="text-2xl font-bold text-green-700">{formatCurrency(globalStats.total)}</p>
+          <p className="text-2xl font-bold text-green-700">{formatCurrency(summary.totalSales)}</p>
         </Card>
         <Card className="p-4">
           <p className="text-sm text-slate-500 mb-1">Tickets Emitidos</p>
-          <p className="text-2xl font-bold text-slate-900">{globalStats.tickets}</p>
+          <p className="text-2xl font-bold text-slate-900">{summary.ticketCount}</p>
         </Card>
         <Card className="p-4">
           <p className="text-sm text-slate-500 mb-1">Sorteos</p>
-          <p className="text-2xl font-bold text-slate-900">{draws.length}</p>
+          <p className="text-2xl font-bold text-slate-900">{summary.drawCount}</p>
         </Card>
         <Card className="p-4">
           <p className="text-sm text-slate-500 mb-1">Usuarios activos</p>
-          <p className="text-2xl font-bold text-slate-900">
-            {users.filter((u) => u.status === 'activo').length}
-          </p>
+          <p className="text-2xl font-bold text-slate-900">{summary.userCount}</p>
         </Card>
       </div>
 
@@ -244,22 +174,22 @@ export default function ReportsPage() {
                 <p className="text-slate-400 text-sm text-center py-6">Sin datos</p>
               ) : (
                 <div className="divide-y divide-slate-100">
-                  {topNumbers.map(([number, total], i) => (
-                    <div key={number} className="flex items-center gap-3 px-4 py-3">
+                  {topNumbers.map((tn, i) => (
+                    <div key={tn.number} className="flex items-center gap-3 px-4 py-3">
                       <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center shrink-0">
                         {i + 1}
                       </span>
-                      <Badge variant="info">{number}</Badge>
+                      <Badge variant="info">{tn.number}</Badge>
                       <div className="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden">
                         <div
                           className="bg-blue-500 h-2 rounded-full"
                           style={{
-                            width: `${Math.round((total / topNumbers[0][1]) * 100)}%`,
+                            width: `${Math.round((tn.total / topNumbers[0].total) * 100)}%`,
                           }}
                         />
                       </div>
                       <span className="text-xs font-medium text-slate-700 whitespace-nowrap">
-                        {formatCurrency(total)}
+                        {formatCurrency(tn.total)}
                       </span>
                     </div>
                   ))}
@@ -278,11 +208,7 @@ export default function ReportsPage() {
                 <p className="text-slate-400 text-sm text-center py-6 px-4">Sin tickets</p>
               ) : (
                 <div className="divide-y divide-slate-100">
-                  {tickets
-                    .filter((t) => !selectedDrawId || t.drawId === selectedDrawId)
-                    .slice(-5)
-                    .reverse()
-                    .map((t) => (
+                  {tickets.map((t) => (
                       <div key={t.id} className="px-4 py-3">
                         <div className="flex items-center justify-between">
                           <span className="font-mono text-xs font-medium">{t.code}</span>

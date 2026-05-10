@@ -2,49 +2,28 @@ import { useEffect, useState } from 'react';
 import { Users, Ticket, ShoppingCart, TrendingUp, DollarSign, Award } from 'lucide-react';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { db } from '@/utils/db';
 import { formatCurrency, formatDateTime } from '@/utils/helpers';
 import { useAuth } from '@/context/AuthContext';
+import { reportsApi, ReportSummary, TopNumber } from '@/services/api';
+import { Ticket as TicketType } from '@/types';
 
 export default function DashboardPage() {
   const { user } = useAuth();
 
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<ReportSummary>({
     userCount: 0,
     drawCount: 0,
     ticketCount: 0,
     totalSales: 0,
   });
 
-  const [recentTickets, setRecentTickets] = useState<ReturnType<typeof db.getTickets>>([]);
-  const [topNumbers, setTopNumbers] = useState<{ number: string; total: number }[]>([]);
+  const [recentTickets, setRecentTickets] = useState<TicketType[]>([]);
+  const [topNumbers, setTopNumbers] = useState<TopNumber[]>([]);
 
   useEffect(() => {
-    const users = db.getUsers();
-    const draws = db.getDraws();
-    const tickets = db.getTickets();
-    const totalSales = tickets.reduce((sum, t) => sum + t.total, 0);
-
-    setStats({
-      userCount: users.length,
-      drawCount: draws.length,
-      ticketCount: tickets.length,
-      totalSales,
-    });
-
-    setRecentTickets(tickets.slice(-5).reverse());
-
-    const numberMap: Record<string, number> = {};
-    tickets.forEach((t) =>
-      t.lines.forEach((l) => {
-        numberMap[l.number] = (numberMap[l.number] ?? 0) + l.amount;
-      })
-    );
-    const top = Object.entries(numberMap)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([number, total]) => ({ number, total }));
-    setTopNumbers(top);
+    reportsApi.summary().then(setStats).catch(() => {});
+    reportsApi.recentTickets(undefined, 5).then(setRecentTickets).catch(() => {});
+    reportsApi.topNumbers(undefined, 10).then(setTopNumbers).catch(() => {});
   }, []);
 
   return (

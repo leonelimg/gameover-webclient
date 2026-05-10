@@ -1,13 +1,13 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Plus, Edit, Trash2, AlertCircle } from 'lucide-react';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
-import { db } from '@/utils/db';
-import { generateId, formatDateTime, isDrawOpen } from '@/utils/helpers';
-import { Draw, DrawStatus, RestrictedNumber } from '@/types';
+import { formatDateTime } from '@/utils/helpers';
+import { Draw, DrawStatus } from '@/types';
+import { drawsApi, DrawPayload } from '@/services/api';
 
 const STATUS_BADGE: Record<DrawStatus, 'success' | 'warning' | 'danger' | 'secondary'> = {
   abierto: 'success',
@@ -15,32 +15,6 @@ const STATUS_BADGE: Record<DrawStatus, 'success' | 'warning' | 'danger' | 'secon
   cerrado: 'danger',
   finalizado: 'secondary',
 };
-
-function useDraws() {
-  const [draws, setDraws] = useState<Draw[]>(() => {
-    // Refresh statuses on load
-    const stored = db.getDraws();
-    const updated = stored.map((d) => {
-      if (d.status === 'finalizado') return d;
-      const now = Date.now();
-      const open = new Date(d.openTime).getTime();
-      const close = new Date(d.closeTime).getTime();
-      let status: DrawStatus = d.status;
-      if (now < open) status = 'pendiente';
-      else if (now >= open && now <= close) status = 'abierto';
-      else if (now > close && !d.winnerNumber) status = 'cerrado';
-      return { ...d, status };
-    });
-    db.saveDraws(updated);
-    return updated;
-  });
-
-  const persist = (next: Draw[]) => {
-    setDraws(next);
-    db.saveDraws(next);
-  };
-  return { draws, persist };
-}
 
 interface DrawFormData {
   name: string;
@@ -56,7 +30,13 @@ const toDatetimeLocal = (iso: string) => {
 };
 
 export default function DrawsPage() {
-  const { draws, persist } = useDraws();
+  const [draws, setDraws] = useState<Draw[]>([]);
+
+  const loadDraws = useCallback(() => {
+    drawsApi.list().then(setDraws).catch(() => {});
+  }, []);
+
+  useEffect(() => { loadDraws(); }, [loadDraws]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingDraw, setEditingDraw] = useState<Draw | null>(null);
@@ -102,7 +82,7 @@ export default function DrawsPage() {
     setModalOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
     if (!form.name || !form.openTime || !form.closeTime) {
@@ -116,72 +96,57 @@ export default function DrawsPage() {
       return;
     }
 
-    if (editingDraw) {
-      persist(
-        draws.map((d) =>
-          d.id === editingDraw.id
-            ? {
-                ...d,
-                name: form.name,
-                openTime: open,
-                closeTime: close,
-                winnerNumber: form.winnerNumber || undefined,
-                status: form.winnerNumber
-                  ? 'finalizado'
-                  : (isDrawOpen(open, close) ? 'abierto' : 'pendiente'),
-              }
-            : d
-        )
-      );
-    } else {
-      const newDraw: Draw = {
-        id: generateId(),
-        name: form.name,
-        openTime: open,
-        closeTime: close,
-        status: isDrawOpen(open, close) ? 'abierto' : 'pendiente',
-        restrictedNumbers: [],
-        createdAt: new Date().toISOString(),
-      };
-      persist([...draws, newDraw]);
-    }
-    setModalOpen(false);
-  };
+    const payload: DrawPayload = {
+      name: form.name,
+      openTime: open,
+      closeTime: close,
+      winnerNumber: form.winnerNumber || null,
+    };
 
-  const deleteDraw = (id: string) => {
-    if (confirm('¿Eliminar este sorteo?')) {
-      persist(draws.filter((d) => d.id !== id));
+    try {
+      if (editingDraw) {
+        const updated = await drawsApi.update(editingDraw.id, payload);
+        setDraws((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+      } else {
+        await drawsApi.create(payload);
+        loadDraws();
+      }
+      setModalOpen(false);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setFormError(msg ?? 'Error al guardar el sorteo.');
     }
   };
 
-  const addRestrictedNumber = () => {
+  const deleteDraw = async (id: string) => {
+    if (!confirm('¿Eliminar este sorteo?')) return;
+    try {
+      await drawsApi.delete(id);
+      setDraws((prev) => prev.filter((d) => d.id !== id));
+    } catch { /* ignore */ }
+  };
+
+  const addRestrictedNumber = async () => {
     if (!rnDraw || !rnNumber || !rnLimit) return;
     const limit = parseInt(rnLimit);
     if (isNaN(limit) || limit <= 0) return;
-    const updated = draws.map((d) => {
-      if (d.id !== rnDraw.id) return d;
-      const existing = d.restrictedNumbers.find((rn) => rn.number === rnNumber);
-      const restrictedNumbers: RestrictedNumber[] = existing
-        ? d.restrictedNumbers.map((rn) =>
-            rn.number === rnNumber ? { ...rn, limit } : rn
-          )
-        : [...d.restrictedNumbers, { number: rnNumber, limit }];
-      return { ...d, restrictedNumbers };
-    });
-    persist(updated);
-    setRnDraw(updated.find((d) => d.id === rnDraw.id) ?? null);
-    setRnNumber('');
-    setRnLimit('');
+    try {
+      await drawsApi.addRestrictedNumber(rnDraw.id, rnNumber, limit);
+      const updated = await drawsApi.get(rnDraw.id);
+      setDraws((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+      setRnDraw(updated);
+      setRnNumber('');
+      setRnLimit('');
+    } catch { /* ignore */ }
   };
 
-  const removeRestrictedNumber = (draw: Draw, number: string) => {
-    const updated = draws.map((d) =>
-      d.id === draw.id
-        ? { ...d, restrictedNumbers: d.restrictedNumbers.filter((rn) => rn.number !== number) }
-        : d
-    );
-    persist(updated);
-    setRnDraw(updated.find((d) => d.id === draw.id) ?? null);
+  const removeRestrictedNumber = async (draw: Draw, number: string) => {
+    try {
+      await drawsApi.removeRestrictedNumber(draw.id, number);
+      const updated = await drawsApi.get(draw.id);
+      setDraws((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+      setRnDraw(updated);
+    } catch { /* ignore */ }
   };
 
   return (

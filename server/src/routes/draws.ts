@@ -4,7 +4,8 @@ import { prisma } from '../config/prisma.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { param } from '../middleware/params.js';
-import { DrawStatus } from '@prisma/client';
+
+type DrawStatusValue = 'pendiente' | 'abierto' | 'cerrado' | 'finalizado';
 
 const router = Router();
 router.use(authenticate);
@@ -21,14 +22,14 @@ const rnSchema = z.object({
   limit: z.number().positive(),
 });
 
-function resolveStatus(openTime: string, closeTime: string, winner?: string | null): DrawStatus {
-  if (winner) return DrawStatus.finalizado;
+function resolveStatus(openTime: string, closeTime: string, winner?: string | null): DrawStatusValue {
+  if (winner) return 'finalizado';
   const now = Date.now();
   const o = new Date(openTime).getTime();
   const c = new Date(closeTime).getTime();
-  if (now < o) return DrawStatus.pendiente;
-  if (now >= o && now <= c) return DrawStatus.abierto;
-  return DrawStatus.cerrado;
+  if (now < o) return 'pendiente';
+  if (now >= o && now <= c) return 'abierto';
+  return 'cerrado';
 }
 
 const rnInclude = { restrictedNumbers: true };

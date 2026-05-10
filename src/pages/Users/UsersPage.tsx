@@ -1,14 +1,14 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Plus, Search, Edit, Lock, Unlock, Archive, Key } from 'lucide-react';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
-import { db } from '@/utils/db';
-import { generateId, formatDate } from '@/utils/helpers';
-import { User, UserRole, UserStatus } from '@/types';
+import { formatDate } from '@/utils/helpers';
+import { User, UserRole, UserStatus, Plan } from '@/types';
 import { useAuth } from '@/context/AuthContext';
+import { usersApi, plansApi, CreateUserPayload, UpdateUserPayload } from '@/services/api';
 
 const ROLE_OPTIONS = [
   { value: '', label: 'Todos los roles' },
@@ -37,12 +37,12 @@ const ROLE_BADGE: Record<UserRole, 'info' | 'secondary' | 'warning'> = {
 };
 
 function useUsers() {
-  const [users, setUsers] = useState<User[]>(() => db.getUsers());
-  const persist = (next: User[]) => {
-    setUsers(next);
-    db.saveUsers(next);
-  };
-  return { users, persist };
+  const [users, setUsers] = useState<User[]>([]);
+  const reload = useCallback(() => {
+    usersApi.list().then(setUsers).catch(() => {});
+  }, []);
+  useEffect(() => { reload(); }, [reload]);
+  return { users, setUsers, reload };
 }
 
 interface UserFormData {
@@ -69,7 +69,10 @@ const emptyForm: UserFormData = {
 
 export default function UsersPage() {
   const { user: currentUser } = useAuth();
-  const { users, persist } = useUsers();
+  const { users, setUsers, reload } = useUsers();
+
+  const [plans, setPlans] = useState<Plan[]>([]);
+  useEffect(() => { plansApi.list().then(setPlans).catch(() => {}); }, []);
 
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
@@ -82,7 +85,6 @@ export default function UsersPage() {
   const [form, setForm] = useState<UserFormData>(emptyForm);
   const [formError, setFormError] = useState('');
 
-  const plans = db.getPlans();
   const associates = users.filter((u) => u.role === 'asociado');
 
   const filtered = users.filter((u) => {
@@ -118,7 +120,7 @@ export default function UsersPage() {
     setModalOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
 
@@ -126,67 +128,64 @@ export default function UsersPage() {
       setFormError('Nombre, usuario y correo son requeridos.');
       return;
     }
-
     if (!editingUser && !form.password) {
       setFormError('La contraseña es requerida para nuevos usuarios.');
       return;
     }
 
-    if (editingUser) {
-      const updated = users.map((u) =>
-        u.id === editingUser.id
-          ? {
-              ...u,
-              fullName: form.fullName,
-              username: form.username,
-              email: form.email,
-              phone: form.phone,
-              role: form.role,
-              planId: form.planId || undefined,
-              parentId: form.parentId || undefined,
-              updatedAt: new Date().toISOString(),
-            }
-          : u
-      );
-      persist(updated);
-    } else {
-      const newUser: User = {
-        id: generateId(),
-        fullName: form.fullName,
-        username: form.username,
-        email: form.email,
-        phone: form.phone,
-        role: form.role,
-        status: 'activo',
-        planId: form.planId || undefined,
-        parentId: form.parentId || undefined,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      persist([...users, newUser]);
+    try {
+      if (editingUser) {
+        const payload: UpdateUserPayload = {
+          fullName: form.fullName,
+          email: form.email,
+          phone: form.phone,
+          role: form.role,
+          planId: form.planId || null,
+          parentId: form.parentId || null,
+        };
+        const updated = await usersApi.update(editingUser.id, payload);
+        setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+      } else {
+        const payload: CreateUserPayload = {
+          fullName: form.fullName,
+          username: form.username,
+          email: form.email,
+          phone: form.phone,
+          role: form.role,
+          password: form.password,
+          planId: form.planId || undefined,
+          parentId: form.parentId || undefined,
+        };
+        await usersApi.create(payload);
+        reload();
+      }
+      setModalOpen(false);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setFormError(msg ?? 'Error al guardar. Intenta de nuevo.');
     }
-    setModalOpen(false);
   };
 
-  const toggleBlock = (u: User) => {
-    const next = users.map((x) =>
-      x.id === u.id
-        ? { ...x, status: (x.status === 'bloqueado' ? 'activo' : 'bloqueado') as UserStatus }
-        : x
-    );
-    persist(next);
+  const toggleBlock = async (u: User) => {
+    const newStatus = u.status === 'bloqueado' ? 'activo' : 'bloqueado';
+    try {
+      const updated = await usersApi.changeStatus(u.id, newStatus);
+      setUsers((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
+    } catch { /* ignore */ }
   };
 
-  const archiveUser = (u: User) => {
-    const next = users.map((x) =>
-      x.id === u.id ? { ...x, status: 'archivado' as UserStatus } : x
-    );
-    persist(next);
+  const archiveUser = async (u: User) => {
+    try {
+      const updated = await usersApi.changeStatus(u.id, 'archivado');
+      setUsers((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
+    } catch { /* ignore */ }
   };
 
-  const savePassword = () => {
-    if (!newPassword) return;
-    // In a real app, hash and save. Here just show confirmation.
+  const savePassword = async () => {
+    if (!pwModalUser || !newPassword) return;
+    try {
+      await usersApi.changePassword(pwModalUser.id, newPassword);
+    } catch { /* ignore */ }
     setPwModalUser(null);
     setNewPassword('');
   };

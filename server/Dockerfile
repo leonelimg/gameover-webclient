@@ -2,7 +2,7 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci
 
 COPY prisma ./prisma
 RUN npx prisma generate
@@ -24,4 +24,4 @@ COPY package*.json ./
 
 EXPOSE 4000
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+CMD ["sh", "-c", "npx prisma db push && npm run db:seed && node dist/index.js"]

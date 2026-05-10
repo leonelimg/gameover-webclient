@@ -81,7 +81,7 @@ router.post('/', validate(createTicketSchema), async (req, res) => {
 
   // Check restricted numbers
   for (const line of body.lines) {
-    const restricted = draw.restrictedNumbers.find((rn) => rn.number === line.number);
+    const restricted = draw.restrictedNumbers.find((rn: { number: string; limit: number }) => rn.number === line.number);
     if (restricted) {
       const agg = await prisma.ticketLine.aggregate({
         where: { number: line.number, ticket: { drawId: body.drawId } },

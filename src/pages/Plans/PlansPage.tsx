@@ -1,21 +1,12 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
-import { db } from '@/utils/db';
-import { generateId, formatDate } from '@/utils/helpers';
-import { Plan } from '@/types';
-
-function usePlans() {
-  const [plans, setPlans] = useState<Plan[]>(() => db.getPlans());
-  const persist = (next: Plan[]) => {
-    setPlans(next);
-    db.savePlans(next);
-  };
-  return { plans, persist };
-}
+import { formatDate } from '@/utils/helpers';
+import { Plan, User } from '@/types';
+import { plansApi, usersApi, PlanPayload } from '@/services/api';
 
 interface PlanFormData {
   name: string;
@@ -32,9 +23,17 @@ const emptyForm: PlanFormData = {
 };
 
 export default function PlansPage() {
-  const { plans, persist } = usePlans();
-  const users = db.getUsers();
-  const associates = users.filter((u) => u.role === 'asociado');
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [associates, setAssociates] = useState<User[]>([]);
+
+  const loadPlans = useCallback(() => {
+    plansApi.list().then(setPlans).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadPlans();
+    usersApi.list({ role: 'asociado' }).then(setAssociates).catch(() => {});
+  }, [loadPlans]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
@@ -60,7 +59,7 @@ export default function PlansPage() {
     setModalOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
     if (!form.name) {
@@ -78,40 +77,34 @@ export default function PlansPage() {
       return;
     }
 
-    if (editingPlan) {
-      persist(
-        plans.map((p) =>
-          p.id === editingPlan.id
-            ? {
-                ...p,
-                name: form.name,
-                multiplier: mult,
-                commission: comm,
-                masterId: form.masterId || undefined,
-              }
-            : p
-        )
-      );
-    } else {
-      persist([
-        ...plans,
-        {
-          id: generateId(),
-          name: form.name,
-          multiplier: mult,
-          commission: comm,
-          masterId: form.masterId || undefined,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
+    const payload: PlanPayload = {
+      name: form.name,
+      multiplier: mult,
+      commission: comm,
+      masterId: form.masterId || null,
+    };
+
+    try {
+      if (editingPlan) {
+        const updated = await plansApi.update(editingPlan.id, payload);
+        setPlans((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      } else {
+        await plansApi.create(payload);
+        loadPlans();
+      }
+      setModalOpen(false);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setFormError(msg ?? 'Error al guardar el plan.');
     }
-    setModalOpen(false);
   };
 
-  const deletePlan = (id: string) => {
-    if (confirm('¿Eliminar este plan?')) {
-      persist(plans.filter((p) => p.id !== id));
-    }
+  const deletePlan = async (id: string) => {
+    if (!confirm('¿Eliminar este plan?')) return;
+    try {
+      await plansApi.delete(id);
+      setPlans((prev) => prev.filter((p) => p.id !== id));
+    } catch { /* ignore */ }
   };
 
   const getMasterName = (id?: string) => {

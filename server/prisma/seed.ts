@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, UserStatus, DrawStatus } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -43,8 +43,8 @@ async function main() {
       username: 'admin',
       email: 'admin@gameover.com',
       phone: '0000-0000',
-      role: UserRole.admin,
-      status: UserStatus.activo,
+      role: 'admin',
+      status: 'activo',
       passwordHash: adminHash,
     },
   });
@@ -57,8 +57,8 @@ async function main() {
       username: 'jperez',
       email: 'juan@gameover.com',
       phone: '8888-1111',
-      role: UserRole.asociado,
-      status: UserStatus.activo,
+      role: 'asociado',
+      status: 'activo',
       passwordHash: defaultHash,
       planId: planBasico.id,
     },
@@ -72,8 +72,8 @@ async function main() {
       username: 'mlopez',
       email: 'maria@gameover.com',
       phone: '8888-2222',
-      role: UserRole.asociado,
-      status: UserStatus.activo,
+      role: 'asociado',
+      status: 'activo',
       passwordHash: defaultHash,
       planId: planPremium.id,
       parentId: asociado1.id,
@@ -94,8 +94,8 @@ async function main() {
       username: 'cruiz',
       email: 'carlos@gameover.com',
       phone: '8888-3333',
-      role: UserRole.vendedor,
-      status: UserStatus.activo,
+      role: 'vendedor',
+      status: 'activo',
       passwordHash: defaultHash,
       planId: planBasico.id,
       parentId: asociado1.id,
@@ -118,7 +118,7 @@ async function main() {
       name: 'Sorteo Matutino',
       openTime,
       closeTime,
-      status: DrawStatus.abierto,
+      status: 'abierto',
       restrictedNumbers: {
         create: [
           { number: '00', limit: 500 },
