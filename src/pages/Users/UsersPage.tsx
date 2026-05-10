@@ -1,0 +1,449 @@
+import { useState } from 'react';
+import { Plus, Search, Edit, Lock, Unlock, Archive, Key } from 'lucide-react';
+import { Card, CardBody } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Input, Select } from '@/components/ui/Input';
+import { Badge } from '@/components/ui/Badge';
+import { Modal } from '@/components/ui/Modal';
+import { db } from '@/utils/db';
+import { generateId, formatDate } from '@/utils/helpers';
+import { User, UserRole, UserStatus } from '@/types';
+import { useAuth } from '@/context/AuthContext';
+
+const ROLE_OPTIONS = [
+  { value: '', label: 'Todos los roles' },
+  { value: 'admin', label: 'Admin' },
+  { value: 'asociado', label: 'Asociado' },
+  { value: 'vendedor', label: 'Vendedor' },
+];
+
+const STATUS_OPTIONS = [
+  { value: '', label: 'Todos los estados' },
+  { value: 'activo', label: 'Activo' },
+  { value: 'bloqueado', label: 'Bloqueado' },
+  { value: 'archivado', label: 'Archivado' },
+];
+
+const STATUS_BADGE: Record<UserStatus, 'success' | 'warning' | 'danger'> = {
+  activo: 'success',
+  bloqueado: 'warning',
+  archivado: 'danger',
+};
+
+const ROLE_BADGE: Record<UserRole, 'info' | 'secondary' | 'warning'> = {
+  admin: 'info',
+  asociado: 'secondary',
+  vendedor: 'warning',
+};
+
+function useUsers() {
+  const [users, setUsers] = useState<User[]>(() => db.getUsers());
+  const persist = (next: User[]) => {
+    setUsers(next);
+    db.saveUsers(next);
+  };
+  return { users, persist };
+}
+
+interface UserFormData {
+  fullName: string;
+  username: string;
+  email: string;
+  phone: string;
+  role: UserRole;
+  planId: string;
+  parentId: string;
+  password: string;
+}
+
+const emptyForm: UserFormData = {
+  fullName: '',
+  username: '',
+  email: '',
+  phone: '',
+  role: 'vendedor',
+  planId: '',
+  parentId: '',
+  password: '',
+};
+
+export default function UsersPage() {
+  const { user: currentUser } = useAuth();
+  const { users, persist } = useUsers();
+
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [pwModalUser, setPwModalUser] = useState<User | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [form, setForm] = useState<UserFormData>(emptyForm);
+  const [formError, setFormError] = useState('');
+
+  const plans = db.getPlans();
+  const associates = users.filter((u) => u.role === 'asociado');
+
+  const filtered = users.filter((u) => {
+    const matchSearch =
+      u.fullName.toLowerCase().includes(search.toLowerCase()) ||
+      u.username.toLowerCase().includes(search.toLowerCase()) ||
+      u.email.toLowerCase().includes(search.toLowerCase());
+    const matchRole = !roleFilter || u.role === roleFilter;
+    const matchStatus = !statusFilter || u.status === statusFilter;
+    return matchSearch && matchRole && matchStatus;
+  });
+
+  const openCreate = () => {
+    setEditingUser(null);
+    setForm(emptyForm);
+    setFormError('');
+    setModalOpen(true);
+  };
+
+  const openEdit = (u: User) => {
+    setEditingUser(u);
+    setForm({
+      fullName: u.fullName,
+      username: u.username,
+      email: u.email,
+      phone: u.phone,
+      role: u.role,
+      planId: u.planId ?? '',
+      parentId: u.parentId ?? '',
+      password: '',
+    });
+    setFormError('');
+    setModalOpen(true);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError('');
+
+    if (!form.fullName || !form.username || !form.email) {
+      setFormError('Nombre, usuario y correo son requeridos.');
+      return;
+    }
+
+    if (!editingUser && !form.password) {
+      setFormError('La contraseña es requerida para nuevos usuarios.');
+      return;
+    }
+
+    if (editingUser) {
+      const updated = users.map((u) =>
+        u.id === editingUser.id
+          ? {
+              ...u,
+              fullName: form.fullName,
+              username: form.username,
+              email: form.email,
+              phone: form.phone,
+              role: form.role,
+              planId: form.planId || undefined,
+              parentId: form.parentId || undefined,
+              updatedAt: new Date().toISOString(),
+            }
+          : u
+      );
+      persist(updated);
+    } else {
+      const newUser: User = {
+        id: generateId(),
+        fullName: form.fullName,
+        username: form.username,
+        email: form.email,
+        phone: form.phone,
+        role: form.role,
+        status: 'activo',
+        planId: form.planId || undefined,
+        parentId: form.parentId || undefined,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      persist([...users, newUser]);
+    }
+    setModalOpen(false);
+  };
+
+  const toggleBlock = (u: User) => {
+    const next = users.map((x) =>
+      x.id === u.id
+        ? { ...x, status: (x.status === 'bloqueado' ? 'activo' : 'bloqueado') as UserStatus }
+        : x
+    );
+    persist(next);
+  };
+
+  const archiveUser = (u: User) => {
+    const next = users.map((x) =>
+      x.id === u.id ? { ...x, status: 'archivado' as UserStatus } : x
+    );
+    persist(next);
+  };
+
+  const savePassword = () => {
+    if (!newPassword) return;
+    // In a real app, hash and save. Here just show confirmation.
+    setPwModalUser(null);
+    setNewPassword('');
+  };
+
+  const canManage = currentUser?.role === 'admin';
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Usuarios</h1>
+          <p className="text-sm text-slate-500">Gestión de usuarios del sistema</p>
+        </div>
+        {canManage && (
+          <Button onClick={openCreate} size="md">
+            <Plus size={16} />
+            Nuevo Usuario
+          </Button>
+        )}
+      </div>
+
+      {/* Filters */}
+      <Card>
+        <CardBody>
+          <div className="flex flex-wrap gap-3">
+            <div className="flex-1 min-w-48">
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Buscar usuario..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+            </div>
+            <Select
+              options={ROLE_OPTIONS}
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="w-40"
+            />
+            <Select
+              options={STATUS_OPTIONS}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-44"
+            />
+          </div>
+        </CardBody>
+      </Card>
+
+      {/* Table */}
+      <Card>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">Nombre</th>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">Usuario</th>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">Correo</th>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">Rol</th>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">Estado</th>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">Creado</th>
+                {canManage && (
+                  <th className="text-right px-4 py-3 text-slate-600 font-medium">Acciones</th>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                    No hay usuarios que coincidan con los filtros.
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((u) => (
+                  <tr key={u.id} className="border-t border-slate-100 hover:bg-slate-50">
+                    <td className="px-4 py-3 font-medium text-slate-900">{u.fullName}</td>
+                    <td className="px-4 py-3 text-slate-600">{u.username}</td>
+                    <td className="px-4 py-3 text-slate-600">{u.email}</td>
+                    <td className="px-4 py-3">
+                      <Badge variant={ROLE_BADGE[u.role]} className="capitalize">
+                        {u.role}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge variant={STATUS_BADGE[u.status]} className="capitalize">
+                        {u.status}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-slate-500">{formatDate(u.createdAt)}</td>
+                    {canManage && (
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            title="Editar"
+                            onClick={() => openEdit(u)}
+                            className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          >
+                            <Edit size={15} />
+                          </button>
+                          <button
+                            title={u.status === 'bloqueado' ? 'Desbloquear' : 'Bloquear'}
+                            onClick={() => toggleBlock(u)}
+                            disabled={u.id === currentUser?.id}
+                            className="p-1.5 text-slate-500 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors disabled:opacity-30"
+                          >
+                            {u.status === 'bloqueado' ? <Unlock size={15} /> : <Lock size={15} />}
+                          </button>
+                          <button
+                            title="Archivar"
+                            onClick={() => archiveUser(u)}
+                            disabled={u.id === currentUser?.id || u.status === 'archivado'}
+                            className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-30"
+                          >
+                            <Archive size={15} />
+                          </button>
+                          <button
+                            title="Cambiar contraseña"
+                            onClick={() => {
+                              setPwModalUser(u);
+                              setNewPassword('');
+                            }}
+                            className="p-1.5 text-slate-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                          >
+                            <Key size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Create/Edit Modal */}
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={editingUser ? 'Editar Usuario' : 'Nuevo Usuario'}
+        size="md"
+      >
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {formError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+              {formError}
+            </div>
+          )}
+          <Input
+            label="Nombre completo"
+            value={form.fullName}
+            onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+            required
+          />
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Usuario"
+              value={form.username}
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
+              required
+            />
+            <Input
+              label="Teléfono"
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            />
+          </div>
+          <Input
+            label="Correo electrónico"
+            type="email"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            required
+          />
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label="Rol"
+              value={form.role}
+              onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}
+              options={[
+                { value: 'admin', label: 'Admin' },
+                { value: 'asociado', label: 'Asociado' },
+                { value: 'vendedor', label: 'Vendedor' },
+              ]}
+            />
+            <Select
+              label="Plan"
+              value={form.planId}
+              onChange={(e) => setForm({ ...form, planId: e.target.value })}
+              options={[
+                { value: '', label: 'Sin plan' },
+                ...plans.map((p) => ({ value: p.id, label: p.name })),
+              ]}
+            />
+          </div>
+          {form.role !== 'admin' && (
+            <Select
+              label="Asociado padre"
+              value={form.parentId}
+              onChange={(e) => setForm({ ...form, parentId: e.target.value })}
+              options={[
+                { value: '', label: 'Sin padre' },
+                ...associates
+                  .filter((a) => a.id !== editingUser?.id)
+                  .map((a) => ({ value: a.id, label: a.fullName })),
+              ]}
+            />
+          )}
+          {!editingUser && (
+            <Input
+              label="Contraseña inicial"
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              required
+            />
+          )}
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit">{editingUser ? 'Guardar cambios' : 'Crear usuario'}</Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Password Modal */}
+      <Modal
+        open={!!pwModalUser}
+        onClose={() => setPwModalUser(null)}
+        title="Cambiar contraseña"
+        size="sm"
+      >
+        <div className="p-6 space-y-4">
+          <p className="text-sm text-slate-600">
+            Cambiando contraseña para: <strong>{pwModalUser?.fullName}</strong>
+          </p>
+          <Input
+            label="Nueva contraseña"
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+          />
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setPwModalUser(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={savePassword}>Guardar</Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}

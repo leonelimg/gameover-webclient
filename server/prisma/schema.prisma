@@ -1,0 +1,182 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Enums
+// ──────────────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  admin
+  asociado
+  vendedor
+}
+
+enum UserStatus {
+  activo
+  bloqueado
+  archivado
+}
+
+enum DrawStatus {
+  pendiente
+  abierto
+  cerrado
+  finalizado
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Models
+// ──────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id           String     @id @default(cuid())
+  fullName     String
+  username     String     @unique
+  email        String     @unique
+  phone        String?
+  role         UserRole   @default(vendedor)
+  status       UserStatus @default(activo)
+  passwordHash String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  // Affiliate hierarchy – self-relation
+  parentId     String?
+  parent       User?      @relation("UserHierarchy", fields: [parentId], references: [id])
+  children     User[]     @relation("UserHierarchy")
+
+  // Plan
+  planId       String?
+  plan         Plan?      @relation("PlanUsers", fields: [planId], references: [id])
+
+  // Plan master relation (reverse of PlanMaster)
+  masterOfPlans Plan[]    @relation("PlanMaster")
+
+  // Refresh tokens
+  refreshTokens RefreshToken[]
+
+  // Tickets sold by this user (as seller)
+  soldTickets  Ticket[]   @relation("SellerTickets")
+
+  // Tickets attributed to this user (as associate)
+  associateTickets Ticket[] @relation("AssociateTickets")
+
+  // Audit
+  auditLogs    AuditLog[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  tokenId   String   @unique @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+model Plan {
+  id         String   @id @default(cuid())
+  name       String
+  multiplier Float    // prize multiplier (e.g. 60 means bet × 60)
+  commission Float    // commission percentage 0-100
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Master associate
+  masterId   String?
+  master     User?    @relation("PlanMaster", fields: [masterId], references: [id])
+
+  users      User[]   @relation("PlanUsers")
+
+  @@map("plans")
+}
+
+model Draw {
+  id            String     @id @default(cuid())
+  name          String
+  openTime      DateTime
+  closeTime     DateTime
+  winnerNumber  String?
+  status        DrawStatus @default(pendiente)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  restrictedNumbers RestrictedNumber[]
+  tickets           Ticket[]
+
+  @@map("draws")
+}
+
+model RestrictedNumber {
+  id       String @id @default(cuid())
+  number   String
+  limit    Float  // max total amount that can be bet on this number
+
+  drawId   String
+  draw     Draw   @relation(fields: [drawId], references: [id], onDelete: Cascade)
+
+  @@unique([drawId, number])
+  @@map("restricted_numbers")
+}
+
+model Ticket {
+  id           String       @id @default(cuid())
+  code         String       @unique
+  customerName String
+  total        Float
+  createdAt    DateTime     @default(now())
+  printedAt    DateTime?
+
+  drawId       String
+  draw         Draw         @relation(fields: [drawId], references: [id])
+
+  sellerId     String
+  seller       User         @relation("SellerTickets", fields: [sellerId], references: [id])
+
+  associateId  String
+  associate    User         @relation("AssociateTickets", fields: [associateId], references: [id])
+
+  lines        TicketLine[]
+
+  @@map("tickets")
+}
+
+model TicketLine {
+  id            String  @id @default(cuid())
+  number        String
+  amount        Float
+  isNicaEspecial Boolean @default(false)
+
+  ticketId      String
+  ticket        Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@map("ticket_lines")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  entity    String
+  entityId  String?
+  details   Json?
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}

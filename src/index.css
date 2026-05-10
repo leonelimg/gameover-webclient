@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #1e40af;
+  --color-primary-hover: #1d4ed8;
+  --color-sidebar: #1e293b;
+  --color-sidebar-text: #94a3b8;
+  --color-sidebar-hover: #334155;
+}
