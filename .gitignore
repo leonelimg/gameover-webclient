@@ -31,3 +31,7 @@ server/.env
 server/public/installers/*.exe
 server/public/installers/*.zip
 !server/public/installers/.gitkeep
+
+# Print Bridge local build artifacts
+print-bridge/release/**
+!print-bridge/release/.gitkeep
