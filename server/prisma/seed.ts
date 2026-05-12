@@ -105,8 +105,6 @@ async function main() {
   // ── Draws ────────────────────────────────────────────────────────────────
 
   const now = new Date();
-  const openTime = new Date(now);
-  openTime.setHours(8, 0, 0, 0);
   const closeTime = new Date(now);
   closeTime.setHours(21, 0, 0, 0);
 
@@ -116,8 +114,8 @@ async function main() {
     create: {
       id: 'draw-matutino',
       name: 'Sorteo Matutino',
-      openTime,
       closeTime,
+      minutosPreviosCierre: 10,
       status: 'abierto',
       restrictedNumbers: {
         create: [

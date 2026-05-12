@@ -1,0 +1,1584 @@
+{
+  "jobs": [
+    {
+      "id": "a70901d1-8fc7-42bb-bf32-ff898a3970f8",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "T9XT2-YWWRZ",
+          "dateIso": "2026-05-11T18:02:41.035Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 50,
+              "total": 50
+            }
+          ],
+          "totals": {
+            "total": 50
+          },
+          "notes": [
+            "14  STD  50.00"
+          ],
+          "qrText": "T9XT2-YWWRZ",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "failed",
+      "attempts": 5,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T18:36:03.814Z",
+      "createdAt": "2026-05-11T18:02:43.034Z",
+      "updatedAt": "2026-05-11T18:36:03.869Z",
+      "lastError": "Opening COM10: Access denied",
+      "finishedAt": "2026-05-11T18:36:03.869Z"
+    },
+    {
+      "id": "3d2d6dce-1f39-447b-a851-b31a3376c11a",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "XP83A-JA3GB",
+          "dateIso": "2026-05-11T18:03:03.234Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 50,
+              "total": 50
+            }
+          ],
+          "totals": {
+            "total": 50
+          },
+          "notes": [
+            "41  STD  50.00"
+          ],
+          "qrText": "XP83A-JA3GB",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "failed",
+      "attempts": 5,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T18:36:05.823Z",
+      "createdAt": "2026-05-11T18:03:06.054Z",
+      "updatedAt": "2026-05-11T18:36:05.878Z",
+      "lastError": "Opening COM10: Access denied",
+      "finishedAt": "2026-05-11T18:36:05.878Z"
+    },
+    {
+      "id": "ce2351b5-83f0-4503-b9ed-8585313117cd",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "L0AIB-HHJDE",
+          "dateIso": "2026-05-11T18:09:11.514Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 20,
+              "total": 20
+            }
+          ],
+          "totals": {
+            "total": 20
+          },
+          "notes": [
+            "20  STD  20.00"
+          ],
+          "qrText": "L0AIB-HHJDE",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "failed",
+      "attempts": 5,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T18:36:15.854Z",
+      "createdAt": "2026-05-11T18:09:13.992Z",
+      "updatedAt": "2026-05-11T18:36:15.918Z",
+      "lastError": "Opening COM10: Access denied",
+      "finishedAt": "2026-05-11T18:36:15.918Z"
+    },
+    {
+      "id": "ef1ddd4c-51d0-4b78-9adc-c1d8a2124641",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "VV5PV-5Y4CH",
+          "dateIso": "2026-05-11T18:09:48.069Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "05  STD  10.00"
+          ],
+          "qrText": "VV5PV-5Y4CH",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "failed",
+      "attempts": 5,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T18:36:25.892Z",
+      "createdAt": "2026-05-11T18:09:57.444Z",
+      "updatedAt": "2026-05-11T18:36:25.972Z",
+      "lastError": "Opening COM10: Access denied",
+      "finishedAt": "2026-05-11T18:36:25.972Z"
+    },
+    {
+      "id": "c1f04855-0bdb-44c6-b87f-9f87d7e657b1",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "GNHTH-FCPWC",
+          "dateIso": "2026-05-11T18:11:57.426Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "50  STD  10.00"
+          ],
+          "qrText": "GNHTH-FCPWC",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "failed",
+      "attempts": 5,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T18:36:35.971Z",
+      "createdAt": "2026-05-11T18:11:59.124Z",
+      "updatedAt": "2026-05-11T18:36:35.993Z",
+      "lastError": "Opening COM10: Access denied",
+      "finishedAt": "2026-05-11T18:36:35.993Z"
+    },
+    {
+      "id": "8af8ad06-3485-401c-a4b6-5e2971a6b020",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "Y3EHS-0116L",
+          "dateIso": "2026-05-11T18:13:11.197Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "20  STD  10.00"
+          ],
+          "qrText": "Y3EHS-0116L",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "failed",
+      "attempts": 5,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T18:36:45.975Z",
+      "createdAt": "2026-05-11T18:13:15.228Z",
+      "updatedAt": "2026-05-11T18:36:46.055Z",
+      "lastError": "Opening COM10: Access denied",
+      "finishedAt": "2026-05-11T18:36:46.055Z"
+    },
+    {
+      "id": "9c06faa2-cbb9-4559-8b18-3211bd0a9e32",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "7G9T9-G8EEC",
+          "dateIso": "2026-05-11T18:18:08.187Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "20  STD  10.00"
+          ],
+          "qrText": "7G9T9-G8EEC",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "failed",
+      "attempts": 5,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T18:36:58.040Z",
+      "createdAt": "2026-05-11T18:18:10.503Z",
+      "updatedAt": "2026-05-11T18:36:58.128Z",
+      "lastError": "Opening COM10: Access denied",
+      "finishedAt": "2026-05-11T18:36:58.128Z"
+    },
+    {
+      "id": "b1b4b6f2-758e-4e96-8d2c-191f23161991",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "K4CQD-U88H2",
+          "dateIso": "2026-05-11T18:19:29.357Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "10  STD  10.00"
+          ],
+          "qrText": "K4CQD-U88H2",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "failed",
+      "attempts": 5,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T18:37:08.103Z",
+      "createdAt": "2026-05-11T18:19:51.012Z",
+      "updatedAt": "2026-05-11T18:37:08.192Z",
+      "lastError": "Opening COM10: Access denied",
+      "finishedAt": "2026-05-11T18:37:08.192Z"
+    },
+    {
+      "id": "57eace2c-c5f8-4674-a7eb-60982f3df6cd",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "KC6S0-DX5DM",
+          "dateIso": "2026-05-11T18:22:21.097Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "10  STD  10.00"
+          ],
+          "qrText": "KC6S0-DX5DM",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "failed",
+      "attempts": 5,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T18:37:32.155Z",
+      "createdAt": "2026-05-11T18:22:22.342Z",
+      "updatedAt": "2026-05-11T18:37:49.208Z",
+      "lastError": "Ticket print timed out after 15000ms",
+      "finishedAt": "2026-05-11T18:37:49.208Z"
+    },
+    {
+      "id": "6dc05699-088d-496b-9abe-abddab6011a9",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "09QMH-8K658",
+          "dateIso": "2026-05-11T18:23:46.025Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "10  STD  10.00"
+          ],
+          "qrText": "09QMH-8K658",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "failed",
+      "attempts": 5,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T18:37:26.394Z",
+      "createdAt": "2026-05-11T18:23:46.971Z",
+      "updatedAt": "2026-05-11T18:37:50.292Z",
+      "lastError": "Opening COM10: Access denied",
+      "finishedAt": "2026-05-11T18:37:50.292Z"
+    },
+    {
+      "id": "7136ae81-1195-4384-bb79-1e8f7c8ef1eb",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "APBNL-A7OJI",
+          "dateIso": "2026-05-11T18:24:59.417Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "10  STD  10.00"
+          ],
+          "qrText": "APBNL-A7OJI",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "failed",
+      "attempts": 5,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T18:38:08.286Z",
+      "createdAt": "2026-05-11T18:25:00.465Z",
+      "updatedAt": "2026-05-11T18:38:08.347Z",
+      "lastError": "Opening COM10: Access denied",
+      "finishedAt": "2026-05-11T18:38:08.347Z"
+    },
+    {
+      "id": "83fec360-50fc-49ee-b46f-3b072d080cf3",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "UGS2P-LOI1V",
+          "dateIso": "2026-05-11T18:26:53.211Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "10  STD  10.00"
+          ],
+          "qrText": "UGS2P-LOI1V",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "failed",
+      "attempts": 5,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T18:38:18.336Z",
+      "createdAt": "2026-05-11T18:27:02.278Z",
+      "updatedAt": "2026-05-11T18:38:18.388Z",
+      "lastError": "Opening COM10: Access denied",
+      "finishedAt": "2026-05-11T18:38:18.388Z"
+    },
+    {
+      "id": "48daedbc-c61d-4328-99e4-a2ce664d35d9",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "UGS2P-LOI1V",
+          "dateIso": "2026-05-11T18:26:53.211Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "10  STD  10.00"
+          ],
+          "qrText": "UGS2P-LOI1V",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "failed",
+      "attempts": 5,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T18:38:26.364Z",
+      "createdAt": "2026-05-11T18:29:18.849Z",
+      "updatedAt": "2026-05-11T18:38:26.426Z",
+      "lastError": "Opening COM10: Access denied",
+      "finishedAt": "2026-05-11T18:38:26.426Z"
+    },
+    {
+      "id": "0801d440-8176-40ac-9ec8-f6df3e251359",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "UGS2P-LOI1V",
+          "dateIso": "2026-05-11T18:26:53.211Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "10  STD  10.00"
+          ],
+          "qrText": "UGS2P-LOI1V",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "failed",
+      "attempts": 5,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T18:38:36.425Z",
+      "createdAt": "2026-05-11T18:29:24.085Z",
+      "updatedAt": "2026-05-11T18:38:36.472Z",
+      "lastError": "Opening COM10: Access denied",
+      "finishedAt": "2026-05-11T18:38:36.472Z"
+    },
+    {
+      "id": "83cdbd17-a5b7-4e78-849e-cd97fd2d28b9",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "UGS2P-LOI1V",
+          "dateIso": "2026-05-11T18:26:53.211Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "10  STD  10.00"
+          ],
+          "qrText": "UGS2P-LOI1V",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "failed",
+      "attempts": 5,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T18:38:46.514Z",
+      "createdAt": "2026-05-11T18:29:30.889Z",
+      "updatedAt": "2026-05-11T18:38:48.517Z",
+      "lastError": "Opening COM10: Access denied",
+      "finishedAt": "2026-05-11T18:38:48.517Z"
+    },
+    {
+      "id": "a70a2944-af07-43cc-ac19-2ae5e2cc3921",
+      "type": "text",
+      "payload": {
+        "text": "Prueba desde Copilot\n2026-05-11T18:34:35.696Z"
+      },
+      "status": "failed",
+      "attempts": 5,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T18:38:56.489Z",
+      "createdAt": "2026-05-11T18:34:35.696Z",
+      "updatedAt": "2026-05-11T18:38:56.546Z",
+      "lastError": "Opening COM10: Access denied",
+      "finishedAt": "2026-05-11T18:38:56.547Z"
+    },
+    {
+      "id": "9632b4b5-68b3-463f-b458-4bbb33418174",
+      "type": "text",
+      "payload": {
+        "text": "Prueba bridge\n2026-05-11T18:38:41.892Z"
+      },
+      "status": "failed",
+      "attempts": 5,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T18:39:14.554Z",
+      "createdAt": "2026-05-11T18:38:41.892Z",
+      "updatedAt": "2026-05-11T18:39:14.624Z",
+      "lastError": "Opening COM10: Access denied",
+      "finishedAt": "2026-05-11T18:39:14.624Z"
+    },
+    {
+      "id": "0feb3641-4c86-430c-b6dd-a1846e8db46c",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "RKVBX-FV9NH",
+          "dateIso": "2026-05-11T18:32:07.112Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "10  STD  10.00"
+          ],
+          "qrText": "RKVBX-FV9NH",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 5,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T19:40:55.795Z",
+      "createdAt": "2026-05-11T18:42:01.990Z",
+      "updatedAt": "2026-05-11T19:40:57.039Z",
+      "finishedAt": "2026-05-11T19:40:57.038Z"
+    },
+    {
+      "id": "958cb3e7-9b51-4eb3-b4c5-cfa8905b26de",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "RKVBX-FV9NH",
+          "dateIso": "2026-05-11T18:32:07.112Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "10  STD  10.00"
+          ],
+          "qrText": "RKVBX-FV9NH",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 5,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T19:01:11.017Z",
+      "createdAt": "2026-05-11T18:43:19.812Z",
+      "updatedAt": "2026-05-11T19:01:13.937Z",
+      "finishedAt": "2026-05-11T19:01:13.937Z"
+    },
+    {
+      "id": "f8358121-f47c-4f20-b52f-870d35bdbe5a",
+      "type": "text",
+      "payload": {
+        "text": "Diagnostic test print 2026-05-11T12:45:20\n2026-05-11T18:45:20.146Z"
+      },
+      "status": "completed",
+      "attempts": 5,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T19:00:48.185Z",
+      "createdAt": "2026-05-11T18:45:20.146Z",
+      "updatedAt": "2026-05-11T19:00:49.883Z",
+      "finishedAt": "2026-05-11T19:00:49.883Z"
+    },
+    {
+      "id": "b1f25165-5ac8-4919-a051-b15b20792896",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "RKVBX-FV9NH",
+          "dateIso": "2026-05-11T18:32:07.112Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "10  STD  10.00"
+          ],
+          "qrText": "RKVBX-FV9NH",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T18:53:47.705Z",
+      "createdAt": "2026-05-11T18:53:47.705Z",
+      "updatedAt": "2026-05-11T18:53:50.106Z",
+      "finishedAt": "2026-05-11T18:53:50.106Z"
+    },
+    {
+      "id": "27e10bc0-b9ca-4e06-978c-f07aa66aaee9",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "RKVBX-FV9NH",
+          "dateIso": "2026-05-11T18:32:07.112Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "10  STD  10.00"
+          ],
+          "qrText": "RKVBX-FV9NH",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T18:54:52.140Z",
+      "createdAt": "2026-05-11T18:54:52.140Z",
+      "updatedAt": "2026-05-11T18:54:54.076Z",
+      "finishedAt": "2026-05-11T18:54:54.076Z"
+    },
+    {
+      "id": "2f297698-9de7-4c3f-b64c-763052b026bb",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "RKVBX-FV9NH",
+          "dateIso": "2026-05-11T18:32:07.112Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "10  STD  10.00"
+          ],
+          "qrText": "RKVBX-FV9NH",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T18:54:59.218Z",
+      "createdAt": "2026-05-11T18:54:59.218Z",
+      "updatedAt": "2026-05-11T18:55:00.316Z",
+      "finishedAt": "2026-05-11T18:55:00.316Z"
+    },
+    {
+      "id": "575a8a84-f823-4b40-bfba-1c7d1aec87c5",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "RKVBX-FV9NH",
+          "dateIso": "2026-05-11T18:32:07.112Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "10  STD  10.00"
+          ],
+          "qrText": "RKVBX-FV9NH",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T18:55:16.841Z",
+      "createdAt": "2026-05-11T18:55:16.841Z",
+      "updatedAt": "2026-05-11T18:55:18.431Z",
+      "finishedAt": "2026-05-11T18:55:18.431Z"
+    },
+    {
+      "id": "c9853f5a-d747-41d1-a5f5-9e850797c128",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "B5G82-BILQP",
+          "dateIso": "2026-05-11T19:03:25.433Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 20,
+              "total": 20
+            }
+          ],
+          "totals": {
+            "total": 20
+          },
+          "notes": [
+            "10  STD  20.00"
+          ],
+          "qrText": "B5G82-BILQP",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T19:03:33.111Z",
+      "createdAt": "2026-05-11T19:03:33.111Z",
+      "updatedAt": "2026-05-11T19:03:34.531Z",
+      "finishedAt": "2026-05-11T19:03:34.531Z"
+    },
+    {
+      "id": "2f8addc3-b241-4272-a844-9fa4b34cec39",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "MI2TP-SWJ2J",
+          "dateIso": "2026-05-11T19:08:24.011Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "60  STD  10.00"
+          ],
+          "qrText": "MI2TP-SWJ2J",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T19:08:36.126Z",
+      "createdAt": "2026-05-11T19:08:36.126Z",
+      "updatedAt": "2026-05-11T19:08:37.693Z",
+      "finishedAt": "2026-05-11T19:08:37.693Z"
+    },
+    {
+      "id": "2942964c-4444-4ade-906f-954eb7d362a7",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "MI2TP-SWJ2J",
+          "dateIso": "2026-05-11T19:08:24.011Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "60  STD  10.00"
+          ],
+          "qrText": "MI2TP-SWJ2J",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T19:08:43.088Z",
+      "createdAt": "2026-05-11T19:08:43.088Z",
+      "updatedAt": "2026-05-11T19:08:45.775Z",
+      "finishedAt": "2026-05-11T19:08:45.775Z"
+    },
+    {
+      "id": "aa4ed50a-4c5c-4875-ad4f-0f1f2cebaf88",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "MI2TP-SWJ2J",
+          "dateIso": "2026-05-11T19:08:24.011Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "60  STD  10.00"
+          ],
+          "qrText": "MI2TP-SWJ2J",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T19:09:20.767Z",
+      "createdAt": "2026-05-11T19:09:20.767Z",
+      "updatedAt": "2026-05-11T19:09:21.535Z",
+      "finishedAt": "2026-05-11T19:09:21.535Z"
+    },
+    {
+      "id": "80185cbd-1286-47dc-a481-8f0bf314e2fa",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "MI2TP-SWJ2J",
+          "dateIso": "2026-05-11T19:08:24.011Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "60  STD  10.00"
+          ],
+          "qrText": "MI2TP-SWJ2J",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T19:09:24.064Z",
+      "createdAt": "2026-05-11T19:09:24.064Z",
+      "updatedAt": "2026-05-11T19:09:25.917Z",
+      "finishedAt": "2026-05-11T19:09:25.917Z"
+    },
+    {
+      "id": "58b380cb-bb8c-4a34-ae56-5f625388bdd0",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "MI2TP-SWJ2J",
+          "dateIso": "2026-05-11T19:08:24.011Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "60  STD  10.00"
+          ],
+          "qrText": "MI2TP-SWJ2J",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T19:09:28.447Z",
+      "createdAt": "2026-05-11T19:09:28.447Z",
+      "updatedAt": "2026-05-11T19:09:29.857Z",
+      "finishedAt": "2026-05-11T19:09:29.857Z"
+    },
+    {
+      "id": "6e07698f-d247-4a7f-a031-4d3f0c287883",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "MI2TP-SWJ2J",
+          "dateIso": "2026-05-11T19:08:24.011Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "60  STD  10.00"
+          ],
+          "qrText": "MI2TP-SWJ2J",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T19:10:16.157Z",
+      "createdAt": "2026-05-11T19:10:16.157Z",
+      "updatedAt": "2026-05-11T19:10:17.927Z",
+      "finishedAt": "2026-05-11T19:10:17.926Z"
+    },
+    {
+      "id": "05a9f5ca-6765-4991-a5d5-c23f15bb407d",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "MI2TP-SWJ2J",
+          "dateIso": "2026-05-11T19:08:24.011Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "60  STD  10.00"
+          ],
+          "qrText": "MI2TP-SWJ2J",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T19:10:54.488Z",
+      "createdAt": "2026-05-11T19:10:54.488Z",
+      "updatedAt": "2026-05-11T19:10:56.190Z",
+      "finishedAt": "2026-05-11T19:10:56.190Z"
+    },
+    {
+      "id": "7fddbb94-0e04-4bb2-8307-111b8e438099",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "MI2TP-SWJ2J",
+          "dateIso": "2026-05-11T19:08:24.011Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "60  STD  10.00"
+          ],
+          "qrText": "MI2TP-SWJ2J",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T19:11:16.112Z",
+      "createdAt": "2026-05-11T19:11:16.112Z",
+      "updatedAt": "2026-05-11T19:11:18.319Z",
+      "finishedAt": "2026-05-11T19:11:18.319Z"
+    },
+    {
+      "id": "77cc6764-7930-43ef-aab1-059f6900fb6c",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "MI2TP-SWJ2J",
+          "dateIso": "2026-05-11T19:08:24.011Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "60  STD  10.00"
+          ],
+          "qrText": "MI2TP-SWJ2J",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T19:12:24.865Z",
+      "createdAt": "2026-05-11T19:12:24.865Z",
+      "updatedAt": "2026-05-11T19:12:26.661Z",
+      "finishedAt": "2026-05-11T19:12:26.661Z"
+    },
+    {
+      "id": "b37f3197-8250-4bcf-a30d-169c1a0cbd32",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "MI2TP-SWJ2J",
+          "dateIso": "2026-05-11T19:08:24.011Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "60  STD  10.00"
+          ],
+          "qrText": "MI2TP-SWJ2J",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T19:14:46.171Z",
+      "createdAt": "2026-05-11T19:14:46.171Z",
+      "updatedAt": "2026-05-11T19:14:48.892Z",
+      "finishedAt": "2026-05-11T19:14:48.891Z"
+    },
+    {
+      "id": "fa6a0a91-9a27-494a-9cf5-51b0472aac7a",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "MI2TP-SWJ2J",
+          "dateIso": "2026-05-11T19:08:24.011Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "60  STD  10.00"
+          ],
+          "qrText": "MI2TP-SWJ2J",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T19:15:17.862Z",
+      "createdAt": "2026-05-11T19:15:17.862Z",
+      "updatedAt": "2026-05-11T19:15:19.245Z",
+      "finishedAt": "2026-05-11T19:15:19.245Z"
+    },
+    {
+      "id": "8efc8e18-7ccb-4545-a613-436f9e043d57",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "MI2TP-SWJ2J",
+          "dateIso": "2026-05-11T19:08:24.011Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "60  STD  10.00"
+          ],
+          "qrText": "MI2TP-SWJ2J",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T19:15:27.242Z",
+      "createdAt": "2026-05-11T19:15:27.242Z",
+      "updatedAt": "2026-05-11T19:15:29.084Z",
+      "finishedAt": "2026-05-11T19:15:29.084Z"
+    },
+    {
+      "id": "0b395d6e-cc55-4cf5-a292-dcc1cdb5383a",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "MI2TP-SWJ2J",
+          "dateIso": "2026-05-11T19:08:24.011Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "60  STD  10.00"
+          ],
+          "qrText": "MI2TP-SWJ2J",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T19:16:04.766Z",
+      "createdAt": "2026-05-11T19:16:04.766Z",
+      "updatedAt": "2026-05-11T19:16:07.441Z",
+      "finishedAt": "2026-05-11T19:16:07.441Z"
+    },
+    {
+      "id": "915899a3-d6cc-4691-abc9-3a975fa2bb5a",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "MI2TP-SWJ2J",
+          "dateIso": "2026-05-11T19:08:24.011Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "60  STD  10.00"
+          ],
+          "qrText": "MI2TP-SWJ2J",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T19:36:21.102Z",
+      "createdAt": "2026-05-11T19:36:21.102Z",
+      "updatedAt": "2026-05-11T19:36:22.179Z",
+      "finishedAt": "2026-05-11T19:36:22.179Z"
+    },
+    {
+      "id": "f7bdb5ff-4b60-4647-b4e1-da505e53e022",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "MI2TP-SWJ2J",
+          "dateIso": "2026-05-11T19:08:24.011Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "60  STD  10.00"
+          ],
+          "qrText": "MI2TP-SWJ2J",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T19:38:21.810Z",
+      "createdAt": "2026-05-11T19:38:21.810Z",
+      "updatedAt": "2026-05-11T19:38:24.746Z",
+      "finishedAt": "2026-05-11T19:38:24.746Z"
+    },
+    {
+      "id": "4de4bb30-c058-4913-a6f2-9b626ee5721b",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "MI2TP-SWJ2J",
+          "dateIso": "2026-05-11T19:08:24.011Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "60  STD  10.00"
+          ],
+          "qrText": "MI2TP-SWJ2J",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T19:38:50.254Z",
+      "createdAt": "2026-05-11T19:38:50.254Z",
+      "updatedAt": "2026-05-11T19:38:52.660Z",
+      "finishedAt": "2026-05-11T19:38:52.660Z"
+    },
+    {
+      "id": "1232acdc-1c47-498e-81da-b2c92eeb9f4f",
+      "type": "ticket",
+      "payload": {
+        "ticket": {
+          "title": "Ticket de Venta",
+          "businessName": "GameOver Loteria",
+          "terminal": "WEB",
+          "cashier": "Administrador Principal",
+          "ticketNumber": "MI2TP-SWJ2J",
+          "dateIso": "2026-05-11T19:08:24.011Z",
+          "items": [
+            {
+              "label": "Sorteo 2PM",
+              "qty": 1,
+              "unitPrice": 10,
+              "total": 10
+            }
+          ],
+          "totals": {
+            "total": 10
+          },
+          "notes": [
+            "60  STD  10.00"
+          ],
+          "qrText": "MI2TP-SWJ2J",
+          "footer": [
+            "Gracias por su compra"
+          ]
+        }
+      },
+      "status": "completed",
+      "attempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": "2026-05-11T19:40:27.341Z",
+      "createdAt": "2026-05-11T19:40:27.341Z",
+      "updatedAt": "2026-05-11T19:40:28.973Z",
+      "finishedAt": "2026-05-11T19:40:28.973Z"
+    }
+  ]
+}

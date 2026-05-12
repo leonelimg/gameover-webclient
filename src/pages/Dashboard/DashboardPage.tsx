@@ -1,11 +1,66 @@
 import { useEffect, useState } from 'react';
-import { Users, Ticket, ShoppingCart, TrendingUp, DollarSign, Award } from 'lucide-react';
+import {
+  Users,
+  Ticket,
+  ShoppingCart,
+  TrendingUp,
+  DollarSign,
+  Award,
+  CalendarDays,
+} from 'lucide-react';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatCurrency, formatDateTime } from '@/utils/helpers';
 import { useAuth } from '@/context/AuthContext';
 import { reportsApi, ReportSummary, TopNumber } from '@/services/api';
 import { Ticket as TicketType } from '@/types';
+
+type DashboardRange = 'today' | 'last7' | 'week' | 'month' | 'custom';
+const DASHBOARD_RANGE_STORAGE_KEY = 'go_dashboard_selected_range';
+const DASHBOARD_CUSTOM_FROM_STORAGE_KEY = 'go_dashboard_custom_from_date';
+const DASHBOARD_CUSTOM_TO_STORAGE_KEY = 'go_dashboard_custom_to_date';
+
+const DASHBOARD_RANGES: Array<{ key: DashboardRange; label: string; hint: string }> = [
+  { key: 'today', label: 'Hoy', hint: 'Cierre diario' },
+  { key: 'last7', label: 'Ultimos 7 dias', hint: 'Ventana movil' },
+  { key: 'week', label: 'Esta semana', hint: 'Lun a hoy' },
+  { key: 'month', label: 'Este mes', hint: 'Mes en curso' },
+  { key: 'custom', label: 'Custom', hint: 'Rango manual' },
+];
+
+function isDashboardRange(value: string): value is DashboardRange {
+  return DASHBOARD_RANGES.some((range) => range.key === value);
+}
+
+function toISODateLocal(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getDateRange(range: DashboardRange): { fromDate: string; toDate: string } {
+  const now = new Date();
+  const start = new Date(now);
+
+  if (range === 'today') {
+    return { fromDate: toISODateLocal(now), toDate: toISODateLocal(now) };
+  }
+
+  if (range === 'last7') {
+    start.setDate(now.getDate() - 6);
+    return { fromDate: toISODateLocal(start), toDate: toISODateLocal(now) };
+  }
+
+  if (range === 'week') {
+    const mondayOffset = (now.getDay() + 6) % 7;
+    start.setDate(now.getDate() - mondayOffset);
+    return { fromDate: toISODateLocal(start), toDate: toISODateLocal(now) };
+  }
+
+  start.setDate(1);
+  return { fromDate: toISODateLocal(start), toDate: toISODateLocal(now) };
+}
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -19,20 +74,130 @@ export default function DashboardPage() {
 
   const [recentTickets, setRecentTickets] = useState<TicketType[]>([]);
   const [topNumbers, setTopNumbers] = useState<TopNumber[]>([]);
+  const [customFromDate, setCustomFromDate] = useState<string>(() => {
+    const savedFromDate = localStorage.getItem(DASHBOARD_CUSTOM_FROM_STORAGE_KEY);
+    return savedFromDate || toISODateLocal(new Date());
+  });
+  const [customToDate, setCustomToDate] = useState<string>(() => {
+    const savedToDate = localStorage.getItem(DASHBOARD_CUSTOM_TO_STORAGE_KEY);
+    return savedToDate || toISODateLocal(new Date());
+  });
+  const [selectedRange, setSelectedRange] = useState<DashboardRange>(() => {
+    const savedRange = localStorage.getItem(DASHBOARD_RANGE_STORAGE_KEY);
+    if (savedRange && isDashboardRange(savedRange)) {
+      return savedRange;
+    }
+    return 'today';
+  });
 
   useEffect(() => {
-    reportsApi.summary().then(setStats).catch(() => {});
-    reportsApi.recentTickets(undefined, 5).then(setRecentTickets).catch(() => {});
-    reportsApi.topNumbers(undefined, 10).then(setTopNumbers).catch(() => {});
-  }, []);
+    localStorage.setItem(DASHBOARD_RANGE_STORAGE_KEY, selectedRange);
+  }, [selectedRange]);
+
+  useEffect(() => {
+    localStorage.setItem(DASHBOARD_CUSTOM_FROM_STORAGE_KEY, customFromDate);
+  }, [customFromDate]);
+
+  useEffect(() => {
+    localStorage.setItem(DASHBOARD_CUSTOM_TO_STORAGE_KEY, customToDate);
+  }, [customToDate]);
+
+  useEffect(() => {
+    const isCustomRange = selectedRange === 'custom';
+    if (isCustomRange && (!customFromDate || !customToDate || customFromDate > customToDate)) {
+      return;
+    }
+
+    const { fromDate, toDate } = isCustomRange
+      ? { fromDate: customFromDate, toDate: customToDate }
+      : getDateRange(selectedRange);
+
+    let isMounted = true;
+
+    Promise.all([
+      reportsApi.summary(undefined, fromDate, toDate),
+      reportsApi.recentTickets(undefined, 5, fromDate, toDate),
+      reportsApi.topNumbers(undefined, 10, fromDate, toDate),
+    ])
+      .then(([summaryData, recentData, topData]) => {
+        if (!isMounted) return;
+        setStats(summaryData);
+        setRecentTickets(recentData);
+        setTopNumbers(topData);
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedRange, customFromDate, customToDate]);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">
-          Bienvenido, {user?.fullName?.split(' ')[0]}
-        </h1>
-        <p className="text-slate-500 text-sm mt-1">Resumen del sistema</p>
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">
+            Bienvenido, {user?.fullName?.split(' ')[0]}
+          </h1>
+          <p className="text-slate-500 text-sm mt-1">Resumen del sistema</p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur">
+          <div className="mb-2 flex items-center gap-2 px-2 text-xs font-medium uppercase tracking-wider text-slate-500">
+            <CalendarDays size={14} />
+            Periodo del dashboard
+          </div>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+            {DASHBOARD_RANGES.map((range) => {
+              const isActive = selectedRange === range.key;
+              return (
+                <button
+                  key={range.key}
+                  type="button"
+                  onClick={() => setSelectedRange(range.key)}
+                  className={`rounded-xl border px-3 py-2 text-left transition-all ${
+                    isActive
+                      ? 'border-blue-200 bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-sm'
+                      : 'border-slate-200 bg-slate-50/70 text-slate-700 hover:border-slate-300 hover:bg-slate-100'
+                  }`}
+                >
+                  <p className="text-sm font-semibold leading-tight">{range.label}</p>
+                  <p className={`text-[11px] ${isActive ? 'text-blue-100' : 'text-slate-500'}`}>
+                    {range.hint}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedRange === 'custom' && (
+            <div className="mt-3 grid grid-cols-1 gap-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3 md:grid-cols-2">
+              <label className="text-xs font-medium text-slate-600">
+                Desde
+                <input
+                  type="date"
+                  value={customFromDate}
+                  onChange={(e) => setCustomFromDate(e.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
+              </label>
+              <label className="text-xs font-medium text-slate-600">
+                Hasta
+                <input
+                  type="date"
+                  value={customToDate}
+                  onChange={(e) => setCustomToDate(e.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
+              </label>
+              {customFromDate > customToDate && (
+                <p className="md:col-span-2 text-xs text-red-600">
+                  El rango es invalido: la fecha desde debe ser menor o igual que hasta.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Stats grid */}

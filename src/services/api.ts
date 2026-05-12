@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { User, Plan, Draw, Ticket } from '@/types';
+import { User, Plan, Draw, Ticket, SpecialMultiplier, PaymentsWinningTicketsResponse } from '@/types';
 
 // ─── Base URL ─────────────────────────────────────────────────────────────────
 // When VITE_API_URL is set, use the real API. Otherwise fall back to localhost.
@@ -42,6 +42,10 @@ api.interceptors.request.use((config) => {
 
 let refreshPromise: Promise<string> | null = null;
 
+const notifyUnauthorized = () => {
+  window.dispatchEvent(new Event('go:unauthorized'));
+};
+
 api.interceptors.response.use(
   (res) => res,
   async (error: AxiosError) => {
@@ -51,7 +55,7 @@ api.interceptors.response.use(
       const refreshToken = tokenStorage.getRefresh();
       if (!refreshToken) {
         tokenStorage.clear();
-        window.location.href = '/login';
+        notifyUnauthorized();
         return Promise.reject(error);
       }
       try {
@@ -77,7 +81,7 @@ api.interceptors.response.use(
         return api(original);
       } catch {
         tokenStorage.clear();
-        window.location.href = '/login';
+        notifyUnauthorized();
         return Promise.reject(error);
       }
     }
@@ -155,7 +159,34 @@ export const usersApi = {
     return res.data;
   },
 };
+// ─── Special Multipliers API ─────────────────────────────────────────────────────
 
+export interface SpecialMultiplierPayload {
+  name: string;
+  value: number;
+}
+
+export const specialMultipliersApi = {
+  list: async (): Promise<SpecialMultiplier[]> => {
+    const res = await api.get<SpecialMultiplier[]>('/api/special-multipliers');
+    return res.data;
+  },
+  get: async (id: string): Promise<SpecialMultiplier> => {
+    const res = await api.get<SpecialMultiplier>(`/api/special-multipliers/${id}`);
+    return res.data;
+  },
+  create: async (data: SpecialMultiplierPayload): Promise<SpecialMultiplier> => {
+    const res = await api.post<SpecialMultiplier>('/api/special-multipliers', data);
+    return res.data;
+  },
+  update: async (id: string, data: Partial<SpecialMultiplierPayload>): Promise<SpecialMultiplier> => {
+    const res = await api.patch<SpecialMultiplier>(`/api/special-multipliers/${id}`, data);
+    return res.data;
+  },
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/api/special-multipliers/${id}`);
+  },
+};
 // ─── Plans API ────────────────────────────────────────────────────────────────
 
 export interface PlanPayload {
@@ -191,14 +222,34 @@ export const plansApi = {
 
 export interface DrawPayload {
   name: string;
-  openTime: string;
   closeTime: string;
+  minutosPreviosCierre?: number;
   winnerNumber?: string | null;
+  specialMultiplierId?: string | null;
+}
+
+export interface DrawListParams {
+  fromDate?: string;
+  toDate?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface DrawListResponse {
+  items: Draw[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export const drawsApi = {
   list: async (): Promise<Draw[]> => {
     const res = await api.get<Draw[]>('/api/draws');
+    return res.data;
+  },
+  listPaged: async (params?: DrawListParams): Promise<DrawListResponse> => {
+    const res = await api.get<DrawListResponse>('/api/draws/search', { params });
     return res.data;
   },
   get: async (id: string): Promise<Draw> => {
@@ -229,12 +280,17 @@ export const drawsApi = {
 
 export interface CreateTicketPayload {
   drawId: string;
-  customerName: string;
-  lines: { number: string; amount: number; isNicaEspecial: boolean }[];
+  customerName?: string;
+  lines: { number: string; amount: number; specialAmount?: number; isNicaEspecial: boolean }[];
 }
 
 export const ticketsApi = {
-  list: async (params?: { drawId?: string; sellerId?: string }): Promise<Ticket[]> => {
+  list: async (params?: {
+    drawId?: string;
+    sellerId?: string;
+    associateId?: string;
+    includeCanceled?: boolean;
+  }): Promise<Ticket[]> => {
     const res = await api.get<Ticket[]>('/api/tickets', { params });
     return res.data;
   },
@@ -248,6 +304,31 @@ export const ticketsApi = {
   },
   markPrinted: async (id: string): Promise<Ticket> => {
     const res = await api.patch<Ticket>(`/api/tickets/${id}/print`);
+    return res.data;
+  },
+  cancel: async (id: string, reason?: string): Promise<Ticket> => {
+    const res = await api.patch<Ticket>(`/api/tickets/${id}/cancel`, { reason });
+    return res.data;
+  },
+};
+
+// ─── Payments API ─────────────────────────────────────────────────────────────
+
+export const paymentsApi = {
+  listWinningTickets: async (params: {
+    drawId: string;
+    status?: 'all' | 'pendiente' | 'pagado';
+    code?: string;
+  }): Promise<PaymentsWinningTicketsResponse> => {
+    const res = await api.get<PaymentsWinningTicketsResponse>('/api/payments/winning-tickets', { params });
+    return res.data;
+  },
+  markPaid: async (payload: { ticketId?: string; code?: string }): Promise<{ ticket: Ticket; prizeAmount: number }> => {
+    const res = await api.patch<{ ticket: Ticket; prizeAmount: number }>('/api/payments/mark-paid', payload);
+    return res.data;
+  },
+  revertPayment: async (ticketId: string): Promise<Ticket> => {
+    const res = await api.patch<Ticket>(`/api/payments/${ticketId}/revert`);
     return res.data;
   },
 };
@@ -273,22 +354,209 @@ export interface HierarchyNode {
   children: HierarchyNode[];
 }
 
+export interface BalanceBreakdownRow {
+  userId: string;
+  fullName: string;
+  username: string;
+  role: 'admin' | 'asociado' | 'vendedor';
+  parentName: string | null;
+  ticketCount: number;
+  totalSales: number;
+  totalPrizes: number;
+  totalCommissions: number;
+  balance: number;
+}
+
+export interface VendorBreakdownRow {
+  vendorId: string;
+  vendorName: string;
+  ticketCount: number;
+  totalSales: number;
+  totalPrizes: number;
+  totalCommissions: number;
+  balance: number;
+}
+
+export interface DrawBreakdownRow {
+  drawId: string;
+  drawName: string;
+  ticketCount: number;
+  totalSales: number;
+  totalPrizes: number;
+  totalCommissions: number;
+  balance: number;
+}
+
+export interface AssociateDrawBreakdownRow {
+  drawId: string;
+  drawName: string;
+  ticketCount: number;
+  totalSales: number;
+  totalPrizes: number;
+  totalCommissions: number;
+  balance: number;
+}
+
+export interface AssociateBreakdownRow {
+  associateId: string;
+  associateName: string;
+  ticketCount: number;
+  totalSales: number;
+  totalPrizes: number;
+  totalCommissions: number;
+  balance: number;
+  draws: AssociateDrawBreakdownRow[];
+}
+
+export interface BalanceBreakdownTotals {
+  ticketCount: number;
+  totalSales: number;
+  totalPrizes: number;
+  totalCommissions: number;
+  balance: number;
+}
+
+export interface BalanceBreakdownResponse {
+  filters: {
+    drawId: string | null;
+    fromDate: string | null;
+    toDate: string | null;
+  };
+  totals: BalanceBreakdownTotals;
+  rows: BalanceBreakdownRow[];
+  byVendor: {
+    totals: BalanceBreakdownTotals;
+    rows: VendorBreakdownRow[];
+  };
+  byDraw: {
+    totals: BalanceBreakdownTotals;
+    rows: DrawBreakdownRow[];
+  };
+  byAssociate: {
+    totals: BalanceBreakdownTotals;
+    rows: AssociateBreakdownRow[];
+  };
+}
+
+export interface SalesByUserRow {
+  userId: string;
+  fullName: string;
+  username: string;
+  role: 'admin' | 'asociado' | 'vendedor';
+  ticketCount: number;
+  activeTicketCount: number;
+  canceledTicketCount: number;
+  totalSales: number;
+}
+
+export interface SalesByUserResponse {
+  filters: {
+    drawId: string | null;
+    userId: string | null;
+    fromDate: string | null;
+    toDate: string | null;
+  };
+  totals: {
+    ticketCount: number;
+    activeTicketCount: number;
+    canceledTicketCount: number;
+    totalSales: number;
+  };
+  rows: SalesByUserRow[];
+  tickets: Ticket[];
+}
+
+export interface DrawListNumberRow {
+  number: string;
+  total: number;
+}
+
+export interface DrawListsResponse {
+  filters: {
+    drawId: string | null;
+    userId: string | null;
+    fromDate: string | null;
+    toDate: string | null;
+  };
+  totals: {
+    ticketCount: number;
+    totalAmount: number;
+  };
+  numbers: DrawListNumberRow[];
+}
+
 export const reportsApi = {
-  summary: async (drawId?: string): Promise<ReportSummary> => {
-    const res = await api.get<ReportSummary>('/api/reports/summary', { params: { drawId } });
+  summary: async (drawId?: string, fromDate?: string, toDate?: string): Promise<ReportSummary> => {
+    const res = await api.get<ReportSummary>('/api/reports/summary', { params: { drawId, fromDate, toDate } });
     return res.data;
   },
-  topNumbers: async (drawId?: string, limit = 10): Promise<TopNumber[]> => {
-    const res = await api.get<TopNumber[]>('/api/reports/top-numbers', { params: { drawId, limit } });
+  topNumbers: async (drawId?: string, limit = 10, fromDate?: string, toDate?: string): Promise<TopNumber[]> => {
+    const res = await api.get<TopNumber[]>('/api/reports/top-numbers', { params: { drawId, limit, fromDate, toDate } });
     return res.data;
   },
-  hierarchy: async (drawId?: string): Promise<HierarchyNode[]> => {
-    const res = await api.get<HierarchyNode[]>('/api/reports/hierarchy', { params: { drawId } });
+  hierarchy: async (drawId?: string, fromDate?: string, toDate?: string): Promise<HierarchyNode[]> => {
+    const res = await api.get<HierarchyNode[]>('/api/reports/hierarchy', { params: { drawId, fromDate, toDate } });
     return res.data;
   },
-  recentTickets: async (drawId?: string, limit = 10): Promise<Ticket[]> => {
-    const res = await api.get<Ticket[]>('/api/reports/recent-tickets', { params: { drawId, limit } });
+  recentTickets: async (drawId?: string, limit = 10, fromDate?: string, toDate?: string): Promise<Ticket[]> => {
+    const res = await api.get<Ticket[]>('/api/reports/recent-tickets', { params: { drawId, limit, fromDate, toDate } });
     return res.data;
+  },
+  balanceBreakdown: async (params?: {
+    drawId?: string;
+    fromDate?: string;
+    toDate?: string;
+  }): Promise<BalanceBreakdownResponse> => {
+    const res = await api.get<BalanceBreakdownResponse>('/api/reports/balance-breakdown', { params });
+    return res.data;
+  },
+  salesByUser: async (params?: {
+    drawId?: string;
+    userId?: string;
+    fromDate?: string;
+    toDate?: string;
+  }): Promise<SalesByUserResponse> => {
+    const res = await api.get<SalesByUserResponse>('/api/reports/sales-by-user', { params });
+    return res.data;
+  },
+  drawLists: async (params?: {
+    drawId?: string;
+    userId?: string;
+    fromDate?: string;
+    toDate?: string;
+  }): Promise<DrawListsResponse> => {
+    const res = await api.get<DrawListsResponse>('/api/reports/draw-lists', { params });
+    return res.data;
+  },
+};
+
+export interface PrintBridgeInstallerInfo {
+  fileName: string;
+  sizeBytes: number;
+  updatedAt: string;
+  downloadUrl: string;
+}
+
+export const printBridgeInstallerApi = {
+  getInfo: async (): Promise<PrintBridgeInstallerInfo> => {
+    const res = await api.get<PrintBridgeInstallerInfo>('/api/print-bridge/installer');
+    return res.data;
+  },
+
+  download: async (downloadUrl: string, fileName: string): Promise<void> => {
+    // Descargar el archivo desde el endpoint API que devuelve el blob
+    const res = await api.get<Blob>(downloadUrl, {
+      responseType: 'blob',
+    });
+
+    const url = URL.createObjectURL(res.data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
   },
 };
 

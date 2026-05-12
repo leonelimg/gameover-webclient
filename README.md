@@ -33,6 +33,7 @@ gameover-webclient/
 │       ├── schema.prisma     # Esquema PostgreSQL con Prisma ORM
 │       └── seed.ts           # Datos iniciales de ejemplo
 │
+├── print-bridge/             # Servicio local de impresión ESC/POS (Bluetooth serial)
 ├── docker-compose.yml        # PostgreSQL + API + Frontend
 ├── Dockerfile.frontend
 └── nginx.conf
@@ -138,6 +139,25 @@ npm run dev
 ```
 
 ---
+
+## Impresion Nativa de Tickets (Bluetooth)
+
+El proyecto incluye `print-bridge/`, un servicio local para impresion termica ESC/POS en Windows usando puerto COM (incluye impresoras Bluetooth emparejadas).
+
+Flujo:
+1. Frontend envia el ticket al bridge en `http://127.0.0.1:17890/print-ticket`.
+2. El bridge encola el trabajo y lo imprime por serial COM.
+3. Si falla, reintenta automaticamente y expone estado por API.
+
+Inicio rapido:
+```bash
+cd print-bridge
+cp .env.example .env
+npm install
+npm run dev
+```
+
+Mas detalles en `print-bridge/README.md`.
 
 ## Credenciales Demo
 

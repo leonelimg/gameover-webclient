@@ -1,0 +1,72 @@
+{
+  "name": "gameover-print-bridge",
+  "version": "0.1.0",
+  "author": "GameOver Loteria",
+  "private": true,
+  "description": "Local print bridge for GameOver tickets",
+  "main": "dist-electron/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "npm run build:bridge && npm run build:electron",
+    "build:bridge": "tsc -p tsconfig.json",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "start": "node dist/index.js",
+    "start:electron": "electron .",
+    "dist:win": "npm run build && electron-builder --win nsis",
+    "dist:portable": "npm run build && electron-builder --win portable",
+    "lint": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.6.2",
+    "express": "^4.21.2",
+    "serialport": "^12.0.0",
+    "uuid": "^11.1.0",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.15.18",
+    "electron": "^36.3.2",
+    "electron-builder": "^24.13.3",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  },
+  "build": {
+    "appId": "com.gameover.printbridge",
+    "productName": "GameOver Print Bridge",
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        "portable"
+      ]
+    },
+    "portable": {
+      "requestExecutionLevel": "user"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://updates.example.com/gameover-print-bridge"
+      }
+    ]
+  }
+}

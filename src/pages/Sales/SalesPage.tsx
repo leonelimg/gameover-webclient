@@ -1,45 +1,134 @@
-import { useEffect, useState } from 'react';
-import { Plus, Trash2, Printer, ShoppingCart, Award } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Plus, Trash2, Printer, ShoppingCart, Award, CheckCircle, Clock, Loader, RotateCcw, XCircle } from 'lucide-react';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { generateId, formatCurrency, formatDateTime, isDrawOpen } from '@/utils/helpers';
-import { Draw, Ticket } from '@/types';
+import { Draw, PrintJob, PrintJobStatus, Ticket, User } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { drawsApi, ticketsApi, reportsApi, CreateTicketPayload, TopNumber } from '@/services/api';
+import { mapSaleTicketToPrintBridge, printBridgeApi } from '@/services/printBridge';
 
 interface SaleLine {
   id: string;
   number: string;
   amount: string;
-  isNicaEspecial: boolean;
+  specialAmount: string;
+}
+
+const NATIVE_PRINT_STATUS_LABEL: Record<PrintJobStatus, string> = {
+  pending: 'Pendiente',
+  processing: 'Procesando',
+  retrying: 'Reintentando',
+  completed: 'Completado',
+  failed: 'Fallido',
+};
+
+const NATIVE_PRINT_STATUS_BADGE: Record<PrintJobStatus, 'secondary' | 'success' | 'warning' | 'danger' | 'info'> = {
+  pending: 'secondary',
+  processing: 'info',
+  retrying: 'warning',
+  completed: 'success',
+  failed: 'danger',
+};
+
+function NativePrintStatusIcon({ status }: { status: PrintJobStatus }) {
+  switch (status) {
+    case 'completed':
+      return <CheckCircle size={14} className="text-green-600" />;
+    case 'failed':
+      return <XCircle size={14} className="text-red-600" />;
+    case 'processing':
+      return <Loader size={14} className="animate-spin text-blue-600" />;
+    case 'retrying':
+      return <RotateCcw size={14} className="text-yellow-600" />;
+    default:
+      return <Clock size={14} className="text-slate-400" />;
+  }
 }
 
 export default function SalesPage() {
   const { user } = useAuth();
 
+  const readSessionString = (key: string, fallback = '') => {
+    const value = sessionStorage.getItem(key);
+    return value ?? fallback;
+  };
+
+  const readSessionLines = (): SaleLine[] => {
+    try {
+      const raw = sessionStorage.getItem('go_sales_lines');
+      if (!raw) {
+        return [{ id: generateId(), number: '', amount: '', specialAmount: '' }];
+      }
+      const parsed = JSON.parse(raw) as Array<Partial<SaleLine> & { isNicaEspecial?: boolean }>;
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        return [{ id: generateId(), number: '', amount: '', specialAmount: '' }];
+      }
+      return parsed.map((line) => ({
+        id: line.id ?? generateId(),
+        number: line.number ?? '',
+        amount: line.amount ?? '',
+        specialAmount: line.specialAmount ?? '',
+      }));
+    } catch {
+      return [{ id: generateId(), number: '', amount: '', specialAmount: '' }];
+    }
+  };
+
+  const readSessionTicket = (): Ticket | null => {
+    try {
+      const raw = sessionStorage.getItem('go_last_ticket');
+      return raw ? (JSON.parse(raw) as Ticket) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const readSessionPrintMode = (): boolean => {
+    return sessionStorage.getItem('go_sales_print_mode') === '1';
+  };
+
   const [draws, setDraws] = useState<Draw[]>([]);
   const [topNumbers, setTopNumbers] = useState<TopNumber[]>([]);
   const [drawTickets, setDrawTickets] = useState<Ticket[]>([]);
 
-  const openDraws = draws.filter((d) => isDrawOpen(d.openTime, d.closeTime));
+  const openDraws = useMemo(
+    () => draws.filter((d) => d.status !== 'finalizado' && isDrawOpen(d.closeTime, d.minutosPreviosCierre)),
+    [draws],
+  );
+  const drawOptions = useMemo(
+    () => [
+      { value: '', label: 'Selecciona un sorteo...' },
+      ...openDraws.map((d) => ({ value: d.id, label: d.name })),
+    ],
+    [openDraws],
+  );
 
-  const [selectedDrawId, setSelectedDrawId] = useState('');
-  const [customerName, setCustomerName] = useState('');
-  const [lines, setLines] = useState<SaleLine[]>([
-    { id: generateId(), number: '', amount: '', isNicaEspecial: false },
-  ]);
-  const [error, setError] = useState('');
-  const [lastTicket, setLastTicket] = useState<Ticket | null>(null);
-  const [printMode, setPrintMode] = useState(false);
+  const [selectedDrawId, setSelectedDrawId] = useState(() => readSessionString('go_sales_selected_draw'));
+  const [customerName, setCustomerName] = useState(() => readSessionString('go_sales_customer_name'));
+  const [lines, setLines] = useState<SaleLine[]>(readSessionLines);
+  const [error, setError] = useState(() => readSessionString('go_sales_error'));
+  const [lastTicket, setLastTicket] = useState<Ticket | null>(readSessionTicket);
+  const [printMode, setPrintMode] = useState(readSessionPrintMode);
+  const [nativePrintMsg, setNativePrintMsg] = useState(() => readSessionString('go_sales_native_print_msg'));
+  const [nativePrintJobId, setNativePrintJobId] = useState(() => readSessionString('go_sales_native_print_job_id'));
+  const [nativePrintJob, setNativePrintJob] = useState<PrintJob | null>(null);
+  const [nativePrintStatusError, setNativePrintStatusError] = useState('');
+  const [retryingPrintJob, setRetryingPrintJob] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     drawsApi.list().then((list) => {
       setDraws(list);
-      const firstOpen = list.find((d) => isDrawOpen(d.openTime, d.closeTime));
-      if (firstOpen) setSelectedDrawId(firstOpen.id);
+      const firstOpen = list.find((d) => d.status !== 'finalizado' && isDrawOpen(d.closeTime, d.minutosPreviosCierre));
+      setSelectedDrawId((current) => {
+        if (current && list.some((d) => d.id === current)) {
+          return current;
+        }
+        return firstOpen?.id ?? '';
+      });
     }).catch(() => {});
   }, []);
 
@@ -53,15 +142,125 @@ export default function SalesPage() {
     ticketsApi.list({ drawId: selectedDrawId }).then(setDrawTickets).catch(() => {});
   }, [selectedDrawId]);
 
-  const selectedDraw = draws.find((d) => d.id === selectedDrawId);
+  useEffect(() => {
+    sessionStorage.setItem('go_sales_selected_draw', selectedDrawId);
+  }, [selectedDrawId]);
 
-  const getSoldForNumber = (number: string) =>
-    drawTickets.flatMap((t) => t.lines).filter((l) => l.number === number).reduce((sum, l) => sum + l.amount, 0);
+  useEffect(() => {
+    sessionStorage.setItem('go_sales_customer_name', customerName);
+  }, [customerName]);
 
-  const total = lines.reduce((sum, l) => sum + (parseFloat(l.amount) || 0), 0);
+  useEffect(() => {
+    sessionStorage.setItem('go_sales_lines', JSON.stringify(lines));
+  }, [lines]);
+
+  useEffect(() => {
+    sessionStorage.setItem('go_sales_error', error);
+  }, [error]);
+
+  useEffect(() => {
+    if (!lastTicket) {
+      sessionStorage.removeItem('go_last_ticket');
+      return;
+    }
+    sessionStorage.setItem('go_last_ticket', JSON.stringify(lastTicket));
+  }, [lastTicket]);
+
+  useEffect(() => {
+    sessionStorage.setItem('go_sales_print_mode', printMode ? '1' : '0');
+  }, [printMode]);
+
+  useEffect(() => {
+    sessionStorage.setItem('go_sales_native_print_msg', nativePrintMsg);
+  }, [nativePrintMsg]);
+
+  useEffect(() => {
+    sessionStorage.setItem('go_sales_native_print_job_id', nativePrintJobId);
+  }, [nativePrintJobId]);
+
+  useEffect(() => {
+    if (!nativePrintJobId) {
+      setNativePrintJob(null);
+      setNativePrintStatusError('');
+      return;
+    }
+
+    let active = true;
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const loadJob = async () => {
+      try {
+        setNativePrintStatusError('');
+        const job = await printBridgeApi.getJob(nativePrintJobId);
+        if (!active) {
+          return;
+        }
+        setNativePrintJob(job);
+        if (!job) {
+          setNativePrintStatusError('No se encontro el trabajo en la cola de impresion.');
+        }
+      } catch (err: unknown) {
+        if (!active) {
+          return;
+        }
+        const message = err instanceof Error ? err.message : 'No se pudo consultar el estado de impresion';
+        setNativePrintStatusError(message);
+      }
+    };
+
+    void loadJob();
+    timer = setInterval(() => {
+      void loadJob();
+    }, 5000);
+
+    return () => {
+      active = false;
+      if (timer) {
+        clearInterval(timer);
+      }
+    };
+  }, [nativePrintJobId]);
+
+  const selectedDraw = useMemo(
+    () => draws.find((d) => d.id === selectedDrawId),
+    [draws, selectedDrawId],
+  );
+
+  const activeSpecialMultiplier = useMemo(
+    () => selectedDraw?.specialMultiplier ?? null,
+    [selectedDraw],
+  );
+
+  const restrictedSummary = useMemo(() => {
+    const soldFor = (number: string) =>
+      drawTickets.flatMap((t) => t.lines).filter((l) => l.number === number).reduce((sum, l) => sum + l.amount, 0);
+    return (selectedDraw?.restrictedNumbers ?? [])
+      .map((rn) => {
+        const sold = soldFor(rn.number);
+        const remaining = Math.max(0, rn.limit - sold);
+        return { ...rn, sold, remaining };
+      })
+      .sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }));
+  }, [selectedDraw, drawTickets]);
+
+  const total = useMemo(
+    () => lines.reduce((sum, l) => {
+      const base = parseFloat(l.amount) || 0;
+      const special = activeSpecialMultiplier ? (parseFloat(l.specialAmount) || 0) : 0;
+      return sum + base + special;
+    }, 0),
+    [lines, activeSpecialMultiplier],
+  );
 
   const addLine = () => {
-    setLines([...lines, { id: generateId(), number: '', amount: '', isNicaEspecial: false }]);
+    const lastAmount = [...lines]
+      .reverse()
+      .find((l) => l.amount.trim() !== '')?.amount ?? '';
+
+    setLines([
+      ...lines,
+      { id: generateId(), number: '', amount: lastAmount, specialAmount: '' },
+    ]);
   };
 
   const removeLine = (id: string) => {
@@ -80,28 +279,41 @@ export default function SalesPage() {
       setError('Selecciona un sorteo abierto.');
       return;
     }
-    if (!isDrawOpen(selectedDraw.openTime, selectedDraw.closeTime)) {
+    if (selectedDraw.status === 'finalizado') {
+      setError('El sorteo seleccionado está finalizado y no permite ventas.');
+      return;
+    }
+    if (!isDrawOpen(selectedDraw.closeTime, selectedDraw.minutosPreviosCierre)) {
       setError('El sorteo seleccionado no está en horario de venta.');
       return;
     }
-    if (!customerName.trim()) {
-      setError('El nombre del cliente es requerido.');
-      return;
-    }
     for (const line of lines) {
-      if (!line.number.trim() || !line.amount || parseFloat(line.amount) <= 0) {
-        setError('Todos los números y montos deben ser válidos.');
+      if (!/^\d{2}$/.test(line.number.trim()) || !line.amount || parseFloat(line.amount) <= 0) {
+        setError('Todos los números deben tener exactamente 2 dígitos y montos válidos.');
         return;
+      }
+      if (activeSpecialMultiplier) {
+        const specAmt = parseFloat(line.specialAmount) || 0;
+        const regAmt = parseFloat(line.amount) || 0;
+        if (specAmt < 0) {
+          setError('El monto especial no puede ser negativo.');
+          return;
+        }
+        if (specAmt > regAmt) {
+          setError(`El monto especial del número ${line.number} no puede superar el monto regular (C$ ${regAmt.toFixed(2)}).`);
+          return;
+        }
       }
     }
 
     const payload: CreateTicketPayload = {
       drawId: selectedDraw.id,
-      customerName: customerName.trim(),
+      customerName: customerName.trim() || '',
       lines: lines.map((l) => ({
         number: l.number.trim(),
         amount: parseFloat(l.amount),
-        isNicaEspecial: l.isNicaEspecial,
+        specialAmount: activeSpecialMultiplier ? (parseFloat(l.specialAmount) || 0) : undefined,
+        isNicaEspecial: false,
       })),
     };
 
@@ -109,8 +321,12 @@ export default function SalesPage() {
     try {
       const ticket = await ticketsApi.create(payload);
       setLastTicket(ticket);
+      setNativePrintMsg('');
+      setNativePrintJobId('');
+      setNativePrintJob(null);
+      setNativePrintStatusError('');
       setCustomerName('');
-      setLines([{ id: generateId(), number: '', amount: '', isNicaEspecial: false }]);
+      setLines([{ id: generateId(), number: '', amount: '', specialAmount: '' }]);
       reportsApi.topNumbers(selectedDrawId, 10).then(setTopNumbers).catch(() => {});
       ticketsApi.list({ drawId: selectedDrawId }).then(setDrawTickets).catch(() => {});
     } catch (err: unknown) {
@@ -121,9 +337,30 @@ export default function SalesPage() {
     }
   };
 
-  const handlePrint = () => {
+  const handlePrint = useCallback(() => {
     window.print();
-  };
+  }, []);
+
+  const handleRetryNativePrint = useCallback(async () => {
+    if (!nativePrintJobId) {
+      return;
+    }
+
+    setRetryingPrintJob(true);
+    setNativePrintStatusError('');
+
+    try {
+      await printBridgeApi.retryJob(nativePrintJobId);
+      const refreshedJob = await printBridgeApi.getJob(nativePrintJobId);
+      setNativePrintJob(refreshedJob ?? null);
+      setNativePrintMsg(`Reintento solicitado (Job: ${nativePrintJobId})`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'No se pudo reintentar la impresion';
+      setNativePrintStatusError(message);
+    } finally {
+      setRetryingPrintJob(false);
+    }
+  }, [nativePrintJobId]);
 
   if (printMode && lastTicket) {
     const draw = draws.find((d) => d.id === lastTicket.drawId);
@@ -135,11 +372,16 @@ export default function SalesPage() {
           </Button>
         </div>
         <TicketPrintView ticket={lastTicket} draw={draw} sellerName={user?.fullName ?? ''} />
-        <div className="print:hidden mt-4">
-          <Button onClick={handlePrint}>
-            <Printer size={16} />
-            Imprimir
-          </Button>
+        <div className="print:hidden mt-4 flex flex-wrap gap-3">
+          <NativePrintControls
+            ticket={lastTicket}
+            draw={draw}
+            user={user}
+            showBrowserButton
+            onBrowserPrint={handlePrint}
+            buttonVariant="secondary"
+            messageClassName="print:hidden mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+          />
         </div>
       </div>
     );
@@ -161,13 +403,7 @@ export default function SalesPage() {
                 label="Sorteo"
                 value={selectedDrawId}
                 onChange={(e) => setSelectedDrawId(e.target.value)}
-                options={[
-                  { value: '', label: 'Selecciona un sorteo...' },
-                  ...openDraws.map((d) => ({ value: d.id, label: d.name })),
-                  ...(openDraws.length === 0
-                    ? [{ value: '', label: 'No hay sorteos abiertos' }]
-                    : []),
-                ]}
+                options={drawOptions}
               />
               {openDraws.length === 0 && (
                 <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm rounded-lg px-4 py-3">
@@ -176,10 +412,10 @@ export default function SalesPage() {
               )}
 
               <Input
-                label="Nombre del cliente"
+                label="Nombre del cliente (opcional)"
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="Nombre completo del cliente"
+                placeholder="Ej: Juan Perez (opcional)"
               />
             </CardBody>
           </Card>
@@ -194,33 +430,39 @@ export default function SalesPage() {
               </Button>
             </div>
             <CardBody className="space-y-3">
-              <div className="grid grid-cols-12 gap-2 text-xs font-medium text-slate-500 px-1">
-                <div className="col-span-3">Número</div>
-                <div className="col-span-3">Monto (C$)</div>
-                <div className="col-span-4">Nica Especial</div>
-                <div className="col-span-2"></div>
+              {activeSpecialMultiplier && (
+                <div className="flex items-center gap-2 bg-purple-50 border border-purple-200 text-purple-800 text-xs rounded-lg px-3 py-2">
+                  <span className="font-semibold">Multiplicador especial activo:</span>
+                  <span>{activeSpecialMultiplier.name} (×{activeSpecialMultiplier.value})</span>
+                  <span className="text-purple-500">— ingresa el monto especial por línea</span>
+                </div>
+              )}
+              <div className="grid gap-2 text-xs font-medium text-slate-500 px-1" style={{ gridTemplateColumns: activeSpecialMultiplier ? '1fr 1fr 1fr auto' : '1fr 1fr auto' }}>
+                <div>Número</div>
+                <div>Monto (C$)</div>
+                {activeSpecialMultiplier && <div>Especial (C$)</div>}
+                <div></div>
               </div>
 
               {lines.map((line) => {
-                const restricted = selectedDraw?.restrictedNumbers.find(
+                const summaryEntry = restrictedSummary.find(
                   (rn) => rn.number === line.number.trim()
                 );
-                const sold = restricted ? getSoldForNumber(line.number.trim()) : 0;
-                const remaining = restricted ? restricted.limit - sold : null;
+                const remaining = summaryEntry ? summaryEntry.remaining : null;
 
                 return (
                   <div key={line.id} className="space-y-1">
-                    <div className="grid grid-cols-12 gap-2 items-center">
-                      <div className="col-span-3">
+                    <div className="grid gap-2 items-center" style={{ gridTemplateColumns: activeSpecialMultiplier ? '1fr 1fr 1fr auto' : '1fr 1fr auto' }}>
+                      <div>
                         <input
                           className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                           placeholder="00"
                           value={line.number}
-                          onChange={(e) => updateLine(line.id, { number: e.target.value.slice(0, 4) })}
-                          maxLength={4}
+                          onChange={(e) => updateLine(line.id, { number: e.target.value.replace(/\D/g, '').slice(0, 2) })}
+                          maxLength={2}
                         />
                       </div>
-                      <div className="col-span-3">
+                      <div>
                         <input
                           className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           type="number"
@@ -230,21 +472,21 @@ export default function SalesPage() {
                           onChange={(e) => updateLine(line.id, { amount: e.target.value })}
                         />
                       </div>
-                      <div className="col-span-4 flex items-center">
-                        <label className="flex items-center gap-2 cursor-pointer">
+                      {activeSpecialMultiplier && (
+                        <div>
                           <input
-                            type="checkbox"
-                            checked={line.isNicaEspecial}
-                            onChange={(e) =>
-                              updateLine(line.id, { isNicaEspecial: e.target.checked })
-                            }
-                            className="rounded border-slate-300 text-blue-600"
+                            className="w-full px-3 py-2 rounded-lg border border-purple-300 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 bg-purple-50"
+                            type="number"
+                            placeholder="0.00"
+                            min="0"
+                            value={line.specialAmount}
+                            onChange={(e) => updateLine(line.id, { specialAmount: e.target.value })}
                           />
-                          <span className="text-sm text-slate-600">Nica Especial</span>
-                        </label>
-                      </div>
-                      <div className="col-span-2 flex justify-end">
+                        </div>
+                      )}
+                      <div className="flex justify-end">
                         <button
+                          type="button"
                           onClick={() => removeLine(line.id)}
                           disabled={lines.length === 1}
                           className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg disabled:opacity-30"
@@ -253,7 +495,7 @@ export default function SalesPage() {
                         </button>
                       </div>
                     </div>
-                    {restricted && remaining !== null && (
+                    {summaryEntry && remaining !== null && (
                       <div className={`text-xs px-1 ${remaining <= 0 ? 'text-red-600' : 'text-yellow-600'}`}>
                         ⚠ Número restringido — Disponible: C$ {Math.max(0, remaining)}
                       </div>
@@ -296,15 +538,89 @@ export default function SalesPage() {
                     <p className="text-green-800 font-semibold">✓ Ticket registrado</p>
                     <p className="text-green-700 text-sm font-mono mt-1">{lastTicket.code}</p>
                   </div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setPrintMode(true)}
-                  >
-                    <Printer size={14} />
-                    Ver / Imprimir
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setPrintMode(true)}
+                    >
+                      <Printer size={14} />
+                      Ver / Imprimir
+                    </Button>
+                    <NativePrintControls
+                      ticket={lastTicket}
+                      draw={draws.find((d) => d.id === lastTicket.drawId)}
+                      user={user}
+                      buttonVariant="secondary"
+                      buttonSize="sm"
+                      showMessage={false}
+                      onMessageChange={setNativePrintMsg}
+                      onJobIdChange={setNativePrintJobId}
+                    />
+                  </div>
                 </div>
+              </CardBody>
+            </Card>
+          )}
+
+          {lastTicket && nativePrintMsg && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              {nativePrintMsg}
+            </div>
+          )}
+
+          {lastTicket && nativePrintJobId && (
+            <Card>
+              <CardBody className="space-y-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">Estado de la ultima impresion nativa</p>
+                    <p className="mt-1 font-mono text-xs text-slate-500">Job: {nativePrintJobId}</p>
+                  </div>
+                  {nativePrintJob ? (
+                    <Badge variant={NATIVE_PRINT_STATUS_BADGE[nativePrintJob.status]} className="gap-1.5">
+                      <NativePrintStatusIcon status={nativePrintJob.status} />
+                      {NATIVE_PRINT_STATUS_LABEL[nativePrintJob.status]}
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary">Consultando...</Badge>
+                  )}
+                </div>
+
+                {nativePrintJob && (
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                    <span>Intentos: {nativePrintJob.attempts}/{nativePrintJob.maxAttempts}</span>
+                    <span>Actualizado: {formatDateTime(nativePrintJob.updatedAt)}</span>
+                    {nativePrintJob.finishedAt && <span>Finalizado: {formatDateTime(nativePrintJob.finishedAt)}</span>}
+                  </div>
+                )}
+
+                {nativePrintJob?.lastError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {nativePrintJob.lastError}
+                  </div>
+                )}
+
+                {nativePrintStatusError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {nativePrintStatusError}
+                  </div>
+                )}
+
+                {nativePrintJob?.status === 'failed' && (
+                  <div className="flex justify-end">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleRetryNativePrint}
+                      disabled={retryingPrintJob}
+                      loading={retryingPrintJob}
+                    >
+                      <RotateCcw size={14} />
+                      Reintentar impresion
+                    </Button>
+                  </div>
+                )}
               </CardBody>
             </Card>
           )}
@@ -331,6 +647,39 @@ export default function SalesPage() {
                     </span>
                   </div>
                 </div>
+              </CardBody>
+            </Card>
+          )}
+
+          {/* Restricted numbers */}
+          {selectedDraw && (
+            <Card>
+              <div className="px-4 py-3 border-b border-slate-200">
+                <h3 className="font-semibold text-slate-800 text-sm">Números restringidos</h3>
+              </div>
+              <CardBody className="p-0">
+                {restrictedSummary.length === 0 ? (
+                  <p className="text-slate-400 text-xs text-center py-4 px-4">
+                    Este sorteo no tiene números restringidos
+                  </p>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {restrictedSummary.map((rn) => (
+                      <div key={rn.number} className="px-4 py-2 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <Badge variant="warning">{rn.number}</Badge>
+                          <span className={`text-xs font-semibold ${rn.remaining <= 0 ? 'text-red-600' : 'text-yellow-700'}`}>
+                            Disponible: {formatCurrency(rn.remaining)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-500">Vendido: {formatCurrency(rn.sold)}</span>
+                          <span className="text-slate-500">Límite: {formatCurrency(rn.limit)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardBody>
             </Card>
           )}
@@ -375,6 +724,83 @@ export default function SalesPage() {
   );
 }
 
+const NativePrintControls = React.memo(function NativePrintControls({
+  ticket,
+  draw,
+  user,
+  showBrowserButton = false,
+  onBrowserPrint,
+  buttonVariant = 'secondary',
+  buttonSize = 'md',
+  showMessage = true,
+  onMessageChange,
+  onJobIdChange,
+  messageClassName = 'mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700',
+}: {
+  ticket: Ticket;
+  draw?: Draw;
+  user?: User | null;
+  showBrowserButton?: boolean;
+  onBrowserPrint?: () => void;
+  buttonVariant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'success';
+  buttonSize?: 'sm' | 'md' | 'lg';
+  showMessage?: boolean;
+  onMessageChange?: (message: string) => void;
+  onJobIdChange?: (jobId: string) => void;
+  messageClassName?: string;
+}) {
+  const [nativePrinting, setNativePrinting] = useState(false);
+  const [nativePrintMsg, setNativePrintMsg] = useState(() => sessionStorage.getItem('go_sales_native_print_msg') ?? '');
+
+  useEffect(() => {
+    sessionStorage.setItem('go_sales_native_print_msg', nativePrintMsg);
+    onMessageChange?.(nativePrintMsg);
+  }, [nativePrintMsg, onMessageChange]);
+
+  const onNativePrintClick = useCallback(async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    setNativePrintMsg('');
+    onJobIdChange?.('');
+    setNativePrinting(true);
+
+    try {
+      const payload = mapSaleTicketToPrintBridge({ ticket, draw, user });
+      const result = await printBridgeApi.printTicket(payload);
+      onJobIdChange?.(result.jobId);
+      setNativePrintMsg(`En cola para imprimir (Job: ${result.jobId})`);
+    } catch (err: unknown) {
+      onJobIdChange?.('');
+      const message = err instanceof Error ? err.message : 'No se pudo imprimir en bridge local';
+      setNativePrintMsg(message);
+    } finally {
+      setNativePrinting(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticket, draw, user]);
+
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2">
+        {showBrowserButton && onBrowserPrint && (
+          <Button onClick={onBrowserPrint}>
+            <Printer size={16} />
+            Imprimir navegador
+          </Button>
+        )}
+        <Button variant={buttonVariant} size={buttonSize} onClick={onNativePrintClick} disabled={nativePrinting}>
+          <Printer size={16} />
+          {nativePrinting ? 'Enviando...' : 'Imprimir nativo'}
+        </Button>
+      </div>
+
+      {showMessage && nativePrintMsg && <div className={messageClassName}>{nativePrintMsg}</div>}
+    </>
+  );
+});
+
 function TicketPrintView({
   ticket,
   draw,
@@ -384,6 +810,9 @@ function TicketPrintView({
   draw?: Draw;
   sellerName: string;
 }) {
+  const regularMultiplier = ticket.seller?.plan?.multiplier;
+  const specialMultiplier = draw?.specialMultiplier?.value ?? ticket.draw?.specialMultiplier?.value;
+
   return (
     <div
       className="max-w-xs mx-auto bg-white border border-slate-200 rounded-xl p-6 shadow-md font-mono text-sm"
@@ -404,7 +833,7 @@ function TicketPrintView({
         </div>
         <div className="flex justify-between">
           <span className="text-slate-500">Cliente:</span>
-          <span>{ticket.customerName}</span>
+          <span>{ticket.customerName || 'Consumidor final'}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-slate-500">Fecha:</span>
@@ -414,19 +843,29 @@ function TicketPrintView({
           <span className="text-slate-500">Vendedor:</span>
           <span>{sellerName}</span>
         </div>
+        <div className="flex justify-between">
+          <span className="text-slate-500">Mult. regular:</span>
+          <span>{typeof regularMultiplier === 'number' ? `x${regularMultiplier}` : 'N/A'}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-slate-500">Mult. especial:</span>
+          <span>{typeof specialMultiplier === 'number' ? `x${specialMultiplier}` : 'No aplica'}</span>
+        </div>
       </div>
 
       <div className="border-t border-dashed border-slate-300 pt-3 mb-3">
-        <div className="grid grid-cols-3 text-xs font-bold text-slate-500 mb-1">
+        <div className="grid grid-cols-4 text-xs font-bold text-slate-500 mb-1">
           <span>Número</span>
-          <span className="text-center">Monto</span>
-          <span className="text-right">Tipo</span>
+          <span className="text-center">Regular</span>
+          <span className="text-center text-purple-600">Especial</span>
+          <span className="text-right">Total</span>
         </div>
         {ticket.lines.map((l, i) => (
-          <div key={i} className="grid grid-cols-3 text-xs py-0.5">
+          <div key={i} className="grid grid-cols-4 text-xs py-0.5">
             <span className="font-bold">{l.number}</span>
             <span className="text-center">{formatCurrency(l.amount)}</span>
-            <span className="text-right">{l.isNicaEspecial ? 'NE' : 'STD'}</span>
+            <span className="text-center text-purple-700">{formatCurrency(l.specialAmount ?? 0)}</span>
+            <span className="text-right">{formatCurrency(l.amount + (l.specialAmount ?? 0))}</span>
           </div>
         ))}
       </div>

@@ -48,8 +48,8 @@ export function Select({ label, error, id, options, className = '', ...props }: 
           error ? 'border-red-400' : 'border-slate-300'
         } ${className}`}
       >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
+        {options.map((o, idx) => (
+          <option key={`${o.value}-${idx}`} value={o.value}>
             {o.label}
           </option>
         ))}

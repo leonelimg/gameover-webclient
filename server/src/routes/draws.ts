@@ -12,32 +12,98 @@ router.use(authenticate);
 
 const drawSchema = z.object({
   name: z.string().min(2),
-  openTime: z.string().datetime(),
   closeTime: z.string().datetime(),
-  winnerNumber: z.string().optional().nullable(),
+  minutosPreviosCierre: z.coerce.number().int().min(0).max(1440).default(10),
+  winnerNumber: z.string().regex(/^\d{2}$/, 'El número ganador debe tener exactamente 2 dígitos.').optional().nullable(),
+  specialMultiplierId: z.string().optional().nullable(),
 });
 
 const rnSchema = z.object({
-  number: z.string().min(1).max(4),
+  number: z.string().regex(/^\d{2}$/, 'El número restringido debe tener exactamente 2 dígitos.'),
   limit: z.number().positive(),
 });
 
-function resolveStatus(openTime: string, closeTime: string, winner?: string | null): DrawStatusValue {
+const drawSearchQuerySchema = z.object({
+  fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(12),
+});
+
+function resolveStatus(closeTime: string, minutosPreviosCierre: number, winner?: string | null): DrawStatusValue {
   if (winner) return 'finalizado';
   const now = Date.now();
-  const o = new Date(openTime).getTime();
   const c = new Date(closeTime).getTime();
-  if (now < o) return 'pendiente';
-  if (now >= o && now <= c) return 'abierto';
+  const cutoff = c - minutosPreviosCierre * 60 * 1000;
+  if (now < cutoff) return 'abierto';
   return 'cerrado';
 }
 
-const rnInclude = { restrictedNumbers: true };
+const rnInclude = {
+  restrictedNumbers: true,
+  specialMultiplier: { select: { id: true, name: true, value: true } },
+};
 
 // GET /api/draws
 router.get('/', async (_req, res) => {
-  const draws = await prisma.draw.findMany({ include: rnInclude, orderBy: { openTime: 'desc' } });
+  const draws = await prisma.draw.findMany({ include: rnInclude, orderBy: { closeTime: 'desc' } });
   res.json(draws);
+});
+
+// GET /api/draws/search
+router.get('/search', async (req, res) => {
+  const parsed = drawSearchQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ message: 'Parámetros inválidos para búsqueda de sorteos.' });
+    return;
+  }
+
+  const { fromDate, toDate, page, pageSize } = parsed.data;
+
+  if (fromDate && toDate && fromDate > toDate) {
+    res.status(400).json({ message: 'El rango de fechas es inválido.' });
+    return;
+  }
+
+  const where: {
+    closeTime?: {
+      gte?: Date;
+      lte?: Date;
+    };
+  } = {};
+
+  if (fromDate || toDate) {
+    where.closeTime = {};
+  }
+
+  if (fromDate) {
+    where.closeTime!.gte = new Date(`${fromDate}T00:00:00.000`);
+  }
+
+  if (toDate) {
+    where.closeTime!.lte = new Date(`${toDate}T23:59:59.999`);
+  }
+
+  const total = await prisma.draw.count({ where });
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const skip = (currentPage - 1) * pageSize;
+
+  const items = await prisma.draw.findMany({
+    where,
+    include: rnInclude,
+    orderBy: { closeTime: 'desc' },
+    skip,
+    take: pageSize,
+  });
+
+  res.json({
+    items,
+    total,
+    page: currentPage,
+    pageSize,
+    totalPages,
+  });
 });
 
 // GET /api/draws/:id
@@ -51,14 +117,15 @@ router.get('/:id', async (req, res) => {
 // POST /api/draws
 router.post('/', authorize('admin'), validate(drawSchema), async (req, res) => {
   const body = req.body as z.infer<typeof drawSchema>;
-  const status = resolveStatus(body.openTime, body.closeTime, body.winnerNumber);
+  const status = resolveStatus(body.closeTime, body.minutosPreviosCierre, body.winnerNumber);
   const draw = await prisma.draw.create({
     data: {
       name: body.name,
-      openTime: new Date(body.openTime),
       closeTime: new Date(body.closeTime),
+      minutosPreviosCierre: body.minutosPreviosCierre,
       winnerNumber: body.winnerNumber ?? null,
       status,
+      specialMultiplierId: body.specialMultiplierId ?? null,
     },
     include: rnInclude,
   });
@@ -71,17 +138,18 @@ router.patch('/:id', authorize('admin'), validate(drawSchema.partial()), async (
   const body = req.body as Partial<z.infer<typeof drawSchema>>;
   const existing = await prisma.draw.findUnique({ where: { id } });
   if (!existing) { res.status(404).json({ message: 'Sorteo no encontrado.' }); return; }
-  const openTime = body.openTime ?? existing.openTime.toISOString();
   const closeTime = body.closeTime ?? existing.closeTime.toISOString();
+  const minutosPreviosCierre = body.minutosPreviosCierre ?? existing.minutosPreviosCierre;
   const winnerNumber = body.winnerNumber !== undefined ? body.winnerNumber : existing.winnerNumber;
   const draw = await prisma.draw.update({
     where: { id },
     data: {
       ...(body.name !== undefined && { name: body.name }),
-      ...(body.openTime !== undefined && { openTime: new Date(body.openTime) }),
       ...(body.closeTime !== undefined && { closeTime: new Date(body.closeTime) }),
+      ...(body.minutosPreviosCierre !== undefined && { minutosPreviosCierre: body.minutosPreviosCierre }),
       ...(body.winnerNumber !== undefined && { winnerNumber: body.winnerNumber }),
-      status: resolveStatus(openTime, closeTime, winnerNumber),
+      ...(body.specialMultiplierId !== undefined && { specialMultiplierId: body.specialMultiplierId }),
+      status: resolveStatus(closeTime, minutosPreviosCierre, winnerNumber),
     },
     include: rnInclude,
   });

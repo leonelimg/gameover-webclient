@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import path from 'path';
 dotenv.config();
 
 function required(key: string): string {
@@ -19,6 +20,11 @@ export const config = {
 
   // CORS
   corsOrigin: process.env['CORS_ORIGIN'] ?? 'http://localhost:5173',
+
+  // Print Bridge installer artifacts
+  printBridgeInstallerDir:
+    process.env['PRINT_BRIDGE_INSTALLER_DIR']
+    ?? path.resolve(process.cwd(), 'public', 'installers'),
 
   // Database
   get databaseUrl() {

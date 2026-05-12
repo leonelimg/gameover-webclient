@@ -13,6 +13,9 @@ import planRoutes from './routes/plans.js';
 import drawRoutes from './routes/draws.js';
 import ticketRoutes from './routes/tickets.js';
 import reportRoutes from './routes/reports.js';
+import printBridgeRoutes from './routes/printBridge.js';
+import specialMultiplierRoutes from './routes/specialMultipliers.js';
+import paymentRoutes from './routes/payments.js';
 
 const app = express();
 
@@ -28,6 +31,9 @@ app.use(
 );
 app.use(express.json());
 app.use(morgan(config.nodeEnv === 'production' ? 'combined' : 'dev'));
+
+// ── Static files ──────────────────────────────────────────────────────────────
+app.use('/public', express.static('public'));
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
 
@@ -61,6 +67,9 @@ app.use('/api/plans', apiLimiter, planRoutes);
 app.use('/api/draws', apiLimiter, drawRoutes);
 app.use('/api/tickets', apiLimiter, ticketRoutes);
 app.use('/api/reports', apiLimiter, reportRoutes);
+app.use('/api/print-bridge', apiLimiter, printBridgeRoutes);
+app.use('/api/special-multipliers', apiLimiter, specialMultiplierRoutes);
+app.use('/api/payments', apiLimiter, paymentRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((_req, res) => {

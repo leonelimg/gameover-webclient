@@ -24,6 +24,16 @@ export interface AuthState {
   isAuthenticated: boolean;
 }
 
+// ─── Special Multipliers ─────────────────────────────────────────────────────
+
+export interface SpecialMultiplier {
+  id: string;
+  name: string;
+  value: number;       // integer 1-10
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Plans ───────────────────────────────────────────────────────────────────
 
 export interface Plan {
@@ -38,6 +48,7 @@ export interface Plan {
 // ─── Draws (Sorteos) ─────────────────────────────────────────────────────────
 
 export type DrawStatus = 'pendiente' | 'abierto' | 'cerrado' | 'finalizado';
+export type TicketPaymentStatus = 'pendiente' | 'pagado';
 
 export interface RestrictedNumber {
   number: string;
@@ -47,11 +58,12 @@ export interface RestrictedNumber {
 export interface Draw {
   id: string;
   name: string;
-  openTime: string;   // ISO datetime
   closeTime: string;  // ISO datetime
+  minutosPreviosCierre: number;
   winnerNumber?: string;
   status: DrawStatus;
   restrictedNumbers: RestrictedNumber[];
+  specialMultiplier?: { id: string; name: string; value: number } | null;
   createdAt: string;
 }
 
@@ -60,6 +72,7 @@ export interface Draw {
 export interface TicketLine {
   number: string;
   amount: number;
+  specialAmount?: number | null;
   isNicaEspecial: boolean;
 }
 
@@ -74,6 +87,113 @@ export interface Ticket {
   total: number;
   createdAt: string;
   printedAt?: string;
+  paymentStatus: TicketPaymentStatus;
+  paidAt?: string;
+  paidById?: string;
+  canceledAt?: string;
+  cancelReason?: string;
+  draw?: {
+    id: string;
+    name: string;
+    winnerNumber?: string | null;
+    closeTime?: string;
+    minutosPreviosCierre?: number;
+    specialMultiplier?: {
+      id: string;
+      name: string;
+      value: number;
+    } | null;
+  };
+  seller?: {
+    id: string;
+    fullName: string;
+    username: string;
+    plan?: {
+      id: string;
+      name: string;
+      multiplier: number;
+    } | null;
+  };
+  associate?: {
+    id: string;
+    fullName: string;
+  };
+  canceledBy?: {
+    id: string;
+    fullName: string;
+    username: string;
+  };
+  paidBy?: {
+    id: string;
+    fullName: string;
+    username: string;
+  };
+}
+
+export interface PaymentWinningTicket {
+  ticketId: string;
+  code: string;
+  customerName: string;
+  winningNumbers: string[];
+  seller: {
+    id: string;
+    fullName: string;
+    username: string;
+  };
+  createdAt: string;
+  paymentStatus: TicketPaymentStatus;
+  paidAt?: string | null;
+  paidBy?: {
+    id: string;
+    fullName: string;
+    username: string;
+  } | null;
+  prizeAmount: number;
+}
+
+export interface PaymentsWinningTicketsResponse {
+  draw: {
+    id: string;
+    name: string;
+    winnerNumber?: string | null;
+    hasWinnerNumber: boolean;
+  };
+  tickets: PaymentWinningTicket[];
+  paidTickets: PaymentWinningTicket[];
+  totals: {
+    totalToPay: number;
+    totalPaid: number;
+    totalPending: number;
+    winnersCount: number;
+    paidCount: number;
+    pendingCount: number;
+  };
+}
+
+// ─── Print Queue ─────────────────────────────────────────────────────────────
+
+export type PrintJobStatus = 'pending' | 'processing' | 'retrying' | 'completed' | 'failed';
+
+export interface PrintJob {
+  id: string;
+  type: 'text' | 'ticket';
+  status: PrintJobStatus;
+  attempts: number;
+  maxAttempts: number;
+  nextAttemptAt: string;
+  lastError?: string;
+  createdAt: string;
+  updatedAt: string;
+  finishedAt?: string;
+}
+
+export interface PrintQueueStats {
+  pending: number;
+  processing: number;
+  retrying: number;
+  completed: number;
+  failed: number;
+  total: number;
 }
 
 // ─── Statistics ──────────────────────────────────────────────────────────────

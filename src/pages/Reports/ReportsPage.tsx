@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ChevronDown, ChevronRight, BarChart3 } from 'lucide-react';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
-import { Select } from '@/components/ui/Input';
+import { Input, Select } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { formatCurrency, formatDate } from '@/utils/helpers';
 import { drawsApi, reportsApi, HierarchyNode, ReportSummary, TopNumber } from '@/services/api';
@@ -59,6 +59,8 @@ function TreeRow({
 export default function ReportsPage() {
   const [draws, setDraws] = useState<Draw[]>([]);
   const [selectedDrawId, setSelectedDrawId] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
   const [summary, setSummary] = useState<ReportSummary>({ ticketCount: 0, totalSales: 0, userCount: 0, drawCount: 0 });
   const [tree, setTree] = useState<HierarchyNode[]>([]);
@@ -73,17 +75,25 @@ export default function ReportsPage() {
   // Reload report data whenever the selected draw changes
   useEffect(() => {
     const drawId = selectedDrawId || undefined;
-    reportsApi.summary(drawId).then(setSummary).catch(() => {});
-    reportsApi.hierarchy(drawId).then(setTree).catch(() => {});
-    reportsApi.topNumbers(drawId).then(setTopNumbers).catch(() => {});
-    reportsApi.recentTickets(drawId).then(setTickets).catch(() => {});
-  }, [selectedDrawId]);
+    const from = fromDate || undefined;
+    const to = toDate || undefined;
+    reportsApi.summary(drawId, from, to).then(setSummary).catch(() => {});
+    reportsApi.hierarchy(drawId, from, to).then(setTree).catch(() => {});
+    reportsApi.topNumbers(drawId, 10, from, to).then(setTopNumbers).catch(() => {});
+    reportsApi.recentTickets(drawId, 10, from, to).then(setTickets).catch(() => {});
+  }, [selectedDrawId, fromDate, toDate]);
+
+  const resetFilters = () => {
+    setSelectedDrawId('');
+    setFromDate('');
+    setToDate('');
+  };
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Reportes</h1>
-        <p className="text-sm text-slate-500">Estadísticas de ventas por jerarquía</p>
+        <p className="text-sm text-slate-500">Estadisctica de ventas</p>
       </div>
 
       {/* Filter */}
@@ -97,11 +107,29 @@ export default function ReportsPage() {
                 { value: '', label: 'Todos los sorteos' },
                 ...draws.map((d) => ({
                   value: d.id,
-                  label: `${d.name} (${formatDate(d.openTime)})`,
+                  label: `${d.name} (${formatDate(d.closeTime)})`,
                 })),
               ]}
               className="w-64"
             />
+            <Input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="w-44"
+            />
+            <Input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="w-44"
+            />
+            <button
+              onClick={resetFilters}
+              className="px-3 py-2 text-sm rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50"
+            >
+              Limpiar
+            </button>
           </div>
         </CardBody>
       </Card>

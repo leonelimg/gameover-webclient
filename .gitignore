@@ -26,3 +26,8 @@ dist-ssr
 # Environment files (contain secrets)
 .env
 server/.env
+
+# Print Bridge installers (large binary files, managed separately)
+server/public/installers/*.exe
+server/public/installers/*.zip
+!server/public/installers/.gitkeep

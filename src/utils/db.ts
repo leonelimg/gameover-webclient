@@ -75,8 +75,6 @@ const SEED_PLANS: Plan[] = [
 ];
 
 const now = new Date();
-const todayOpen = new Date(now);
-todayOpen.setHours(8, 0, 0, 0);
 const todayClose = new Date(now);
 todayClose.setHours(21, 0, 0, 0);
 
@@ -84,8 +82,8 @@ const SEED_DRAWS: Draw[] = [
   {
     id: 'draw-1',
     name: 'Sorteo Matutino',
-    openTime: todayOpen.toISOString(),
     closeTime: todayClose.toISOString(),
+    minutosPreviosCierre: 10,
     status: 'abierto',
     restrictedNumbers: [
       { number: '00', limit: 500 },

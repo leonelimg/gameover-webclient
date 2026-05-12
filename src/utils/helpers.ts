@@ -38,7 +38,9 @@ export function formatDateTime(iso: string): string {
   });
 }
 
-export function isDrawOpen(openTime: string, closeTime: string): boolean {
+export function isDrawOpen(closeTime: string, minutosPreviosCierre: number = 10): boolean {
   const now = Date.now();
-  return now >= new Date(openTime).getTime() && now <= new Date(closeTime).getTime();
+  const close = new Date(closeTime).getTime();
+  const cutoff = close - minutosPreviosCierre * 60 * 1000;
+  return now < cutoff;
 }
