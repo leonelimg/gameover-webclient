@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { rolesApi } from '@/services/api';
 import { RolePermissionRow } from '@/types';
+import { useAuth } from '@/context/AuthContext';
 
 const roles = [
   {
@@ -31,10 +32,12 @@ const roles = [
 ];
 
 export default function RolesPage() {
+  const { hasPermission } = useAuth();
   const [rows, setRows] = useState<RolePermissionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const canUpdatePermissions = hasPermission('/roles:update');
 
   useEffect(() => {
     let mounted = true;
@@ -120,7 +123,7 @@ export default function RolesPage() {
         <CardHeader>
           <div className="flex items-center justify-between gap-3">
             <h2 className="font-semibold text-slate-800">Matriz de Permisos por Ruta</h2>
-            <Button onClick={save} loading={saving} disabled={loading || saving || rows.length === 0}>
+            <Button onClick={save} loading={saving} disabled={!canUpdatePermissions || loading || saving || rows.length === 0}>
               Guardar cambios
             </Button>
           </div>
@@ -156,12 +159,13 @@ export default function RolesPage() {
                   <td className="px-4 py-3 text-center">
                     <button
                       type="button"
+                      disabled={!canUpdatePermissions}
                       onClick={() => toggle(row.resourceKey, 'asociado')}
                       className={`inline-flex items-center justify-center w-7 h-7 rounded-full border ${
                         row.asociado
                           ? 'bg-green-100 border-green-300 text-green-700'
                           : 'bg-slate-100 border-slate-300 text-slate-400'
-                      }`}
+                      } disabled:opacity-50`}
                       aria-label={`Alternar acceso asociado para ${row.resourceKey}`}
                     >
                       {row.asociado ? '✓' : '—'}
@@ -170,12 +174,13 @@ export default function RolesPage() {
                   <td className="px-4 py-3 text-center">
                     <button
                       type="button"
+                      disabled={!canUpdatePermissions}
                       onClick={() => toggle(row.resourceKey, 'vendedor')}
                       className={`inline-flex items-center justify-center w-7 h-7 rounded-full border ${
                         row.vendedor
                           ? 'bg-green-100 border-green-300 text-green-700'
                           : 'bg-slate-100 border-slate-300 text-slate-400'
-                      }`}
+                      } disabled:opacity-50`}
                       aria-label={`Alternar acceso vendedor para ${row.resourceKey}`}
                     >
                       {row.vendedor ? '✓' : '—'}

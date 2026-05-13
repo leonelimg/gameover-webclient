@@ -30,6 +30,24 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
 
 type RoleParam = 'admin' | 'asociado' | 'vendedor';
 
+export async function isResourceAllowedForRole(resourceKey: string, role: AppRole): Promise<boolean> {
+  if (!APP_RESOURCE_KEYS.has(resourceKey)) {
+    throw new Error(`Recurso no configurado: ${resourceKey}`);
+  }
+
+  const permission = await prisma.rolePermission.findUnique({
+    where: {
+      resourceKey_role: {
+        resourceKey,
+        role,
+      },
+    },
+    select: { allowed: true },
+  });
+
+  return permission ? permission.allowed : isDefaultAllowed(resourceKey, role);
+}
+
 export function authorize(...roles: RoleParam[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
@@ -57,17 +75,41 @@ export function authorizeResource(resourceKey: string) {
     }
 
     const role = req.user.role as AppRole;
-    const permission = await prisma.rolePermission.findUnique({
-      where: {
-        resourceKey_role: {
-          resourceKey,
-          role,
-        },
-      },
-      select: { allowed: true },
-    });
+    const allowed = await isResourceAllowedForRole(resourceKey, role);
+    if (!allowed) {
+      res.status(403).json({ message: 'No tienes permisos para esta ruta.' });
+      return;
+    }
 
-    const allowed = permission ? permission.allowed : isDefaultAllowed(resourceKey, role);
+    next();
+  };
+}
+
+export function authorizeAnyResource(...resourceKeys: string[]) {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (!req.user) {
+      res.status(401).json({ message: 'No autenticado.' });
+      return;
+    }
+
+    if (resourceKeys.length === 0) {
+      res.status(500).json({ message: 'No se configuraron recursos para esta ruta.' });
+      return;
+    }
+
+    const invalidKey = resourceKeys.find((resourceKey) => !APP_RESOURCE_KEYS.has(resourceKey));
+    if (invalidKey) {
+      res.status(500).json({ message: `Recurso no configurado: ${invalidKey}` });
+      return;
+    }
+
+    const role = req.user.role as AppRole;
+    const checks = await Promise.all(
+      resourceKeys.map(async (resourceKey) => isResourceAllowedForRole(resourceKey, role))
+    );
+
+    const allowed = checks.some(Boolean);
+
     if (!allowed) {
       res.status(403).json({ message: 'No tienes permisos para esta ruta.' });
       return;

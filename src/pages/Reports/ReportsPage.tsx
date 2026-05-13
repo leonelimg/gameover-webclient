@@ -81,7 +81,14 @@ export default function ReportsPage() {
     return 'today';
   });
 
-  const [summary, setSummary] = useState<ReportSummary>({ ticketCount: 0, totalSales: 0, userCount: 0, drawCount: 0 });
+  const [summary, setSummary] = useState<ReportSummary>({
+    ticketCount: 0,
+    totalSales: 0,
+    totalPrizes: 0,
+    totalCommissions: 0,
+    userCount: 0,
+    drawCount: 0,
+  });
   const [tree, setTree] = useState<HierarchyNode[]>([]);
   const [topNumbers, setTopNumbers] = useState<TopNumber[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);

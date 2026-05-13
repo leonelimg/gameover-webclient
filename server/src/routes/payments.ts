@@ -378,7 +378,7 @@ router.get('/winning-tickets', async (req, res) => {
 });
 
 // PATCH /api/payments/mark-paid
-router.patch('/mark-paid', validate(markPaidSchema), async (req, res) => {
+router.patch('/mark-paid', authorizeResource('/ticket-payments:mark-paid'), validate(markPaidSchema), async (req, res) => {
   const body = req.body as z.infer<typeof markPaidSchema>;
 
   const ticket = await getTicketForPayment(
@@ -458,7 +458,7 @@ router.patch('/mark-paid', validate(markPaidSchema), async (req, res) => {
 });
 
 // PATCH /api/payments/:id/revert
-router.patch('/:id/revert', async (req, res) => {
+router.patch('/:id/revert', authorizeResource('/ticket-payments:revert'), async (req, res) => {
   const id = param(req, 'id');
 
   const ticket = await getTicketForPayment({ id });

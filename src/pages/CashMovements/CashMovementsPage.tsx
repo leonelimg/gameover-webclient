@@ -44,7 +44,7 @@ const EMPTY_BALANCE: CashMovementBalanceResponse = {
 };
 
 export default function CashMovementsPage() {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const [targets, setTargets] = useState<CashMovementUserSummary[]>([]);
   const [selectedTargetId, setSelectedTargetId] = useState('');
   const [customFromDate, setCustomFromDate] = useState<string>(() => {
@@ -76,7 +76,8 @@ export default function CashMovementsPage() {
   const [cancelReason, setCancelReason] = useState('');
   const [canceling, setCanceling] = useState(false);
 
-  const canCreate = user?.role === 'admin' || user?.role === 'asociado';
+  const canCreate = hasPermission('/cash-movements:create');
+  const canCancelPermission = hasPermission('/cash-movements:cancel');
 
   const selectedTarget = useMemo(
     () => targets.find((t) => t.id === selectedTargetId) ?? null,
@@ -86,6 +87,7 @@ export default function CashMovementsPage() {
   const canOperateTarget = Boolean(selectedTarget && selectedTarget.canOperate && selectedTarget.id !== user?.id);
 
   const canCancelMovement = (movement: CashMovement): boolean => {
+    if (!canCancelPermission) return false;
     if (movement.canceledAt) return false;
     if (user?.role === 'admin') return true;
     if (user?.id === movement.createdById) return true;

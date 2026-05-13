@@ -14,6 +14,7 @@ import {
   SalesByUserRow,
 } from '@/services/api';
 import { Draw, Ticket, User } from '@/types';
+import { useAuth } from '@/context/AuthContext';
 import { formatCurrency, formatDateTime, formatDrawLabel } from '@/utils/helpers';
 import { DateRange, getDateRange, isDateRange, toISODateLocal } from '@/utils/dateRanges';
 import { mapSaleTicketToPrintBridge, printBridgeApi } from '@/services/printBridge';
@@ -123,8 +124,10 @@ function printTicket(ticket: Ticket): void {
 }
 
 export default function SalesByUserPage() {
+  const { hasPermission } = useAuth();
   const [draws, setDraws] = useState<Draw[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const canCancelTickets = hasPermission('/sales:cancel');
 
   const [selectedDrawId, setSelectedDrawId] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
@@ -476,14 +479,16 @@ export default function SalesByUserPage() {
                             >
                               Nativo
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="danger"
-                              onClick={() => handleCancel(ticket)}
-                              disabled={!!ticket.canceledAt}
-                            >
-                              Anular
-                            </Button>
+                            {canCancelTickets && (
+                              <Button
+                                size="sm"
+                                variant="danger"
+                                onClick={() => handleCancel(ticket)}
+                                disabled={!!ticket.canceledAt}
+                              >
+                                Anular
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -601,13 +606,15 @@ export default function SalesByUserPage() {
               >
                 Nativo
               </Button>
-              <Button
-                variant="danger"
-                onClick={() => handleCancel(selectedTicket)}
-                disabled={!!selectedTicket.canceledAt}
-              >
-                Anular
-              </Button>
+              {canCancelTickets && (
+                <Button
+                  variant="danger"
+                  onClick={() => handleCancel(selectedTicket)}
+                  disabled={!!selectedTicket.canceledAt}
+                >
+                  Anular
+                </Button>
+              )}
             </div>
           </div>
         )}

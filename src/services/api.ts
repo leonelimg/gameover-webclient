@@ -446,6 +446,8 @@ export const cashMovementsApi = {
 export interface ReportSummary {
   ticketCount: number;
   totalSales: number;
+  totalPrizes: number;
+  totalCommissions: number;
   userCount: number;
   drawCount: number;
 }

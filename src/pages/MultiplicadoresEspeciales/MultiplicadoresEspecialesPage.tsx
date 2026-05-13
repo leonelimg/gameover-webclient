@@ -4,6 +4,7 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { useAuth } from '@/context/AuthContext';
 import { SpecialMultiplier } from '@/types';
 import { specialMultipliersApi, SpecialMultiplierPayload } from '@/services/api';
 
@@ -15,7 +16,12 @@ interface FormData {
 const emptyForm: FormData = { name: '', value: '2' };
 
 export default function MultiplicadoresEspecialesPage() {
+  const { hasPermission } = useAuth();
   const [items, setItems] = useState<SpecialMultiplier[]>([]);
+  const canCreateMultiplier = hasPermission('/multiplicadores:create');
+  const canUpdateMultiplier = hasPermission('/multiplicadores:update');
+  const canDeleteMultiplier = hasPermission('/multiplicadores:delete');
+  const canOpenModal = canCreateMultiplier || canUpdateMultiplier;
 
   const loadItems = useCallback(() => {
     specialMultipliersApi.list().then(setItems).catch(() => {});
@@ -89,10 +95,12 @@ export default function MultiplicadoresEspecialesPage() {
           <h1 className="text-2xl font-bold text-slate-900">Multiplicadores especiales</h1>
           <p className="text-sm text-slate-500">Configura multiplicadores para asociarlos a sorteos</p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus size={16} />
-          Nuevo multiplicador
-        </Button>
+        {canCreateMultiplier && (
+          <Button onClick={openCreate}>
+            <Plus size={16} />
+            Nuevo multiplicador
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -103,20 +111,26 @@ export default function MultiplicadoresEspecialesPage() {
                 <div>
                   <h3 className="font-semibold text-slate-900">{item.name}</h3>
                 </div>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => openEdit(item)}
-                    className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  >
-                    <Edit size={15} />
-                  </button>
-                  <button
-                    onClick={() => deleteItem(item.id)}
-                    className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </div>
+                {(canUpdateMultiplier || canDeleteMultiplier) && (
+                  <div className="flex gap-1">
+                    {canUpdateMultiplier && (
+                      <button
+                        onClick={() => openEdit(item)}
+                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      >
+                        <Edit size={15} />
+                      </button>
+                    )}
+                    {canDeleteMultiplier && (
+                      <button
+                        onClick={() => deleteItem(item.id)}
+                        className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
@@ -134,13 +148,14 @@ export default function MultiplicadoresEspecialesPage() {
         )}
       </div>
 
-      <Modal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={editing ? 'Editar multiplicador' : 'Nuevo multiplicador especial'}
-        size="sm"
-      >
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+      {canOpenModal && (
+        <Modal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          title={editing ? 'Editar multiplicador' : 'Nuevo multiplicador especial'}
+          size="sm"
+        >
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {formError && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
               {formError}
@@ -169,8 +184,9 @@ export default function MultiplicadoresEspecialesPage() {
             </Button>
             <Button type="submit">{editing ? 'Guardar cambios' : 'Crear'}</Button>
           </div>
-        </form>
-      </Modal>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }

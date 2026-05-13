@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { useAuth } from '@/context/AuthContext';
 import { formatDateTime } from '@/utils/helpers';
 import { Draw, DrawStatus, SpecialMultiplier } from '@/types';
 import { drawsApi, DrawPayload, specialMultipliersApi } from '@/services/api';
@@ -103,8 +104,14 @@ const toDatetimeLocal = (iso: string) => {
 };
 
 export default function DrawsPage() {
+  const { hasPermission } = useAuth();
   const PAGE_SIZE = 12;
   const HISTORY_LIMIT = 10;
+  const canCreateDraw = hasPermission('/draws:create');
+  const canUpdateDraw = hasPermission('/draws:update');
+  const canDeleteDraw = hasPermission('/draws:delete');
+  const canManageRestrictedNumbers = hasPermission('/draws:restricted-numbers');
+  const canOpenDrawModal = canCreateDraw || canUpdateDraw;
   const [draws, setDraws] = useState<Draw[]>([]);
   const [totalDraws, setTotalDraws] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -364,10 +371,12 @@ export default function DrawsPage() {
           <h1 className="text-2xl font-bold text-slate-900">Sorteos</h1>
           <p className="text-sm text-slate-500">Gestión de sorteos y números restringidos</p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus size={16} />
-          Nuevo Sorteo
-        </Button>
+        {canCreateDraw && (
+          <Button onClick={openCreate}>
+            <Plus size={16} />
+            Nuevo Sorteo
+          </Button>
+        )}
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
@@ -484,20 +493,26 @@ export default function DrawsPage() {
                       )}
                     </div>
                   </div>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => openEdit(draw)}
-                      className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                    >
-                      <Edit size={15} />
-                    </button>
-                    <button
-                      onClick={() => deleteDraw(draw.id)}
-                      className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
+                  {(canUpdateDraw || canDeleteDraw) && (
+                    <div className="flex gap-1">
+                      {canUpdateDraw && (
+                        <button
+                          onClick={() => openEdit(draw)}
+                          className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        >
+                          <Edit size={15} />
+                        </button>
+                      )}
+                      {canDeleteDraw && (
+                        <button
+                          onClick={() => deleteDraw(draw.id)}
+                          className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Restricted numbers */}
@@ -507,12 +522,14 @@ export default function DrawsPage() {
                       <AlertCircle size={12} />
                       Números restringidos ({draw.restrictedNumbers.length})
                     </span>
-                    <button
-                      onClick={() => setRnDraw(draw)}
-                      className="text-xs text-blue-600 hover:underline"
-                    >
-                      Gestionar
-                    </button>
+                    {canManageRestrictedNumbers && (
+                      <button
+                        onClick={() => setRnDraw(draw)}
+                        className="text-xs text-blue-600 hover:underline"
+                      >
+                        Gestionar
+                      </button>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {draw.restrictedNumbers.map((rn) => (
@@ -580,29 +597,37 @@ export default function DrawsPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <span className="text-slate-600">{draw.restrictedNumbers.length}</span>
-                        <button
-                          onClick={() => setRnDraw(draw)}
-                          className="text-xs text-blue-600 hover:underline"
-                        >
-                          Gestionar
-                        </button>
+                        {canManageRestrictedNumbers && (
+                          <button
+                            onClick={() => setRnDraw(draw)}
+                            className="text-xs text-blue-600 hover:underline"
+                          >
+                            Gestionar
+                          </button>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex justify-end gap-1">
-                        <button
-                          onClick={() => openEdit(draw)}
-                          className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        >
-                          <Edit size={15} />
-                        </button>
-                        <button
-                          onClick={() => deleteDraw(draw.id)}
-                          className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
+                      {(canUpdateDraw || canDeleteDraw) && (
+                        <div className="flex justify-end gap-1">
+                          {canUpdateDraw && (
+                            <button
+                              onClick={() => openEdit(draw)}
+                              className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            >
+                              <Edit size={15} />
+                            </button>
+                          )}
+                          {canDeleteDraw && (
+                            <button
+                              onClick={() => deleteDraw(draw.id)}
+                              className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -648,13 +673,14 @@ export default function DrawsPage() {
       )}
 
       {/* Draw Form Modal */}
-      <Modal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={editingDraw ? 'Editar Sorteo' : 'Nuevo Sorteo'}
-        size="md"
-      >
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+      {canOpenDrawModal && (
+        <Modal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          title={editingDraw ? 'Editar Sorteo' : 'Nuevo Sorteo'}
+          size="md"
+        >
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {formError && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
               {formError}
@@ -734,17 +760,19 @@ export default function DrawsPage() {
             </Button>
             <Button type="submit">{editingDraw ? 'Guardar cambios' : 'Crear sorteo'}</Button>
           </div>
-        </form>
-      </Modal>
+          </form>
+        </Modal>
+      )}
 
       {/* Restricted Numbers Modal */}
-      <Modal
-        open={!!rnDraw}
-        onClose={() => setRnDraw(null)}
-        title={`Números Restringidos — ${rnDraw?.name ?? ''}`}
-        size="md"
-      >
-        <div className="p-6 space-y-4">
+      {canManageRestrictedNumbers && (
+        <Modal
+          open={!!rnDraw}
+          onClose={() => setRnDraw(null)}
+          title={`Números Restringidos — ${rnDraw?.name ?? ''}`}
+          size="md"
+        >
+          <div className="p-6 space-y-4">
           <p className="text-sm text-slate-500">
             Define números con límites máximos de venta acumulada para toda la plataforma.
           </p>
@@ -790,8 +818,9 @@ export default function DrawsPage() {
               <p className="text-slate-400 text-sm text-center py-4">Sin números restringidos</p>
             )}
           </div>
-        </div>
-      </Modal>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

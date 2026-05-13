@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../config/prisma.js';
-import { authenticate, authorize, authorizeResource } from '../middleware/auth.js';
+import { authenticate, authorizeAnyResource, authorizeResource } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { param } from '../middleware/params.js';
 
@@ -47,7 +47,7 @@ const safeSelect = {
 };
 
 // GET /api/users
-router.get('/', authorizeResource('/users'), async (req, res) => {
+router.get('/', authorizeAnyResource('/users', '/plans', '/reports/balance-breakdown', '/reports/draw-lists', '/reports/sales-by-user'), async (req, res) => {
   const { role, status, search } = req.query as Record<string, string>;
   const where: Record<string, unknown> = {};
   if (role) where['role'] = role;
@@ -75,7 +75,7 @@ router.get('/:id', authorizeResource('/users'), async (req, res) => {
 });
 
 // POST /api/users
-router.post('/', authorizeResource('/users'), validate(createUserSchema), async (req, res) => {
+router.post('/', authorizeResource('/users:create'), validate(createUserSchema), async (req, res) => {
   const body = req.body as z.infer<typeof createUserSchema>;
   if (req.user!.role === 'asociado' && body.role === 'admin') {
     res.status(403).json({ message: 'Los asociados no pueden crear administradores.' });
@@ -102,11 +102,15 @@ router.post('/', authorizeResource('/users'), validate(createUserSchema), async 
 });
 
 // PATCH /api/users/:id
-router.patch('/:id', authorizeResource('/users'), validate(updateUserSchema), async (req, res) => {
+router.patch('/:id', authorizeResource('/users:update'), validate(updateUserSchema), async (req, res) => {
   const id = param(req, 'id');
   const body = req.body as z.infer<typeof updateUserSchema>;
   const existing = await prisma.user.findUnique({ where: { id } });
   if (!existing) { res.status(404).json({ message: 'Usuario no encontrado.' }); return; }
+  if (req.user!.role !== 'admin' && (existing.role === 'admin' || body.role === 'admin')) {
+    res.status(403).json({ message: 'Solo un administrador puede modificar usuarios administradores.' });
+    return;
+  }
   const user = await prisma.user.update({
     where: { id },
     data: {
@@ -126,9 +130,15 @@ router.patch('/:id', authorizeResource('/users'), validate(updateUserSchema), as
 });
 
 // PATCH /api/users/:id/password
-router.patch('/:id/password', authorizeResource('/users'), authorize('admin'), validate(changePasswordSchema), async (req, res) => {
+router.patch('/:id/password', authorizeResource('/users:password'), validate(changePasswordSchema), async (req, res) => {
   const id = param(req, 'id');
   const { password } = req.body as z.infer<typeof changePasswordSchema>;
+  const existing = await prisma.user.findUnique({ where: { id }, select: { role: true } });
+  if (!existing) { res.status(404).json({ message: 'Usuario no encontrado.' }); return; }
+  if (req.user!.role !== 'admin' && existing.role === 'admin') {
+    res.status(403).json({ message: 'Solo un administrador puede cambiar la contrasena de otro administrador.' });
+    return;
+  }
   const passwordHash = await bcrypt.hash(password, 12);
   await prisma.user.update({ where: { id }, data: { passwordHash } });
   await prisma.auditLog.create({
@@ -138,11 +148,17 @@ router.patch('/:id/password', authorizeResource('/users'), authorize('admin'), v
 });
 
 // PATCH /api/users/:id/status
-router.patch('/:id/status', authorizeResource('/users'), authorize('admin'), validate(changeStatusSchema), async (req, res) => {
+router.patch('/:id/status', authorizeResource('/users:status'), validate(changeStatusSchema), async (req, res) => {
   const id = param(req, 'id');
   const { status } = req.body as z.infer<typeof changeStatusSchema>;
   if (id === req.user!.sub) {
     res.status(400).json({ message: 'No puedes cambiar tu propio estado.' });
+    return;
+  }
+  const existing = await prisma.user.findUnique({ where: { id }, select: { role: true } });
+  if (!existing) { res.status(404).json({ message: 'Usuario no encontrado.' }); return; }
+  if (req.user!.role !== 'admin' && existing.role === 'admin') {
+    res.status(403).json({ message: 'Solo un administrador puede cambiar el estado de otro administrador.' });
     return;
   }
   const user = await prisma.user.update({ where: { id }, data: { status }, select: safeSelect });

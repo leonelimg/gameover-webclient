@@ -1,13 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/prisma.js';
-import { authenticate, authorize, authorizeResource } from '../middleware/auth.js';
+import { authenticate, authorizeAnyResource, authorizeResource } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { param } from '../middleware/params.js';
 
 const router = Router();
 router.use(authenticate);
-router.use(authorizeResource('/multiplicadores'));
 
 const specialMultiplierSchema = z.object({
   name: z.string().min(2),
@@ -15,7 +14,7 @@ const specialMultiplierSchema = z.object({
 });
 
 // GET /api/special-multipliers
-router.get('/', async (_req, res) => {
+router.get('/', authorizeAnyResource('/multiplicadores', '/draws'), async (_req, res) => {
   const items = await prisma.specialMultiplier.findMany({
     orderBy: { createdAt: 'desc' },
   });
@@ -23,7 +22,7 @@ router.get('/', async (_req, res) => {
 });
 
 // GET /api/special-multipliers/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', authorizeAnyResource('/multiplicadores', '/draws'), async (req, res) => {
   const id = param(req, 'id');
   const item = await prisma.specialMultiplier.findUnique({ where: { id } });
   if (!item) { res.status(404).json({ message: 'Multiplicador especial no encontrado.' }); return; }
@@ -31,7 +30,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/special-multipliers
-router.post('/', authorize('admin'), validate(specialMultiplierSchema), async (req, res) => {
+router.post('/', authorizeResource('/multiplicadores:create'), validate(specialMultiplierSchema), async (req, res) => {
   const body = req.body as z.infer<typeof specialMultiplierSchema>;
   const item = await prisma.specialMultiplier.create({
     data: { name: body.name, value: body.value },
@@ -40,7 +39,7 @@ router.post('/', authorize('admin'), validate(specialMultiplierSchema), async (r
 });
 
 // PATCH /api/special-multipliers/:id
-router.patch('/:id', authorize('admin'), validate(specialMultiplierSchema.partial()), async (req, res) => {
+router.patch('/:id', authorizeResource('/multiplicadores:update'), validate(specialMultiplierSchema.partial()), async (req, res) => {
   const id = param(req, 'id');
   const body = req.body as Partial<z.infer<typeof specialMultiplierSchema>>;
   const item = await prisma.specialMultiplier.update({
@@ -54,7 +53,7 @@ router.patch('/:id', authorize('admin'), validate(specialMultiplierSchema.partia
 });
 
 // DELETE /api/special-multipliers/:id
-router.delete('/:id', authorize('admin'), async (req, res) => {
+router.delete('/:id', authorizeResource('/multiplicadores:delete'), async (req, res) => {
   const id = param(req, 'id');
   await prisma.specialMultiplier.delete({ where: { id } });
   res.status(204).send();

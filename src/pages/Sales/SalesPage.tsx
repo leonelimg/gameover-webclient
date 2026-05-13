@@ -49,7 +49,8 @@ function NativePrintStatusIcon({ status }: { status: PrintJobStatus }) {
 }
 
 export default function SalesPage() {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
+  const canCreateSale = hasPermission('/sales:create');
 
   const readSessionString = (key: string, fallback = '') => {
     const value = sessionStorage.getItem(key);
@@ -522,7 +523,7 @@ export default function SalesPage() {
               className="flex-1"
               size="lg"
               onClick={handleSell}
-              disabled={!selectedDrawId || submitting}
+              disabled={!canCreateSale || !selectedDrawId || submitting}
             >
               <ShoppingCart size={18} />
               Registrar Venta

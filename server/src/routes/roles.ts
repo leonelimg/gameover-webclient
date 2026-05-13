@@ -83,23 +83,17 @@ router.get('/my-permissions', async (req, res) => {
   await ensurePermissionsSeeded();
 
   const rows = await prisma.rolePermission.findMany({
-    where: { role, allowed: true },
-    select: { resourceKey: true },
+    where: { role },
+    select: { resourceKey: true, allowed: true },
   });
 
-  const permissions = new Set(
-    APP_RESOURCES
-      .filter((resource) => isDefaultAllowed(resource.key, role))
-      .map((resource) => resource.key)
-  );
+  const rowsByResource = new Map(rows.map((row) => [row.resourceKey, row.allowed]));
 
-  for (const row of rows) {
-    if (APP_RESOURCE_KEYS.has(row.resourceKey)) {
-      permissions.add(row.resourceKey);
-    }
-  }
+  const permissions = APP_RESOURCES
+    .filter((resource) => rowsByResource.get(resource.key) ?? isDefaultAllowed(resource.key, role))
+    .map((resource) => resource.key);
 
-  res.json({ permissions: Array.from(permissions) });
+  res.json({ permissions });
 });
 
 router.use(authorizeResource('/roles'));
@@ -119,7 +113,7 @@ router.get('/permissions', async (_req, res) => {
 });
 
 // PATCH /api/roles/permissions
-router.patch('/permissions', async (req, res) => {
+router.patch('/permissions', authorizeResource('/roles:update'), async (req, res) => {
   const parsed = updatePermissionsSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ message: parsed.error.issues[0]?.message ?? 'Payload invalido.' });

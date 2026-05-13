@@ -68,8 +68,13 @@ const emptyForm: UserFormData = {
 };
 
 export default function UsersPage() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, hasPermission } = useAuth();
   const { users, setUsers, reload } = useUsers();
+  const canCreateUser = hasPermission('/users:create');
+  const canUpdateUser = hasPermission('/users:update');
+  const canChangeStatus = hasPermission('/users:status');
+  const canChangePassword = hasPermission('/users:password');
+  const canShowActions = canUpdateUser || canChangeStatus || canChangePassword;
 
   const [plans, setPlans] = useState<Plan[]>([]);
   useEffect(() => { plansApi.list().then(setPlans).catch(() => {}); }, []);
@@ -216,46 +221,52 @@ export default function UsersPage() {
     setNewPassword('');
   };
 
-  const canManage = currentUser?.role === 'admin';
-
   const renderActions = (u: User) => {
-    if (!canManage) return null;
+    if (!canShowActions) return null;
 
     return (
       <div className="flex items-center justify-end gap-1">
-        <button
-          title="Editar"
-          onClick={() => openEdit(u)}
-          className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-        >
-          <Edit size={15} />
-        </button>
-        <button
-          title={u.status === 'bloqueado' ? 'Desbloquear' : 'Bloquear'}
-          onClick={() => toggleBlock(u)}
-          disabled={u.id === currentUser?.id}
-          className="p-1.5 text-slate-500 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors disabled:opacity-30"
-        >
-          {u.status === 'bloqueado' ? <Unlock size={15} /> : <Lock size={15} />}
-        </button>
-        <button
-          title="Archivar"
-          onClick={() => archiveUser(u)}
-          disabled={u.id === currentUser?.id || u.status === 'archivado'}
-          className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-30"
-        >
-          <Archive size={15} />
-        </button>
-        <button
-          title="Cambiar contraseña"
-          onClick={() => {
-            setPwModalUser(u);
-            setNewPassword('');
-          }}
-          className="p-1.5 text-slate-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-        >
-          <Key size={15} />
-        </button>
+        {canUpdateUser && (
+          <button
+            title="Editar"
+            onClick={() => openEdit(u)}
+            className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+          >
+            <Edit size={15} />
+          </button>
+        )}
+        {canChangeStatus && (
+          <>
+            <button
+              title={u.status === 'bloqueado' ? 'Desbloquear' : 'Bloquear'}
+              onClick={() => toggleBlock(u)}
+              disabled={u.id === currentUser?.id}
+              className="p-1.5 text-slate-500 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors disabled:opacity-30"
+            >
+              {u.status === 'bloqueado' ? <Unlock size={15} /> : <Lock size={15} />}
+            </button>
+            <button
+              title="Archivar"
+              onClick={() => archiveUser(u)}
+              disabled={u.id === currentUser?.id || u.status === 'archivado'}
+              className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-30"
+            >
+              <Archive size={15} />
+            </button>
+          </>
+        )}
+        {canChangePassword && (
+          <button
+            title="Cambiar contraseña"
+            onClick={() => {
+              setPwModalUser(u);
+              setNewPassword('');
+            }}
+            className="p-1.5 text-slate-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+          >
+            <Key size={15} />
+          </button>
+        )}
       </div>
     );
   };
@@ -305,7 +316,7 @@ export default function UsersPage() {
           <h1 className="text-2xl font-bold text-slate-900">Usuarios</h1>
           <p className="text-sm text-slate-500">Gestión de usuarios del sistema</p>
         </div>
-        {canManage && (
+        {canCreateUser && (
           <Button onClick={openCreate} size="md">
             <Plus size={16} />
             Nuevo Usuario
@@ -373,7 +384,7 @@ export default function UsersPage() {
                   <th className="text-left px-4 py-3 text-slate-600 font-medium">Rol</th>
                   <th className="text-left px-4 py-3 text-slate-600 font-medium">Estado</th>
                   <th className="text-left px-4 py-3 text-slate-600 font-medium">Creado</th>
-                  {canManage && (
+                  {canShowActions && (
                     <th className="text-right px-4 py-3 text-slate-600 font-medium">Acciones</th>
                   )}
                 </tr>
@@ -381,7 +392,7 @@ export default function UsersPage() {
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                    <td colSpan={canShowActions ? 7 : 6} className="px-4 py-8 text-center text-slate-500">
                       No hay usuarios que coincidan con los filtros.
                     </td>
                   </tr>
@@ -402,7 +413,7 @@ export default function UsersPage() {
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-slate-500">{formatDate(u.createdAt)}</td>
-                      {canManage && (
+                      {canShowActions && (
                         <td className="px-4 py-3">{renderActions(u)}</td>
                       )}
                     </tr>
@@ -423,13 +434,14 @@ export default function UsersPage() {
       </Card>
 
       {/* Create/Edit Modal */}
-      <Modal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={editingUser ? 'Editar Usuario' : 'Nuevo Usuario'}
-        size="md"
-      >
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+      {(canCreateUser || canUpdateUser) && (
+        <Modal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          title={editingUser ? 'Editar Usuario' : 'Nuevo Usuario'}
+          size="md"
+        >
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {formError && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
               {formError}
@@ -467,7 +479,7 @@ export default function UsersPage() {
               value={form.role}
               onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}
               options={[
-                { value: 'admin', label: 'Admin' },
+                ...(currentUser?.role === 'admin' ? [{ value: 'admin', label: 'Admin' }] : []),
                 { value: 'asociado', label: 'Asociado' },
                 { value: 'vendedor', label: 'Vendedor' },
               ]}
@@ -510,17 +522,19 @@ export default function UsersPage() {
             </Button>
             <Button type="submit">{editingUser ? 'Guardar cambios' : 'Crear usuario'}</Button>
           </div>
-        </form>
-      </Modal>
+          </form>
+        </Modal>
+      )}
 
       {/* Password Modal */}
-      <Modal
-        open={!!pwModalUser}
-        onClose={() => setPwModalUser(null)}
-        title="Cambiar contraseña"
-        size="sm"
-      >
-        <div className="p-6 space-y-4">
+      {canChangePassword && (
+        <Modal
+          open={!!pwModalUser}
+          onClose={() => setPwModalUser(null)}
+          title="Cambiar contraseña"
+          size="sm"
+        >
+          <div className="p-6 space-y-4">
           <p className="text-sm text-slate-600">
             Cambiando contraseña para: <strong>{pwModalUser?.fullName}</strong>
           </p>
@@ -536,8 +550,9 @@ export default function UsersPage() {
             </Button>
             <Button onClick={savePassword}>Guardar</Button>
           </div>
-        </div>
-      </Modal>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

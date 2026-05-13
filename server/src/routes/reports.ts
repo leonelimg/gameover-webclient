@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../config/prisma.js';
-import { authenticate, authorizeResource } from '../middleware/auth.js';
+import { authenticate, authorizeAnyResource, authorizeResource } from '../middleware/auth.js';
 
 type Stats = { totalSales: number; ticketCount: number };
 type Role = 'admin' | 'asociado' | 'vendedor';
@@ -14,7 +14,7 @@ interface HierarchyUser {
 }
 
 const router = Router();
-router.use(authenticate, authorizeResource('/reports'));
+router.use(authenticate);
 
 async function getHierarchyUsers(): Promise<HierarchyUser[]> {
   return prisma.user.findMany({
@@ -75,7 +75,7 @@ function parseCreatedAtFilter(query: Record<string, string>): {
 
 // ── GET /api/reports/summary ──────────────────────────────────────────────────
 
-router.get('/summary', authorizeResource('/reports/sales-stats'), async (req, res) => {
+router.get('/summary', authorizeAnyResource('/dashboard', '/reports/sales-stats'), async (req, res) => {
   const query = req.query as Record<string, string>;
   const { drawId } = query;
 
@@ -89,20 +89,113 @@ router.get('/summary', authorizeResource('/reports/sales-stats'), async (req, re
   if (drawId) ticketWhere['drawId'] = drawId;
   if (Object.keys(createdAtFilter).length > 0) ticketWhere['createdAt'] = createdAtFilter;
   ticketWhere['canceledAt'] = null;
-  if (req.user!.role === 'asociado') {
-    ticketWhere['associateId'] = req.user!.sub;
+
+  let scopedUserIds: Set<string> | null = null;
+
+  if (req.user!.role !== 'admin') {
+    const users = await getHierarchyUsers();
+    const currentScopedUserIds =
+      req.user!.role === 'asociado'
+        ? getDescendantUserIds(users, req.user!.sub)
+        : new Set<string>([req.user!.sub]);
+    scopedUserIds = currentScopedUserIds;
+
+    const sellerIds = users
+      .filter((u) => currentScopedUserIds.has(u.id))
+      .map((u) => u.id);
+
+    ticketWhere['sellerId'] = { in: sellerIds };
   }
 
-  const [ticketCount, totalResult, userCount, drawCount] = await Promise.all([
+  const userCountWhere: Record<string, unknown> = { status: 'activo' };
+  if (scopedUserIds) {
+    userCountWhere['id'] = { in: Array.from(scopedUserIds) };
+  }
+
+  interface SummaryTicket {
+    total: number;
+    lines: Array<{ number: string; amount: number; specialAmount: number | null }>;
+    draw: {
+      winnerNumber: string | null;
+      specialMultiplier: { value: number } | null;
+    };
+    seller: { plan: { multiplier: number; commission: number } | null };
+    associate: { plan: { multiplier: number; commission: number } | null };
+  }
+
+  const [ticketCount, totalResult, userCount, drawCount, tickets, defaultPlan] = await Promise.all([
     prisma.ticket.count({ where: ticketWhere }),
     prisma.ticket.aggregate({ where: ticketWhere, _sum: { total: true } }),
-    prisma.user.count({ where: { status: 'activo' } }),
+    prisma.user.count({ where: userCountWhere }),
     prisma.draw.count(),
+    prisma.ticket.findMany({
+      where: ticketWhere,
+      select: {
+        total: true,
+        lines: { select: { number: true, amount: true, specialAmount: true } },
+        draw: {
+          select: {
+            winnerNumber: true,
+            specialMultiplier: { select: { value: true } },
+          },
+        },
+        seller: {
+          select: {
+            plan: { select: { multiplier: true, commission: true } },
+          },
+        },
+        associate: {
+          select: {
+            plan: { select: { multiplier: true, commission: true } },
+          },
+        },
+      },
+    }) as Promise<SummaryTicket[]>,
+    prisma.plan.findFirst({
+      orderBy: { createdAt: 'asc' },
+      select: { multiplier: true, commission: true },
+    }),
   ]);
+
+  function normalizeNumber(value: string): string {
+    const trimmed = value.trim();
+    return trimmed.replace(/^0+(?=\d)/, '');
+  }
+
+  const financialTotals = tickets.reduce(
+    (acc, ticket) => {
+      const effectivePlan = ticket.seller.plan ?? ticket.associate.plan ?? defaultPlan;
+      const regularMultiplier = effectivePlan?.multiplier ?? 0;
+      const commissionRate = (effectivePlan?.commission ?? 0) / 100;
+      const specialMultiplierValue = ticket.draw.specialMultiplier?.value ?? null;
+
+      acc.totalCommissions += ticket.total * commissionRate;
+
+      const winnerNumber = ticket.draw.winnerNumber;
+      if (!winnerNumber) {
+        return acc;
+      }
+
+      const normalizedWinner = normalizeNumber(winnerNumber);
+      const prizeForTicket = ticket.lines.reduce((sum, line) => {
+        if (normalizeNumber(line.number) !== normalizedWinner) return sum;
+        if (specialMultiplierValue !== null && (line.specialAmount ?? 0) > 0) {
+          return sum + (line.amount + (line.specialAmount ?? 0)) * regularMultiplier * specialMultiplierValue;
+        }
+        return sum + line.amount * regularMultiplier;
+      }, 0);
+
+      acc.totalPrizes += prizeForTicket;
+      return acc;
+    },
+    { totalPrizes: 0, totalCommissions: 0 }
+  );
 
   res.json({
     ticketCount,
     totalSales: totalResult._sum.total ?? 0,
+    totalPrizes: financialTotals.totalPrizes,
+    totalCommissions: financialTotals.totalCommissions,
     userCount,
     drawCount,
   });
@@ -110,7 +203,7 @@ router.get('/summary', authorizeResource('/reports/sales-stats'), async (req, re
 
 // ── GET /api/reports/top-numbers ──────────────────────────────────────────────
 
-router.get('/top-numbers', authorizeResource('/reports/sales-stats'), async (req, res) => {
+router.get('/top-numbers', async (req, res) => {
   const query = req.query as Record<string, string>;
   const { drawId, limit = '10' } = query;
 
@@ -150,6 +243,51 @@ router.get('/top-numbers', authorizeResource('/reports/sales-stats'), async (req
 
   res.json(result);
 });
+
+// ── GET /api/reports/recent-tickets ──────────────────────────────────────────
+
+router.get('/recent-tickets', authorizeAnyResource('/dashboard', '/reports/sales-stats'), async (req, res) => {
+  const query = req.query as Record<string, string>;
+  const { drawId, limit = '10' } = query;
+
+  const { filter: createdAtFilter, error } = parseCreatedAtFilter(query);
+  if (error) {
+    res.status(400).json({ message: error });
+    return;
+  }
+
+  const where: Record<string, unknown> = {};
+  if (drawId) where['drawId'] = drawId;
+  if (Object.keys(createdAtFilter).length > 0) where['createdAt'] = createdAtFilter;
+  where['canceledAt'] = null;
+
+  if (req.user!.role !== 'admin') {
+    const users = await getHierarchyUsers();
+    const scopedUserIds =
+      req.user!.role === 'asociado'
+        ? getDescendantUserIds(users, req.user!.sub)
+        : new Set<string>([req.user!.sub]);
+
+    const sellerIds = users
+      .filter((u) => scopedUserIds.has(u.id))
+      .map((u) => u.id);
+
+    where['sellerId'] = { in: sellerIds };
+  }
+
+  const tickets = await prisma.ticket.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+    take: parseInt(limit, 10),
+    include: {
+      draw: { select: { name: true } },
+      seller: { select: { fullName: true } },
+    },
+  });
+  res.json(tickets);
+});
+
+router.use(authorizeResource('/reports'));
 
 // ── GET /api/reports/hierarchy ────────────────────────────────────────────────
 
@@ -241,36 +379,6 @@ router.get('/hierarchy', authorizeResource('/reports/sales-stats'), async (req, 
   }
 
   res.json(tree);
-});
-
-// ── GET /api/reports/recent-tickets ──────────────────────────────────────────
-
-router.get('/recent-tickets', authorizeResource('/reports/sales-stats'), async (req, res) => {
-  const query = req.query as Record<string, string>;
-  const { drawId, limit = '10' } = query;
-
-  const { filter: createdAtFilter, error } = parseCreatedAtFilter(query);
-  if (error) {
-    res.status(400).json({ message: error });
-    return;
-  }
-
-  const where: Record<string, unknown> = {};
-  if (drawId) where['drawId'] = drawId;
-  if (Object.keys(createdAtFilter).length > 0) where['createdAt'] = createdAtFilter;
-  where['canceledAt'] = null;
-  if (req.user!.role === 'asociado') where['associateId'] = req.user!.sub;
-
-  const tickets = await prisma.ticket.findMany({
-    where,
-    orderBy: { createdAt: 'desc' },
-    take: parseInt(limit, 10),
-    include: {
-      draw: { select: { name: true } },
-      seller: { select: { fullName: true } },
-    },
-  });
-  res.json(tickets);
 });
 
 // ── GET /api/reports/balance-breakdown ──────────────────────────────────────
@@ -793,9 +901,13 @@ router.get('/sales-by-user', authorizeResource('/reports/sales-by-user'), async 
 
   const users = await getHierarchyUsers();
 
-  let allowedUserIds = new Set<string>(users.map((u) => u.id));
-  if (req.user!.role === 'asociado') {
+  let allowedUserIds: Set<string>;
+  if (req.user!.role === 'admin') {
+    allowedUserIds = new Set(users.map((u) => u.id));
+  } else if (req.user!.role === 'asociado') {
     allowedUserIds = getDescendantUserIds(users, req.user!.sub);
+  } else {
+    allowedUserIds = new Set([req.user!.sub]);
   }
 
   if (userId && !allowedUserIds.has(userId)) {
@@ -803,11 +915,13 @@ router.get('/sales-by-user', authorizeResource('/reports/sales-by-user'), async 
     return;
   }
 
-  const sellerIds = userId
-    ? [userId]
-    : users
-      .filter((u) => allowedUserIds.has(u.id))
-      .map((u) => u.id);
+  const scopedUserIds = userId
+    ? getDescendantUserIds(users, userId)
+    : allowedUserIds;
+
+  const sellerIds = users
+    .filter((u) => allowedUserIds.has(u.id) && scopedUserIds.has(u.id))
+    .map((u) => u.id);
 
   const where: Record<string, unknown> = {
     sellerId: { in: sellerIds },

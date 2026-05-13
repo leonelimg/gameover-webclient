@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/prisma.js';
-import { authenticate, authorizeResource } from '../middleware/auth.js';
+import { authenticate, authorizeResource, isResourceAllowedForRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 
 type AuthUser = { sub: string; role: 'admin' | 'asociado' | 'vendedor' };
@@ -173,6 +173,7 @@ router.get('/targets', async (req, res) => {
   const authUser = req.user as AuthUser;
   const users = await getHierarchyUsers();
   const scoped = getScopedUserIds(authUser, users);
+  const canCreateMovements = await isResourceAllowedForRole('/cash-movements:create', authUser.role);
 
   const targets = users
     .filter((u) => scoped.has(u.id))
@@ -183,7 +184,7 @@ router.get('/targets', async (req, res) => {
       username: u.username,
       role: u.role,
       status: u.status,
-      canOperate: authUser.role !== 'vendedor' && authUser.sub !== u.id,
+      canOperate: canCreateMovements && authUser.sub !== u.id,
     }))
     .sort((a, b) => a.fullName.localeCompare(b.fullName));
 
@@ -356,12 +357,8 @@ router.get('/balance', async (req, res) => {
 });
 
 // POST /api/cash-movements
-router.post('/', validate(createMovementSchema), async (req, res) => {
+router.post('/', authorizeResource('/cash-movements:create'), validate(createMovementSchema), async (req, res) => {
   const authUser = req.user as AuthUser;
-  if (authUser.role === 'vendedor') {
-    res.status(403).json({ message: 'No tienes permisos para registrar depositos o retiros.' });
-    return;
-  }
 
   const body = req.body as z.infer<typeof createMovementSchema>;
 
@@ -432,7 +429,7 @@ router.post('/', validate(createMovementSchema), async (req, res) => {
 });
 
 // PATCH /api/cash-movements/:id/cancel
-router.patch('/:id/cancel', validate(cancelMovementSchema), async (req, res) => {
+router.patch('/:id/cancel', authorizeResource('/cash-movements:cancel'), validate(cancelMovementSchema), async (req, res) => {
   const authUser = req.user as AuthUser;
   const movementId = req.params.id as string;
   const body = req.body as z.infer<typeof cancelMovementSchema>;

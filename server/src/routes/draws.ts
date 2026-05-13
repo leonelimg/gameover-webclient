@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/prisma.js';
-import { authenticate, authorize, authorizeResource } from '../middleware/auth.js';
+import { authenticate, authorizeAnyResource, authorizeResource } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { param } from '../middleware/params.js';
 
@@ -9,7 +9,6 @@ type DrawStatusValue = 'pendiente' | 'abierto' | 'cerrado' | 'finalizado';
 
 const router = Router();
 router.use(authenticate);
-router.use(authorizeResource('/draws'));
 
 const drawSchema = z.object({
   name: z.string().min(2),
@@ -46,13 +45,13 @@ const rnInclude = {
 };
 
 // GET /api/draws
-router.get('/', async (_req, res) => {
+router.get('/', authorizeAnyResource('/draws/list', '/draws', '/sales', '/ticket-payments', '/reports/sales-stats', '/reports/balance-breakdown', '/reports/sales-by-user', '/reports/draw-lists'), async (_req, res) => {
   const draws = await prisma.draw.findMany({ include: rnInclude, orderBy: { closeTime: 'desc' } });
   res.json(draws);
 });
 
 // GET /api/draws/search
-router.get('/search', async (req, res) => {
+router.get('/search', authorizeAnyResource('/draws/list', '/draws', '/sales', '/ticket-payments', '/reports/sales-stats', '/reports/balance-breakdown', '/reports/sales-by-user', '/reports/draw-lists'), async (req, res) => {
   const parsed = drawSearchQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ message: 'Parámetros inválidos para búsqueda de sorteos.' });
@@ -108,7 +107,7 @@ router.get('/search', async (req, res) => {
 });
 
 // GET /api/draws/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', authorizeAnyResource('/draws/list', '/draws', '/sales', '/ticket-payments', '/reports/sales-stats', '/reports/balance-breakdown', '/reports/sales-by-user', '/reports/draw-lists'), async (req, res) => {
   const id = param(req, 'id');
   const draw = await prisma.draw.findUnique({ where: { id }, include: rnInclude });
   if (!draw) { res.status(404).json({ message: 'Sorteo no encontrado.' }); return; }
@@ -116,7 +115,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/draws
-router.post('/', authorize('admin'), validate(drawSchema), async (req, res) => {
+router.post('/', authorizeResource('/draws:create'), validate(drawSchema), async (req, res) => {
   const body = req.body as z.infer<typeof drawSchema>;
   const status = resolveStatus(body.closeTime, body.minutosPreviosCierre, body.winnerNumber);
   const draw = await prisma.draw.create({
@@ -134,7 +133,7 @@ router.post('/', authorize('admin'), validate(drawSchema), async (req, res) => {
 });
 
 // PATCH /api/draws/:id
-router.patch('/:id', authorize('admin'), validate(drawSchema.partial()), async (req, res) => {
+router.patch('/:id', authorizeResource('/draws:update'), validate(drawSchema.partial()), async (req, res) => {
   const id = param(req, 'id');
   const body = req.body as Partial<z.infer<typeof drawSchema>>;
   const existing = await prisma.draw.findUnique({ where: { id } });
@@ -158,14 +157,14 @@ router.patch('/:id', authorize('admin'), validate(drawSchema.partial()), async (
 });
 
 // DELETE /api/draws/:id
-router.delete('/:id', authorize('admin'), async (req, res) => {
+router.delete('/:id', authorizeResource('/draws:delete'), async (req, res) => {
   const id = param(req, 'id');
   await prisma.draw.delete({ where: { id } });
   res.status(204).send();
 });
 
 // POST /api/draws/:id/restricted-numbers
-router.post('/:id/restricted-numbers', authorize('admin'), validate(rnSchema), async (req, res) => {
+router.post('/:id/restricted-numbers', authorizeResource('/draws:restricted-numbers'), validate(rnSchema), async (req, res) => {
   const drawId = param(req, 'id');
   const body = req.body as z.infer<typeof rnSchema>;
   const rn = await prisma.restrictedNumber.upsert({
@@ -177,7 +176,7 @@ router.post('/:id/restricted-numbers', authorize('admin'), validate(rnSchema), a
 });
 
 // DELETE /api/draws/:id/restricted-numbers/:number
-router.delete('/:id/restricted-numbers/:number', authorize('admin'), async (req, res) => {
+router.delete('/:id/restricted-numbers/:number', authorizeResource('/draws:restricted-numbers'), async (req, res) => {
   const drawId = param(req, 'id');
   const number = param(req, 'number');
   await prisma.restrictedNumber.delete({

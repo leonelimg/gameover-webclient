@@ -7,6 +7,7 @@ import {
   DollarSign,
   Award,
   CalendarDays,
+  HandCoins,
 } from 'lucide-react';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -70,6 +71,8 @@ export default function DashboardPage() {
     drawCount: 0,
     ticketCount: 0,
     totalSales: 0,
+    totalPrizes: 0,
+    totalCommissions: 0,
   });
 
   const [recentTickets, setRecentTickets] = useState<TicketType[]>([]);
@@ -201,7 +204,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
         <StatCard icon={<Users size={20} />} label="Usuarios" value={stats.userCount} color="blue" />
         <StatCard icon={<Ticket size={20} />} label="Sorteos" value={stats.drawCount} color="purple" />
         <StatCard icon={<ShoppingCart size={20} />} label="Tickets" value={stats.ticketCount} color="green" />
@@ -210,6 +213,18 @@ export default function DashboardPage() {
           label="Ventas Totales"
           value={formatCurrency(stats.totalSales)}
           color="orange"
+        />
+        <StatCard
+          icon={<Award size={20} />}
+          label="Premios"
+          value={formatCurrency(stats.totalPrizes)}
+          color="red"
+        />
+        <StatCard
+          icon={<HandCoins size={20} />}
+          label="Comisiones"
+          value={formatCurrency(stats.totalCommissions)}
+          color="indigo"
         />
       </div>
 
@@ -300,13 +315,15 @@ function StatCard({
   icon: React.ReactNode;
   label: string;
   value: string | number;
-  color: 'blue' | 'purple' | 'green' | 'orange';
+  color: 'blue' | 'purple' | 'green' | 'orange' | 'red' | 'indigo';
 }) {
   const colorMap = {
     blue: 'bg-blue-50 text-blue-600',
     purple: 'bg-purple-50 text-purple-600',
     green: 'bg-green-50 text-green-600',
     orange: 'bg-orange-50 text-orange-600',
+    red: 'bg-red-50 text-red-600',
+    indigo: 'bg-indigo-50 text-indigo-600',
   };
   return (
     <Card className="p-4">

@@ -1,13 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/prisma.js';
-import { authenticate, authorizeResource } from '../middleware/auth.js';
+import { authenticate, authorizeAnyResource, authorizeResource } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { param } from '../middleware/params.js';
 
 const router = Router();
 router.use(authenticate);
-router.use(authorizeResource('/sales'));
 
 const ticketLineSchema = z.object({
   number: z.string().regex(/^\d{2}$/, 'El número debe tener exactamente 2 dígitos.'),
@@ -78,7 +77,7 @@ function generateCode(): string {
 }
 
 // GET /api/tickets
-router.get('/', async (req, res) => {
+router.get('/', authorizeResource('/sales'), async (req, res) => {
   const { drawId, sellerId, associateId, includeCanceled } = req.query as Record<string, string>;
   const where: Record<string, unknown> = {};
   if (drawId) where['drawId'] = drawId;
@@ -118,7 +117,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/tickets/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', authorizeAnyResource('/sales', '/ticket-payments', '/reports/sales-by-user'), async (req, res) => {
   const id = param(req, 'id');
 
   const allowed = await canAccessTicket(id, req.user!);
@@ -157,7 +156,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/tickets
-router.post('/', validate(createTicketSchema), async (req, res) => {
+router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema), async (req, res) => {
   const body = req.body as z.infer<typeof createTicketSchema>;
 
   const draw = await prisma.draw.findUnique({
@@ -255,7 +254,7 @@ router.post('/', validate(createTicketSchema), async (req, res) => {
 });
 
 // PATCH /api/tickets/:id/print
-router.patch('/:id/print', async (req, res) => {
+router.patch('/:id/print', authorizeAnyResource('/sales', '/reports/sales-by-user'), async (req, res) => {
   const id = param(req, 'id');
 
   const allowed = await canAccessTicket(id, req.user!);
@@ -291,14 +290,9 @@ router.patch('/:id/print', async (req, res) => {
 });
 
 // PATCH /api/tickets/:id/cancel
-router.patch('/:id/cancel', validate(cancelTicketSchema), async (req, res) => {
+router.patch('/:id/cancel', authorizeResource('/sales:cancel'), validate(cancelTicketSchema), async (req, res) => {
   const id = param(req, 'id');
   const body = req.body as z.infer<typeof cancelTicketSchema>;
-
-  if (!['admin', 'asociado'].includes(req.user!.role)) {
-    res.status(403).json({ message: 'No tienes permisos para anular tickets.' });
-    return;
-  }
 
   const allowed = await canAccessTicket(id, req.user!);
   if (!allowed) {

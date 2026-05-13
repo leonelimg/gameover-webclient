@@ -8,6 +8,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Input, Select } from '@/components/ui/Input';
 import { formatCurrency, formatDateTime, formatDrawLabel } from '@/utils/helpers';
 import { Modal } from '@/components/ui/Modal';
+import { useAuth } from '@/context/AuthContext';
 
 interface PaymentsTotals {
   totalToPay: number;
@@ -28,6 +29,7 @@ const EMPTY_TOTALS: PaymentsTotals = {
 };
 
 export default function TicketPaymentsPage() {
+  const { hasPermission } = useAuth();
   const [draws, setDraws] = useState<Draw[]>([]);
   const [selectedDrawId, setSelectedDrawId] = useState('');
   const [status, setStatus] = useState<'all' | 'pendiente' | 'pagado'>('all');
@@ -49,6 +51,8 @@ export default function TicketPaymentsPage() {
   const [selectedTicketWinner, setSelectedTicketWinner] = useState<string | null>(null);
   const [selectedTicketPrizeAmount, setSelectedTicketPrizeAmount] = useState<number | null>(null);
   const [selectedTicketPaymentStatus, setSelectedTicketPaymentStatus] = useState<'pendiente' | 'pagado' | null>(null);
+  const canMarkPaid = hasPermission('/ticket-payments:mark-paid');
+  const canRevertPayment = hasPermission('/ticket-payments:revert');
 
   useEffect(() => {
     drawsApi
@@ -305,7 +309,7 @@ export default function TicketPaymentsPage() {
             <Button
               variant="success"
               onClick={handleMarkPaidByCode}
-              disabled={!quickPayCode.trim()}
+              disabled={!canMarkPaid || !quickPayCode.trim()}
               loading={scanLookupLoading}
             >
               <ScanLine size={16} />
@@ -439,7 +443,7 @@ export default function TicketPaymentsPage() {
                         >
                           Ver detalle
                         </Button>
-                        {ticket.paymentStatus !== 'pagado' ? (
+                        {ticket.paymentStatus !== 'pagado' && canMarkPaid ? (
                           <Button
                             size="sm"
                             variant="success"
@@ -449,7 +453,7 @@ export default function TicketPaymentsPage() {
                             <CheckCircle2 size={14} />
                             Pagar
                           </Button>
-                        ) : (
+                        ) : ticket.paymentStatus === 'pagado' && canRevertPayment ? (
                           <Button
                             size="sm"
                             variant="danger"
@@ -459,7 +463,7 @@ export default function TicketPaymentsPage() {
                             <RotateCcw size={14} />
                             Revertir
                           </Button>
-                        )}
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -615,7 +619,7 @@ export default function TicketPaymentsPage() {
             </div>
 
             <div className="flex justify-end gap-2">
-              {selectedTicketPaymentStatus !== 'pagado' && (
+              {selectedTicketPaymentStatus !== 'pagado' && canMarkPaid && (
                 <Button
                   variant="success"
                   onClick={handlePayFromDetail}

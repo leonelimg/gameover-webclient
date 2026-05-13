@@ -4,6 +4,7 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { useAuth } from '@/context/AuthContext';
 import { formatDate } from '@/utils/helpers';
 import { Plan, User } from '@/types';
 import { plansApi, usersApi, PlanPayload } from '@/services/api';
@@ -23,8 +24,13 @@ const emptyForm: PlanFormData = {
 };
 
 export default function PlansPage() {
+  const { hasPermission } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [associates, setAssociates] = useState<User[]>([]);
+  const canCreatePlan = hasPermission('/plans:create');
+  const canUpdatePlan = hasPermission('/plans:update');
+  const canDeletePlan = hasPermission('/plans:delete');
+  const canOpenModal = canCreatePlan || canUpdatePlan;
 
   const loadPlans = useCallback(() => {
     plansApi.list().then(setPlans).catch(() => {});
@@ -119,10 +125,12 @@ export default function PlansPage() {
           <h1 className="text-2xl font-bold text-slate-900">Planes de Afiliados</h1>
           <p className="text-sm text-slate-500">Configuración de multiplicadores y comisiones</p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus size={16} />
-          Nuevo Plan
-        </Button>
+        {canCreatePlan && (
+          <Button onClick={openCreate}>
+            <Plus size={16} />
+            Nuevo Plan
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -134,20 +142,26 @@ export default function PlansPage() {
                   <h3 className="font-semibold text-slate-900">{plan.name}</h3>
                   <p className="text-xs text-slate-500 mt-0.5">Creado {formatDate(plan.createdAt)}</p>
                 </div>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => openEdit(plan)}
-                    className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  >
-                    <Edit size={15} />
-                  </button>
-                  <button
-                    onClick={() => deletePlan(plan.id)}
-                    className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </div>
+                {(canUpdatePlan || canDeletePlan) && (
+                  <div className="flex gap-1">
+                    {canUpdatePlan && (
+                      <button
+                        onClick={() => openEdit(plan)}
+                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      >
+                        <Edit size={15} />
+                      </button>
+                    )}
+                    {canDeletePlan && (
+                      <button
+                        onClick={() => deletePlan(plan.id)}
+                        className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -177,62 +191,64 @@ export default function PlansPage() {
         )}
       </div>
 
-      <Modal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={editingPlan ? 'Editar Plan' : 'Nuevo Plan'}
-        size="md"
-      >
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {formError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
-              {formError}
+      {canOpenModal && (
+        <Modal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          title={editingPlan ? 'Editar Plan' : 'Nuevo Plan'}
+          size="md"
+        >
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            {formError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+                {formError}
+              </div>
+            )}
+            <Input
+              label="Nombre del plan"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              required
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Multiplicador (×)"
+                type="number"
+                min="1"
+                step="1"
+                value={form.multiplier}
+                onChange={(e) => setForm({ ...form, multiplier: e.target.value })}
+                required
+              />
+              <Input
+                label="Comisión (%)"
+                type="number"
+                min="0"
+                max="100"
+                step="0.5"
+                value={form.commission}
+                onChange={(e) => setForm({ ...form, commission: e.target.value })}
+                required
+              />
             </div>
-          )}
-          <Input
-            label="Nombre del plan"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            required
-          />
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Multiplicador (×)"
-              type="number"
-              min="1"
-              step="1"
-              value={form.multiplier}
-              onChange={(e) => setForm({ ...form, multiplier: e.target.value })}
-              required
+            <Select
+              label="Asociado master (opcional)"
+              value={form.masterId}
+              onChange={(e) => setForm({ ...form, masterId: e.target.value })}
+              options={[
+                { value: '', label: 'Sin master' },
+                ...associates.map((a) => ({ value: a.id, label: a.fullName })),
+              ]}
             />
-            <Input
-              label="Comisión (%)"
-              type="number"
-              min="0"
-              max="100"
-              step="0.5"
-              value={form.commission}
-              onChange={(e) => setForm({ ...form, commission: e.target.value })}
-              required
-            />
-          </div>
-          <Select
-            label="Asociado master (opcional)"
-            value={form.masterId}
-            onChange={(e) => setForm({ ...form, masterId: e.target.value })}
-            options={[
-              { value: '', label: 'Sin master' },
-              ...associates.map((a) => ({ value: a.id, label: a.fullName })),
-            ]}
-          />
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit">{editingPlan ? 'Guardar cambios' : 'Crear plan'}</Button>
-          </div>
-        </form>
-      </Modal>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit">{editingPlan ? 'Guardar cambios' : 'Crear plan'}</Button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }
