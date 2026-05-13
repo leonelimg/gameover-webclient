@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { APP_RESOURCES, isDefaultAllowed } from '../src/config/permissions.js';
 
 const prisma = new PrismaClient();
 
@@ -101,6 +102,29 @@ async function main() {
       parentId: asociado1.id,
     },
   });
+
+  // ── Role permissions ─────────────────────────────────────────────────────
+
+  await prisma.$transaction(
+    APP_RESOURCES.flatMap((resource) =>
+      (['admin', 'asociado', 'vendedor'] as const).map((role) =>
+        prisma.rolePermission.upsert({
+          where: {
+            resourceKey_role: {
+              resourceKey: resource.key,
+              role,
+            },
+          },
+          update: {},
+          create: {
+            resourceKey: resource.key,
+            role,
+            allowed: isDefaultAllowed(resource.key, role),
+          },
+        })
+      )
+    )
+  );
 
   // ── Draws ────────────────────────────────────────────────────────────────
 

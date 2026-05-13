@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken, AccessTokenPayload } from '../config/jwt.js';
+import { prisma } from '../config/prisma.js';
+import { APP_RESOURCE_KEYS, isDefaultAllowed, type AppRole } from '../config/permissions.js';
 
 // Augment Express Request with authenticated user
 declare global {
@@ -38,6 +40,39 @@ export function authorize(...roles: RoleParam[]) {
       res.status(403).json({ message: 'No tienes permisos para esta acción.' });
       return;
     }
+    next();
+  };
+}
+
+export function authorizeResource(resourceKey: string) {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (!req.user) {
+      res.status(401).json({ message: 'No autenticado.' });
+      return;
+    }
+
+    if (!APP_RESOURCE_KEYS.has(resourceKey)) {
+      res.status(500).json({ message: `Recurso no configurado: ${resourceKey}` });
+      return;
+    }
+
+    const role = req.user.role as AppRole;
+    const permission = await prisma.rolePermission.findUnique({
+      where: {
+        resourceKey_role: {
+          resourceKey,
+          role,
+        },
+      },
+      select: { allowed: true },
+    });
+
+    const allowed = permission ? permission.allowed : isDefaultAllowed(resourceKey, role);
+    if (!allowed) {
+      res.status(403).json({ message: 'No tienes permisos para esta ruta.' });
+      return;
+    }
+
     next();
   };
 }

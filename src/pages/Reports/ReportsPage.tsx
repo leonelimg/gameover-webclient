@@ -1,11 +1,17 @@
 import { useState, useEffect } from 'react';
 import { ChevronDown, ChevronRight, BarChart3 } from 'lucide-react';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
-import { Input, Select } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
-import { formatCurrency, formatDate } from '@/utils/helpers';
+import { DateRangeSegmentedControl } from '@/components/ui/DateRangeSegmentedControl';
+import { formatCurrency, formatDrawLabel } from '@/utils/helpers';
 import { drawsApi, reportsApi, HierarchyNode, ReportSummary, TopNumber } from '@/services/api';
+import { DateRange, getDateRange, isDateRange, toISODateLocal } from '@/utils/dateRanges';
 import { Draw, Ticket } from '@/types';
+
+const REPORTS_RANGE_KEY = 'go_reports_selected_range';
+const REPORTS_CUSTOM_FROM_KEY = 'go_reports_custom_from_date';
+const REPORTS_CUSTOM_TO_KEY = 'go_reports_custom_to_date';
 
 function TreeRow({
   node,
@@ -59,34 +65,67 @@ function TreeRow({
 export default function ReportsPage() {
   const [draws, setDraws] = useState<Draw[]>([]);
   const [selectedDrawId, setSelectedDrawId] = useState('');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
+  const [customFromDate, setCustomFromDate] = useState<string>(() => {
+    const saved = localStorage.getItem(REPORTS_CUSTOM_FROM_KEY);
+    return saved || toISODateLocal(new Date());
+  });
+  const [customToDate, setCustomToDate] = useState<string>(() => {
+    const saved = localStorage.getItem(REPORTS_CUSTOM_TO_KEY);
+    return saved || toISODateLocal(new Date());
+  });
+  const [selectedRange, setSelectedRange] = useState<DateRange>(() => {
+    const saved = localStorage.getItem(REPORTS_RANGE_KEY);
+    if (saved && isDateRange(saved)) {
+      return saved;
+    }
+    return 'today';
+  });
 
   const [summary, setSummary] = useState<ReportSummary>({ ticketCount: 0, totalSales: 0, userCount: 0, drawCount: 0 });
   const [tree, setTree] = useState<HierarchyNode[]>([]);
   const [topNumbers, setTopNumbers] = useState<TopNumber[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
 
+  // Persist selectedRange to localStorage
+  useEffect(() => {
+    localStorage.setItem(REPORTS_RANGE_KEY, selectedRange);
+  }, [selectedRange]);
+
+  // Persist custom dates to localStorage
+  useEffect(() => {
+    localStorage.setItem(REPORTS_CUSTOM_FROM_KEY, customFromDate);
+  }, [customFromDate]);
+
+  useEffect(() => {
+    localStorage.setItem(REPORTS_CUSTOM_TO_KEY, customToDate);
+  }, [customToDate]);
+
   // Load draws once
   useEffect(() => {
     drawsApi.list().then(setDraws).catch(() => {});
   }, []);
 
-  // Reload report data whenever the selected draw changes
+  // Reload report data whenever the selected draw or date range changes
   useEffect(() => {
     const drawId = selectedDrawId || undefined;
-    const from = fromDate || undefined;
-    const to = toDate || undefined;
-    reportsApi.summary(drawId, from, to).then(setSummary).catch(() => {});
-    reportsApi.hierarchy(drawId, from, to).then(setTree).catch(() => {});
-    reportsApi.topNumbers(drawId, 10, from, to).then(setTopNumbers).catch(() => {});
-    reportsApi.recentTickets(drawId, 10, from, to).then(setTickets).catch(() => {});
-  }, [selectedDrawId, fromDate, toDate]);
+    const isCustomRange = selectedRange === 'custom';
+    if (isCustomRange && (!customFromDate || !customToDate || customFromDate > customToDate)) {
+      return;
+    }
+
+    const { fromDate, toDate } = isCustomRange
+      ? { fromDate: customFromDate, toDate: customToDate }
+      : getDateRange(selectedRange);
+
+    reportsApi.summary(drawId, fromDate, toDate).then(setSummary).catch(() => {});
+    reportsApi.hierarchy(drawId, fromDate, toDate).then(setTree).catch(() => {});
+    reportsApi.topNumbers(drawId, 10, fromDate, toDate).then(setTopNumbers).catch(() => {});
+    reportsApi.recentTickets(drawId, 10, fromDate, toDate).then(setTickets).catch(() => {});
+  }, [selectedDrawId, selectedRange, customFromDate, customToDate]);
 
   const resetFilters = () => {
     setSelectedDrawId('');
-    setFromDate('');
-    setToDate('');
+    setSelectedRange('today');
   };
 
   return (
@@ -96,7 +135,17 @@ export default function ReportsPage() {
         <p className="text-sm text-slate-500">Estadisctica de ventas</p>
       </div>
 
-      {/* Filter */}
+      {/* Date range filter */}
+      <DateRangeSegmentedControl
+        selectedRange={selectedRange}
+        onRangeChange={setSelectedRange}
+        customFromDate={customFromDate}
+        customToDate={customToDate}
+        onCustomFromDateChange={setCustomFromDate}
+        onCustomToDateChange={setCustomToDate}
+      />
+
+      {/* Additional filters */}
       <Card>
         <CardBody>
           <div className="flex flex-wrap gap-3 items-center">
@@ -107,28 +156,16 @@ export default function ReportsPage() {
                 { value: '', label: 'Todos los sorteos' },
                 ...draws.map((d) => ({
                   value: d.id,
-                  label: `${d.name} (${formatDate(d.closeTime)})`,
+                  label: formatDrawLabel(d),
                 })),
               ]}
               className="w-64"
-            />
-            <Input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="w-44"
-            />
-            <Input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              className="w-44"
             />
             <button
               onClick={resetFilters}
               className="px-3 py-2 text-sm rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50"
             >
-              Limpiar
+              Limpiar filtros
             </button>
           </div>
         </CardBody>

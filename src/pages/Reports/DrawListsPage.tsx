@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
-import { Input, Select } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { DateRangeSegmentedControl } from '@/components/ui/DateRangeSegmentedControl';
 import { drawsApi, DrawListsResponse, reportsApi, usersApi } from '@/services/api';
 import { Draw, User } from '@/types';
-import { formatCurrency, formatDate } from '@/utils/helpers';
+import { formatCurrency, formatDrawLabel } from '@/utils/helpers';
+import { DateRange, getDateRange, isDateRange, toISODateLocal } from '@/utils/dateRanges';
+
+const DRAW_LISTS_RANGE_KEY = 'go_drawlists_selected_range';
+const DRAW_LISTS_CUSTOM_FROM_KEY = 'go_drawlists_custom_from_date';
+const DRAW_LISTS_CUSTOM_TO_KEY = 'go_drawlists_custom_to_date';
 
 const COLUMN_OPTIONS = [
   { value: '2', label: '2 Columnas' },
@@ -46,8 +52,21 @@ export default function DrawListsPage() {
 
   const [selectedDrawId, setSelectedDrawId] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
+  const [customFromDate, setCustomFromDate] = useState<string>(() => {
+    const saved = localStorage.getItem(DRAW_LISTS_CUSTOM_FROM_KEY);
+    return saved || toISODateLocal(new Date());
+  });
+  const [customToDate, setCustomToDate] = useState<string>(() => {
+    const saved = localStorage.getItem(DRAW_LISTS_CUSTOM_TO_KEY);
+    return saved || toISODateLocal(new Date());
+  });
+  const [selectedRange, setSelectedRange] = useState<DateRange>(() => {
+    const saved = localStorage.getItem(DRAW_LISTS_RANGE_KEY);
+    if (saved && isDateRange(saved)) {
+      return saved;
+    }
+    return 'today';
+  });
   const [columnsToShow, setColumnsToShow] = useState('4');
 
   const [loading, setLoading] = useState(false);
@@ -60,8 +79,31 @@ export default function DrawListsPage() {
   }, []);
 
   useEffect(() => {
+    localStorage.setItem(DRAW_LISTS_RANGE_KEY, selectedRange);
+  }, [selectedRange]);
+
+  useEffect(() => {
+    localStorage.setItem(DRAW_LISTS_CUSTOM_FROM_KEY, customFromDate);
+  }, [customFromDate]);
+
+  useEffect(() => {
+    localStorage.setItem(DRAW_LISTS_CUSTOM_TO_KEY, customToDate);
+  }, [customToDate]);
+
+  useEffect(() => {
     setLoading(true);
     setError('');
+
+    const isCustomRange = selectedRange === 'custom';
+    if (isCustomRange && (!customFromDate || !customToDate || customFromDate > customToDate)) {
+      setReport(buildEmptyReport());
+      setLoading(false);
+      return;
+    }
+
+    const { fromDate, toDate } = isCustomRange
+      ? { fromDate: customFromDate, toDate: customToDate }
+      : getDateRange(selectedRange);
 
     reportsApi.drawLists({
       drawId: selectedDrawId || undefined,
@@ -76,7 +118,7 @@ export default function DrawListsPage() {
         setReport(buildEmptyReport());
       })
       .finally(() => setLoading(false));
-  }, [selectedDrawId, selectedUserId, fromDate, toDate]);
+  }, [selectedDrawId, selectedUserId, selectedRange, customFromDate, customToDate]);
 
   const columnCount = useMemo(() => {
     const parsed = Number.parseInt(columnsToShow, 10);
@@ -100,15 +142,15 @@ export default function DrawListsPage() {
   const resetFilters = () => {
     setSelectedDrawId('');
     setSelectedUserId('');
-    setFromDate('');
-    setToDate('');
+    setSelectedRange('today');
   };
 
   const handleExportText = () => {
     const lines: string[] = [];
     lines.push('LISTAS DE SORTEOS');
     lines.push(`Fecha: ${new Date().toLocaleString()}`);
-    lines.push(`Sorteo: ${draws.find((d) => d.id === selectedDrawId)?.name ?? 'Todos'}`);
+    const selectedDraw = draws.find((d) => d.id === selectedDrawId);
+    lines.push(`Sorteo: ${selectedDraw ? formatDrawLabel(selectedDraw) : 'Todos'}`);
     lines.push(`Usuario: ${users.find((u) => u.id === selectedUserId)?.fullName ?? 'Todos'}`);
     lines.push(`Tickets: ${report.totals.ticketCount}`);
     lines.push('');
@@ -138,16 +180,27 @@ export default function DrawListsPage() {
         <p className="text-sm text-slate-500">Montos acumulados por numero (00 al 99)</p>
       </div>
 
+      {/* Date range filter */}
+      <DateRangeSegmentedControl
+        selectedRange={selectedRange}
+        onRangeChange={setSelectedRange}
+        customFromDate={customFromDate}
+        customToDate={customToDate}
+        onCustomFromDateChange={setCustomFromDate}
+        onCustomToDateChange={setCustomToDate}
+      />
+
+      {/* Additional filters */}
       <Card>
         <CardBody>
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
             <Select
               label="Sorteo"
               value={selectedDrawId}
               onChange={(e) => setSelectedDrawId(e.target.value)}
               options={[
                 { value: '', label: 'Todos los sorteos' },
-                ...draws.map((d) => ({ value: d.id, label: `${d.name} (${formatDate(d.closeTime)})` })),
+                ...draws.map((d) => ({ value: d.id, label: formatDrawLabel(d) })),
               ]}
             />
             <Select
@@ -162,8 +215,6 @@ export default function DrawListsPage() {
               onChange={(e) => setColumnsToShow(e.target.value)}
               options={COLUMN_OPTIONS}
             />
-            <Input label="Desde" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-            <Input label="Hasta" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
             <Button variant="secondary" onClick={resetFilters}>Limpiar filtros</Button>
           </div>
 

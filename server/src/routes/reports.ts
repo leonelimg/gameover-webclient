@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../config/prisma.js';
-import { authenticate, authorize } from '../middleware/auth.js';
+import { authenticate, authorizeResource } from '../middleware/auth.js';
 
 type Stats = { totalSales: number; ticketCount: number };
 type Role = 'admin' | 'asociado' | 'vendedor';
@@ -14,7 +14,7 @@ interface HierarchyUser {
 }
 
 const router = Router();
-router.use(authenticate, authorize('admin', 'asociado'));
+router.use(authenticate, authorizeResource('/reports'));
 
 async function getHierarchyUsers(): Promise<HierarchyUser[]> {
   return prisma.user.findMany({
@@ -75,7 +75,7 @@ function parseCreatedAtFilter(query: Record<string, string>): {
 
 // ── GET /api/reports/summary ──────────────────────────────────────────────────
 
-router.get('/summary', async (req, res) => {
+router.get('/summary', authorizeResource('/reports/sales-stats'), async (req, res) => {
   const query = req.query as Record<string, string>;
   const { drawId } = query;
 
@@ -110,7 +110,7 @@ router.get('/summary', async (req, res) => {
 
 // ── GET /api/reports/top-numbers ──────────────────────────────────────────────
 
-router.get('/top-numbers', async (req, res) => {
+router.get('/top-numbers', authorizeResource('/reports/sales-stats'), async (req, res) => {
   const query = req.query as Record<string, string>;
   const { drawId, limit = '10' } = query;
 
@@ -153,7 +153,7 @@ router.get('/top-numbers', async (req, res) => {
 
 // ── GET /api/reports/hierarchy ────────────────────────────────────────────────
 
-router.get('/hierarchy', async (req, res) => {
+router.get('/hierarchy', authorizeResource('/reports/sales-stats'), async (req, res) => {
   const query = req.query as Record<string, string>;
   const { drawId } = query;
 
@@ -245,7 +245,7 @@ router.get('/hierarchy', async (req, res) => {
 
 // ── GET /api/reports/recent-tickets ──────────────────────────────────────────
 
-router.get('/recent-tickets', async (req, res) => {
+router.get('/recent-tickets', authorizeResource('/reports/sales-stats'), async (req, res) => {
   const query = req.query as Record<string, string>;
   const { drawId, limit = '10' } = query;
 
@@ -275,8 +275,8 @@ router.get('/recent-tickets', async (req, res) => {
 
 // ── GET /api/reports/balance-breakdown ──────────────────────────────────────
 
-router.get('/balance-breakdown', async (req, res) => {
-  const { drawId, fromDate, toDate } = req.query as Record<string, string>;
+router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown'), async (req, res) => {
+  const { drawId, userId, fromDate, toDate } = req.query as Record<string, string>;
 
   interface BreakdownUser {
     id: string;
@@ -336,6 +336,7 @@ router.get('/balance-breakdown', async (req, res) => {
 
   const where: Record<string, unknown> = {};
   if (drawId) where['drawId'] = drawId;
+  if (userId) where['sellerId'] = userId;
   if (Object.keys(createdAtFilter).length > 0) where['createdAt'] = createdAtFilter;
   where['canceledAt'] = null;
   if (req.user!.role === 'asociado') {
@@ -361,6 +362,7 @@ router.get('/balance-breakdown', async (req, res) => {
     draw: {
       id: string;
       name: string;
+      closeTime: Date;
       winnerNumber: string | null;
       specialMultiplier: { id: string; name: string; value: number } | null;
     };
@@ -385,6 +387,7 @@ router.get('/balance-breakdown', async (req, res) => {
         select: {
           id: true,
           name: true,
+          closeTime: true,
           winnerNumber: true,
           specialMultiplier: { select: { id: true, name: true, value: true } },
         },
@@ -649,6 +652,7 @@ router.get('/balance-breakdown', async (req, res) => {
   interface AssociateDrawGroup {
     drawId: string;
     drawName: string;
+    drawCloseTime: Date;
     ticketCount: number;
     totalSales: number;
     totalPrizes: number;
@@ -703,6 +707,7 @@ router.get('/balance-breakdown', async (req, res) => {
     const drawCurrent = associateCurrent.draws.get(ticket.draw.id) ?? {
       drawId: ticket.draw.id,
       drawName: ticket.draw.name,
+      drawCloseTime: ticket.draw.closeTime,
       ticketCount: 0,
       totalSales: 0,
       totalPrizes: 0,
@@ -729,7 +734,7 @@ router.get('/balance-breakdown', async (req, res) => {
       totalPrizes: associate.totalPrizes,
       totalCommissions: associate.totalCommissions,
       balance: associate.balance,
-      draws: Array.from(associate.draws.values()).sort((a, b) => b.totalSales - a.totalSales),
+      draws: Array.from(associate.draws.values()).sort((a, b) => new Date(b.drawCloseTime).getTime() - new Date(a.drawCloseTime).getTime()),
     }))
     .sort((a, b) => b.totalSales - a.totalSales);
 
@@ -753,6 +758,7 @@ router.get('/balance-breakdown', async (req, res) => {
   res.json({
     filters: {
       drawId: drawId || null,
+      userId: userId || null,
       fromDate: fromDate || null,
       toDate: toDate || null,
     },
@@ -775,7 +781,7 @@ router.get('/balance-breakdown', async (req, res) => {
 
 // ── GET /api/reports/sales-by-user ─────────────────────────────────────────
 
-router.get('/sales-by-user', async (req, res) => {
+router.get('/sales-by-user', authorizeResource('/reports/sales-by-user'), async (req, res) => {
   const query = req.query as Record<string, string>;
   const { drawId, userId } = query;
 
@@ -890,7 +896,7 @@ router.get('/sales-by-user', async (req, res) => {
 
 // ── GET /api/reports/draw-lists ────────────────────────────────────────────
 
-router.get('/draw-lists', async (req, res) => {
+router.get('/draw-lists', authorizeResource('/reports/draw-lists'), async (req, res) => {
   const query = req.query as Record<string, string>;
   const { drawId, userId } = query;
 

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/prisma.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, authorizeResource } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { param } from '../middleware/params.js';
 
@@ -56,6 +56,7 @@ interface PaymentTicket {
 
 const router = Router();
 router.use(authenticate);
+router.use(authorizeResource('/ticket-payments'));
 
 const listWinningTicketsQuery = z.object({
   drawId: z.string().min(1),

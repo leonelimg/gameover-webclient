@@ -24,6 +24,14 @@ export interface AuthState {
   isAuthenticated: boolean;
 }
 
+export interface RolePermissionRow {
+  resourceKey: string;
+  label: string;
+  admin: boolean;
+  asociado: boolean;
+  vendedor: boolean;
+}
+
 // ─── Special Multipliers ─────────────────────────────────────────────────────
 
 export interface SpecialMultiplier {

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../config/prisma.js';
-import { authenticate, authorize } from '../middleware/auth.js';
+import { authenticate, authorize, authorizeResource } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { param } from '../middleware/params.js';
 
@@ -47,7 +47,7 @@ const safeSelect = {
 };
 
 // GET /api/users
-router.get('/', authorize('admin', 'asociado'), async (req, res) => {
+router.get('/', authorizeResource('/users'), async (req, res) => {
   const { role, status, search } = req.query as Record<string, string>;
   const where: Record<string, unknown> = {};
   if (role) where['role'] = role;
@@ -67,7 +67,7 @@ router.get('/', authorize('admin', 'asociado'), async (req, res) => {
 });
 
 // GET /api/users/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', authorizeResource('/users'), async (req, res) => {
   const id = param(req, 'id');
   const user = await prisma.user.findUnique({ where: { id }, select: safeSelect });
   if (!user) { res.status(404).json({ message: 'Usuario no encontrado.' }); return; }
@@ -75,7 +75,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/users
-router.post('/', authorize('admin', 'asociado'), validate(createUserSchema), async (req, res) => {
+router.post('/', authorizeResource('/users'), validate(createUserSchema), async (req, res) => {
   const body = req.body as z.infer<typeof createUserSchema>;
   if (req.user!.role === 'asociado' && body.role === 'admin') {
     res.status(403).json({ message: 'Los asociados no pueden crear administradores.' });
@@ -102,7 +102,7 @@ router.post('/', authorize('admin', 'asociado'), validate(createUserSchema), asy
 });
 
 // PATCH /api/users/:id
-router.patch('/:id', authorize('admin', 'asociado'), validate(updateUserSchema), async (req, res) => {
+router.patch('/:id', authorizeResource('/users'), validate(updateUserSchema), async (req, res) => {
   const id = param(req, 'id');
   const body = req.body as z.infer<typeof updateUserSchema>;
   const existing = await prisma.user.findUnique({ where: { id } });
@@ -126,7 +126,7 @@ router.patch('/:id', authorize('admin', 'asociado'), validate(updateUserSchema),
 });
 
 // PATCH /api/users/:id/password
-router.patch('/:id/password', authorize('admin'), validate(changePasswordSchema), async (req, res) => {
+router.patch('/:id/password', authorizeResource('/users'), authorize('admin'), validate(changePasswordSchema), async (req, res) => {
   const id = param(req, 'id');
   const { password } = req.body as z.infer<typeof changePasswordSchema>;
   const passwordHash = await bcrypt.hash(password, 12);
@@ -138,7 +138,7 @@ router.patch('/:id/password', authorize('admin'), validate(changePasswordSchema)
 });
 
 // PATCH /api/users/:id/status
-router.patch('/:id/status', authorize('admin'), validate(changeStatusSchema), async (req, res) => {
+router.patch('/:id/status', authorizeResource('/users'), authorize('admin'), validate(changeStatusSchema), async (req, res) => {
   const id = param(req, 'id');
   const { status } = req.body as z.infer<typeof changeStatusSchema>;
   if (id === req.user!.sub) {

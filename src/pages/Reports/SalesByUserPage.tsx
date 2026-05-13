@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
-import { Input, Select } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { DateRangeSegmentedControl } from '@/components/ui/DateRangeSegmentedControl';
 import {
   drawsApi,
   reportsApi,
@@ -13,8 +14,13 @@ import {
   SalesByUserRow,
 } from '@/services/api';
 import { Draw, Ticket, User } from '@/types';
-import { formatCurrency, formatDate, formatDateTime } from '@/utils/helpers';
+import { formatCurrency, formatDateTime, formatDrawLabel } from '@/utils/helpers';
+import { DateRange, getDateRange, isDateRange, toISODateLocal } from '@/utils/dateRanges';
 import { mapSaleTicketToPrintBridge, printBridgeApi } from '@/services/printBridge';
+
+const SALES_USER_RANGE_KEY = 'go_salesuser_selected_range';
+const SALES_USER_CUSTOM_FROM_KEY = 'go_salesuser_custom_from_date';
+const SALES_USER_CUSTOM_TO_KEY = 'go_salesuser_custom_to_date';
 
 const EMPTY_REPORT: SalesByUserResponse = {
   filters: {
@@ -83,7 +89,7 @@ function printTicket(ticket: Ticket): void {
         <div class="box">
           <div class="title">GameOver Loteria</div>
           <div class="title" style="font-size:16px; letter-spacing:2px; margin-top:6px;">${ticket.code}</div>
-          <p class="muted">Sorteo: ${ticket.draw?.name ?? ticket.drawId}</p>
+          <p class="muted">Sorteo: ${ticket.draw ? formatDrawLabel(ticket.draw) : ticket.drawId}</p>
           <p class="muted">Cliente: ${ticket.customerName}</p>
           <p class="muted">Vendedor: ${ticket.seller?.fullName ?? ticket.sellerId}</p>
           <p class="muted">Fecha: ${formatDateTime(ticket.createdAt)}</p>
@@ -122,8 +128,21 @@ export default function SalesByUserPage() {
 
   const [selectedDrawId, setSelectedDrawId] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
+  const [customFromDate, setCustomFromDate] = useState<string>(() => {
+    const saved = localStorage.getItem(SALES_USER_CUSTOM_FROM_KEY);
+    return saved || toISODateLocal(new Date());
+  });
+  const [customToDate, setCustomToDate] = useState<string>(() => {
+    const saved = localStorage.getItem(SALES_USER_CUSTOM_TO_KEY);
+    return saved || toISODateLocal(new Date());
+  });
+  const [selectedRange, setSelectedRange] = useState<DateRange>(() => {
+    const saved = localStorage.getItem(SALES_USER_RANGE_KEY);
+    if (saved && isDateRange(saved)) {
+      return saved;
+    }
+    return 'today';
+  });
 
   const [report, setReport] = useState<SalesByUserResponse>(EMPTY_REPORT);
   const [loading, setLoading] = useState(false);
@@ -137,8 +156,31 @@ export default function SalesByUserPage() {
   }, []);
 
   useEffect(() => {
+    localStorage.setItem(SALES_USER_RANGE_KEY, selectedRange);
+  }, [selectedRange]);
+
+  useEffect(() => {
+    localStorage.setItem(SALES_USER_CUSTOM_FROM_KEY, customFromDate);
+  }, [customFromDate]);
+
+  useEffect(() => {
+    localStorage.setItem(SALES_USER_CUSTOM_TO_KEY, customToDate);
+  }, [customToDate]);
+
+  useEffect(() => {
     setLoading(true);
     setError('');
+
+    const isCustomRange = selectedRange === 'custom';
+    if (isCustomRange && (!customFromDate || !customToDate || customFromDate > customToDate)) {
+      setReport(EMPTY_REPORT);
+      setLoading(false);
+      return;
+    }
+
+    const { fromDate, toDate } = isCustomRange
+      ? { fromDate: customFromDate, toDate: customToDate }
+      : getDateRange(selectedRange);
 
     reportsApi.salesByUser({
       drawId: selectedDrawId || undefined,
@@ -153,7 +195,7 @@ export default function SalesByUserPage() {
         setReport(EMPTY_REPORT);
       })
       .finally(() => setLoading(false));
-  }, [selectedDrawId, selectedUserId, fromDate, toDate]);
+  }, [selectedDrawId, selectedUserId, selectedRange, customFromDate, customToDate]);
 
   const userOptions = useMemo(
     () => [
@@ -166,11 +208,19 @@ export default function SalesByUserPage() {
   const resetFilters = () => {
     setSelectedDrawId('');
     setSelectedUserId('');
-    setFromDate('');
-    setToDate('');
+    setSelectedRange('today');
   };
 
   const refreshReport = () => {
+    const isCustomRange = selectedRange === 'custom';
+    if (isCustomRange && (!customFromDate || !customToDate || customFromDate > customToDate)) {
+      return;
+    }
+
+    const { fromDate, toDate } = isCustomRange
+      ? { fromDate: customFromDate, toDate: customToDate }
+      : getDateRange(selectedRange);
+
     reportsApi.salesByUser({
       drawId: selectedDrawId || undefined,
       userId: selectedUserId || undefined,
@@ -262,16 +312,27 @@ export default function SalesByUserPage() {
         <p className="text-sm text-slate-500">Filtra tickets y administra anulaciones con control jerarquico</p>
       </div>
 
+      {/* Date range filter */}
+      <DateRangeSegmentedControl
+        selectedRange={selectedRange}
+        onRangeChange={setSelectedRange}
+        customFromDate={customFromDate}
+        customToDate={customToDate}
+        onCustomFromDateChange={setCustomFromDate}
+        onCustomToDateChange={setCustomToDate}
+      />
+
+      {/* Additional filters */}
       <Card>
         <CardBody>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
             <Select
               label="Sorteo"
               value={selectedDrawId}
               onChange={(e) => setSelectedDrawId(e.target.value)}
               options={[
                 { value: '', label: 'Todos los sorteos' },
-                ...draws.map((d) => ({ value: d.id, label: `${d.name} (${formatDate(d.closeTime)})` })),
+                ...draws.map((d) => ({ value: d.id, label: formatDrawLabel(d) })),
               ]}
             />
             <Select
@@ -280,8 +341,6 @@ export default function SalesByUserPage() {
               onChange={(e) => setSelectedUserId(e.target.value)}
               options={userOptions}
             />
-            <Input label="Desde" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-            <Input label="Hasta" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
             <Button variant="secondary" onClick={resetFilters}>Limpiar filtros</Button>
           </div>
           {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
@@ -448,7 +507,7 @@ export default function SalesByUserPage() {
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="text-slate-500">Sorteo</p>
-                <p className="font-medium">{selectedTicket.draw?.name ?? selectedTicket.drawId}</p>
+                <p className="font-medium">{selectedTicket.draw ? formatDrawLabel(selectedTicket.draw) : selectedTicket.drawId}</p>
               </div>
               <div>
                 <p className="text-slate-500">Fecha</p>

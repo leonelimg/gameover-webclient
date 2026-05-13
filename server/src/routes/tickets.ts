@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/prisma.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, authorizeResource } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { param } from '../middleware/params.js';
 
 const router = Router();
 router.use(authenticate);
+router.use(authorizeResource('/sales'));
 
 const ticketLineSchema = z.object({
   number: z.string().regex(/^\d{2}$/, 'El número debe tener exactamente 2 dígitos.'),

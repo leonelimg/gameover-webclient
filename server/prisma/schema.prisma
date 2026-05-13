@@ -24,6 +24,9 @@ model User {
   masterOfPlans    Plan[]         @relation("PlanMaster")
   refreshTokens    RefreshToken[]
   associateTickets Ticket[]       @relation("AssociateTickets")
+  cashMovementsCreated CashMovement[] @relation("CashMovementCreatedBy")
+  cashMovementsReceived CashMovement[] @relation("CashMovementTargetUser")
+  cashMovementsCanceled CashMovement[] @relation("CashMovementCanceledBy")
   canceledTickets  Ticket[]       @relation("CanceledTickets")
   paidTickets      Ticket[]       @relation("PaidTickets")
   soldTickets      Ticket[]       @relation("SellerTickets")
@@ -32,6 +35,38 @@ model User {
   plan             Plan?          @relation("PlanUsers", fields: [planId], references: [id])
 
   @@map("users")
+}
+
+model RolePermission {
+  id          String   @id @default(cuid())
+  resourceKey String
+  role        UserRole
+  allowed     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([resourceKey, role])
+  @@index([resourceKey])
+  @@map("role_permissions")
+}
+
+model CashMovement {
+  id           String           @id @default(cuid())
+  type         CashMovementType
+  amount       Float
+  note         String?
+  createdAt    DateTime         @default(now())
+  createdById  String
+  targetUserId String
+  canceledAt   DateTime?
+  canceledById String?
+  createdBy    User             @relation("CashMovementCreatedBy", fields: [createdById], references: [id])
+  targetUser   User             @relation("CashMovementTargetUser", fields: [targetUserId], references: [id])
+  canceledBy   User?            @relation("CashMovementCanceledBy", fields: [canceledById], references: [id])
+
+  @@index([targetUserId, createdAt])
+  @@index([createdById, createdAt])
+  @@map("cash_movements")
 }
 
 model RefreshToken {
@@ -172,4 +207,9 @@ enum DrawStatus {
 enum PaymentStatus {
   pendiente
   pagado
+}
+
+enum CashMovementType {
+  deposito
+  retiro
 }

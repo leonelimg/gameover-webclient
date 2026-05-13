@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { config } from '../config/index.js';
-import { authenticate, authorize } from '../middleware/auth.js';
+import { authenticate, authorizeResource } from '../middleware/auth.js';
 
 interface InstallerInfo {
   filePath: string;
@@ -12,7 +12,7 @@ interface InstallerInfo {
 }
 
 const router = Router();
-router.use(authenticate, authorize('admin', 'asociado', 'vendedor'));
+router.use(authenticate, authorizeResource('/print-queue'));
 
 const readInstallers = async (dir: string): Promise<InstallerInfo[]> => {
   const files: InstallerInfo[] = [];

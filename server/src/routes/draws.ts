@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/prisma.js';
-import { authenticate, authorize } from '../middleware/auth.js';
+import { authenticate, authorize, authorizeResource } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { param } from '../middleware/params.js';
 
@@ -9,6 +9,7 @@ type DrawStatusValue = 'pendiente' | 'abierto' | 'cerrado' | 'finalizado';
 
 const router = Router();
 router.use(authenticate);
+router.use(authorizeResource('/draws'));
 
 const drawSchema = z.object({
   name: z.string().min(2),

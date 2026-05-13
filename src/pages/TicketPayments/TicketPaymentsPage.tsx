@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Input, Select } from '@/components/ui/Input';
-import { formatCurrency, formatDateTime } from '@/utils/helpers';
+import { formatCurrency, formatDateTime, formatDrawLabel } from '@/utils/helpers';
 import { Modal } from '@/components/ui/Modal';
 
 interface PaymentsTotals {
@@ -64,7 +64,7 @@ export default function TicketPaymentsPage() {
   const drawOptions = useMemo(
     () => [
       { value: '', label: 'Seleccione un sorteo' },
-      ...draws.map((draw) => ({ value: draw.id, label: draw.name })),
+      ...draws.map((draw) => ({ value: draw.id, label: formatDrawLabel(draw) })),
     ],
     [draws]
   );
@@ -534,7 +534,9 @@ export default function TicketPaymentsPage() {
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="text-slate-500">Sorteo</p>
-                <p className="font-medium">{selectedTicket.draw?.name ?? selectedTicket.drawId}</p>
+                <p className="font-medium">
+                  {selectedTicket.draw ? formatDrawLabel(selectedTicket.draw) : selectedTicket.drawId}
+                </p>
               </div>
               <div>
                 <p className="text-slate-500">Fecha</p>

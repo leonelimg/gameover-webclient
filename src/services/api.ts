@@ -1,5 +1,13 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { User, Plan, Draw, Ticket, SpecialMultiplier, PaymentsWinningTicketsResponse } from '@/types';
+import {
+  User,
+  Plan,
+  Draw,
+  Ticket,
+  SpecialMultiplier,
+  PaymentsWinningTicketsResponse,
+  RolePermissionRow,
+} from '@/types';
 
 // ─── Base URL ─────────────────────────────────────────────────────────────────
 // When VITE_API_URL is set, use the real API. Otherwise fall back to localhost.
@@ -157,6 +165,25 @@ export const usersApi = {
   changeStatus: async (id: string, status: string): Promise<User> => {
     const res = await api.patch<User>(`/api/users/${id}/status`, { status });
     return res.data;
+  },
+};
+
+// ─── Roles Permissions API ──────────────────────────────────────────────────
+
+export const rolesApi = {
+  myPermissions: async (): Promise<string[]> => {
+    const res = await api.get<{ permissions: string[] }>('/api/roles/my-permissions');
+    return res.data.permissions;
+  },
+  getPermissions: async (): Promise<RolePermissionRow[]> => {
+    const res = await api.get<{ permissions: RolePermissionRow[] }>('/api/roles/permissions');
+    return res.data.permissions;
+  },
+  updatePermissions: async (
+    permissions: Array<{ resourceKey: string; asociado: boolean; vendedor: boolean }>
+  ): Promise<RolePermissionRow[]> => {
+    const res = await api.patch<{ permissions: RolePermissionRow[] }>('/api/roles/permissions', { permissions });
+    return res.data.permissions;
   },
 };
 // ─── Special Multipliers API ─────────────────────────────────────────────────────
@@ -333,6 +360,87 @@ export const paymentsApi = {
   },
 };
 
+// ─── Cash Movements API ──────────────────────────────────────────────────────
+
+export type CashMovementType = 'deposito' | 'retiro';
+
+export interface CashMovementUserSummary {
+  id: string;
+  fullName: string;
+  username: string;
+  role: 'admin' | 'asociado' | 'vendedor';
+  status?: 'activo' | 'bloqueado' | 'archivado';
+  canOperate?: boolean;
+}
+
+export interface CashMovement {
+  id: string;
+  type: CashMovementType;
+  amount: number;
+  note: string | null;
+  createdAt: string;
+  createdById: string;
+  targetUserId: string;
+  canceledAt: string | null;
+  canceledById: string | null;
+  createdBy: CashMovementUserSummary;
+  targetUser: CashMovementUserSummary;
+}
+
+export interface CashMovementBalanceResponse {
+  targetUser: CashMovementUserSummary;
+  totals: {
+    totalDeposits: number;
+    totalWithdrawals: number;
+    totalSales: number;
+    totalPrizes: number;
+    ticketCount: number;
+    balance: number;
+  };
+  filters: {
+    fromDate: string | null;
+    toDate: string | null;
+  };
+}
+
+export const cashMovementsApi = {
+  targets: async (): Promise<CashMovementUserSummary[]> => {
+    const res = await api.get<CashMovementUserSummary[]>('/api/cash-movements/targets');
+    return res.data;
+  },
+  list: async (params?: {
+    targetUserId?: string;
+    type?: CashMovementType;
+    fromDate?: string;
+    toDate?: string;
+    limit?: number;
+  }): Promise<CashMovement[]> => {
+    const res = await api.get<CashMovement[]>('/api/cash-movements', { params });
+    return res.data;
+  },
+  balance: async (params?: {
+    targetUserId?: string;
+    fromDate?: string;
+    toDate?: string;
+  }): Promise<CashMovementBalanceResponse> => {
+    const res = await api.get<CashMovementBalanceResponse>('/api/cash-movements/balance', { params });
+    return res.data;
+  },
+  create: async (payload: {
+    targetUserId: string;
+    type: CashMovementType;
+    amount: number;
+    note?: string;
+  }): Promise<CashMovement> => {
+    const res = await api.post<CashMovement>('/api/cash-movements', payload);
+    return res.data;
+  },
+  cancel: async (movementId: string, reason?: string): Promise<CashMovement> => {
+    const res = await api.patch<CashMovement>(`/api/cash-movements/${movementId}/cancel`, { reason });
+    return res.data;
+  },
+};
+
 // ─── Reports API ──────────────────────────────────────────────────────────────
 
 export interface ReportSummary {
@@ -390,6 +498,7 @@ export interface DrawBreakdownRow {
 export interface AssociateDrawBreakdownRow {
   drawId: string;
   drawName: string;
+  drawCloseTime: string;
   ticketCount: number;
   totalSales: number;
   totalPrizes: number;
@@ -419,6 +528,7 @@ export interface BalanceBreakdownTotals {
 export interface BalanceBreakdownResponse {
   filters: {
     drawId: string | null;
+    userId: string | null;
     fromDate: string | null;
     toDate: string | null;
   };
@@ -504,6 +614,7 @@ export const reportsApi = {
   },
   balanceBreakdown: async (params?: {
     drawId?: string;
+    userId?: string;
     fromDate?: string;
     toDate?: string;
   }): Promise<BalanceBreakdownResponse> => {

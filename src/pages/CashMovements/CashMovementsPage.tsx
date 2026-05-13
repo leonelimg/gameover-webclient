@@ -1,0 +1,514 @@
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { ArrowDownCircle, ArrowUpCircle, CircleDollarSign, RefreshCcw, Trash2 } from 'lucide-react';
+import {
+  cashMovementsApi,
+  CashMovement,
+  CashMovementBalanceResponse,
+  CashMovementType,
+  CashMovementUserSummary,
+} from '@/services/api';
+import { Card, CardBody, CardHeader } from '@/components/ui/Card';
+import { Select, Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { Modal } from '@/components/ui/Modal';
+import { DateRangeSegmentedControl } from '@/components/ui/DateRangeSegmentedControl';
+import { useAuth } from '@/context/AuthContext';
+import { formatCurrency, formatDateTime } from '@/utils/helpers';
+import { DateRange, getDateRange, isDateRange, toISODateLocal } from '@/utils/dateRanges';
+
+const CASH_MOVEMENTS_RANGE_KEY = 'go_cashmovements_selected_range';
+const CASH_MOVEMENTS_CUSTOM_FROM_KEY = 'go_cashmovements_custom_from_date';
+const CASH_MOVEMENTS_CUSTOM_TO_KEY = 'go_cashmovements_custom_to_date';
+
+const EMPTY_BALANCE: CashMovementBalanceResponse = {
+  targetUser: {
+    id: '',
+    fullName: '',
+    username: '',
+    role: 'vendedor',
+    status: 'activo',
+  },
+  totals: {
+    totalDeposits: 0,
+    totalWithdrawals: 0,
+    totalSales: 0,
+    totalPrizes: 0,
+    ticketCount: 0,
+    balance: 0,
+  },
+  filters: {
+    fromDate: null,
+    toDate: null,
+  },
+};
+
+export default function CashMovementsPage() {
+  const { user } = useAuth();
+  const [targets, setTargets] = useState<CashMovementUserSummary[]>([]);
+  const [selectedTargetId, setSelectedTargetId] = useState('');
+  const [customFromDate, setCustomFromDate] = useState<string>(() => {
+    const saved = localStorage.getItem(CASH_MOVEMENTS_CUSTOM_FROM_KEY);
+    return saved || toISODateLocal(new Date());
+  });
+  const [customToDate, setCustomToDate] = useState<string>(() => {
+    const saved = localStorage.getItem(CASH_MOVEMENTS_CUSTOM_TO_KEY);
+    return saved || toISODateLocal(new Date());
+  });
+  const [selectedRange, setSelectedRange] = useState<DateRange>(() => {
+    const saved = localStorage.getItem(CASH_MOVEMENTS_RANGE_KEY);
+    if (saved && isDateRange(saved)) {
+      return saved;
+    }
+    return 'today';
+  });
+  const [movementType, setMovementType] = useState<CashMovementType>('deposito');
+  const [amount, setAmount] = useState('');
+  const [note, setNote] = useState('');
+  const [rows, setRows] = useState<CashMovement[]>([]);
+  const [balance, setBalance] = useState<CashMovementBalanceResponse>(EMPTY_BALANCE);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancellingMovementId, setCancellingMovementId] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [canceling, setCanceling] = useState(false);
+
+  const canCreate = user?.role === 'admin' || user?.role === 'asociado';
+
+  const selectedTarget = useMemo(
+    () => targets.find((t) => t.id === selectedTargetId) ?? null,
+    [targets, selectedTargetId]
+  );
+
+  const canOperateTarget = Boolean(selectedTarget && selectedTarget.canOperate && selectedTarget.id !== user?.id);
+
+  const canCancelMovement = (movement: CashMovement): boolean => {
+    if (movement.canceledAt) return false;
+    if (user?.role === 'admin') return true;
+    if (user?.id === movement.createdById) return true;
+    // Asociado can cancel movements created by subordinates (would be validated on backend too)
+    if (user?.role === 'asociado') return true;
+    return false;
+  };
+
+  const loadTargets = async () => {
+    const data = await cashMovementsApi.targets();
+    setTargets(data);
+    if (data.length > 0) {
+      setSelectedTargetId((prev) => prev || data[0].id);
+    }
+  };
+
+  const loadData = async (targetUserId: string, fromDate: string, toDate: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [history, balanceData] = await Promise.all([
+        cashMovementsApi.list({ targetUserId, fromDate, toDate, limit: 200 }),
+        cashMovementsApi.balance({ targetUserId, fromDate, toDate }),
+      ]);
+      setRows(history);
+      setBalance(balanceData);
+    } catch (err) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(msg ?? 'No se pudo cargar el modulo de depositos y retiros.');
+      setRows([]);
+      setBalance(EMPTY_BALANCE);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTargets().catch(() => {
+      setError('No se pudieron cargar los usuarios disponibles.');
+    });
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(CASH_MOVEMENTS_RANGE_KEY, selectedRange);
+  }, [selectedRange]);
+
+  useEffect(() => {
+    localStorage.setItem(CASH_MOVEMENTS_CUSTOM_FROM_KEY, customFromDate);
+  }, [customFromDate]);
+
+  useEffect(() => {
+    localStorage.setItem(CASH_MOVEMENTS_CUSTOM_TO_KEY, customToDate);
+  }, [customToDate]);
+
+  useEffect(() => {
+    if (!selectedTargetId) return;
+
+    const isCustomRange = selectedRange === 'custom';
+    if (isCustomRange && (!customFromDate || !customToDate || customFromDate > customToDate)) {
+      return;
+    }
+
+    const { fromDate, toDate } = isCustomRange
+      ? { fromDate: customFromDate, toDate: customToDate }
+      : getDateRange(selectedRange);
+
+    loadData(selectedTargetId, fromDate, toDate).catch(() => {
+      setError('No se pudo cargar la informacion del usuario seleccionado.');
+    });
+  }, [selectedTargetId, selectedRange, customFromDate, customToDate]);
+
+  const resetForm = () => {
+    setMovementType('deposito');
+    setAmount('');
+    setNote('');
+  };
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selectedTargetId) {
+      setError('Selecciona un usuario destino.');
+      return;
+    }
+
+    const parsedAmount = Number(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setError('El monto debe ser mayor a cero.');
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await cashMovementsApi.create({
+        targetUserId: selectedTargetId,
+        type: movementType,
+        amount: parsedAmount,
+        note: note.trim() || undefined,
+      });
+      setSuccess(`Movimiento de ${movementType} registrado correctamente.`);
+      resetForm();
+      const isCustomRange = selectedRange === 'custom';
+      const { fromDate, toDate } = isCustomRange
+        ? { fromDate: customFromDate, toDate: customToDate }
+        : getDateRange(selectedRange);
+      await loadData(selectedTargetId, fromDate, toDate);
+    } catch (err) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(msg ?? 'No se pudo registrar el movimiento.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCancelMovement = async () => {
+    if (!cancellingMovementId) return;
+
+    setCanceling(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await cashMovementsApi.cancel(cancellingMovementId, cancelReason.trim() || undefined);
+      setSuccess('Movimiento cancelado correctamente.');
+      setShowCancelModal(false);
+      setCancellingMovementId(null);
+      setCancelReason('');
+
+      // Refresh the data
+      if (selectedTargetId) {
+        const isCustomRange = selectedRange === 'custom';
+        const { fromDate, toDate } = isCustomRange
+          ? { fromDate: customFromDate, toDate: customToDate }
+          : getDateRange(selectedRange);
+        await loadData(selectedTargetId, fromDate, toDate);
+      }
+    } catch (err) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(msg ?? 'No se pudo cancelar el movimiento.');
+    } finally {
+      setCanceling(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Depositos y retiros</h1>
+        <p className="text-sm text-slate-500">Gestion de efectivo por asociados y vendedores de la jerarquia.</p>
+      </div>
+
+      <DateRangeSegmentedControl
+        selectedRange={selectedRange}
+        onRangeChange={setSelectedRange}
+        customFromDate={customFromDate}
+        customToDate={customToDate}
+        onCustomFromDateChange={setCustomFromDate}
+        onCustomToDateChange={setCustomToDate}
+      />
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          {success}
+        </div>
+      )}
+
+      <Card>
+        <CardBody>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+            <Select
+              label="Usuario destino"
+              value={selectedTargetId}
+              onChange={(event) => {
+                setSelectedTargetId(event.target.value);
+                setSuccess(null);
+              }}
+              options={targets.map((target) => ({
+                value: target.id,
+                label: `${target.fullName} (${target.username})`,
+              }))}
+            />
+            <div className="text-sm text-slate-600 md:col-span-2">
+              {selectedTarget ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary" className="capitalize">{selectedTarget.role}</Badge>
+                  {selectedTarget.status && (
+                    <Badge variant={selectedTarget.status === 'activo' ? 'success' : 'warning'} className="capitalize">
+                      {selectedTarget.status}
+                    </Badge>
+                  )}
+                  <span>@{selectedTarget.username}</span>
+                </div>
+              ) : (
+                <span>Selecciona un usuario para ver su balance e historial.</span>
+              )}
+            </div>
+          </div>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-semibold text-slate-900">Balance operativo</h2>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                if (!selectedTargetId) return;
+                const isCustomRange = selectedRange === 'custom';
+                if (isCustomRange && (!customFromDate || !customToDate || customFromDate > customToDate)) {
+                  return;
+                }
+                const { fromDate, toDate } = isCustomRange
+                  ? { fromDate: customFromDate, toDate: customToDate }
+                  : getDateRange(selectedRange);
+                loadData(selectedTargetId, fromDate, toDate).catch(() => {
+                  setError('No se pudo refrescar la informacion.');
+                });
+              }}
+              disabled={!selectedTargetId || loading}
+            >
+              <RefreshCcw size={15} />
+              Recargar
+            </Button>
+          </div>
+        </CardHeader>
+        <CardBody>
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="text-xs text-slate-500">Depositos</p>
+              <p className="text-lg font-semibold text-emerald-700">{formatCurrency(balance.totals.totalDeposits)}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="text-xs text-slate-500">Retiros</p>
+              <p className="text-lg font-semibold text-rose-700">{formatCurrency(balance.totals.totalWithdrawals)}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="text-xs text-slate-500">Ventas</p>
+              <p className="text-lg font-semibold text-blue-700">{formatCurrency(balance.totals.totalSales)}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="text-xs text-slate-500">Premios</p>
+              <p className="text-lg font-semibold text-amber-700">{formatCurrency(balance.totals.totalPrizes)}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="text-xs text-slate-500">Balance final</p>
+              <p className={`text-lg font-bold ${balance.totals.balance >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                {formatCurrency(balance.totals.balance)}
+              </p>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-slate-500">
+            Formula: Depositos - Retiros + Ventas - Premios
+          </p>
+        </CardBody>
+      </Card>
+
+      {canCreate && (
+        <Card>
+          <CardHeader>
+            <h2 className="font-semibold text-slate-900">Registrar movimiento</h2>
+          </CardHeader>
+          <CardBody>
+            <form className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end" onSubmit={handleSubmit}>
+              <Select
+                label="Tipo"
+                value={movementType}
+                onChange={(event) => setMovementType(event.target.value as CashMovementType)}
+                options={[
+                  { value: 'deposito', label: 'Deposito' },
+                  { value: 'retiro', label: 'Retiro' },
+                ]}
+              />
+              <Input
+                label="Monto"
+                type="number"
+                min="0"
+                step="0.01"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                placeholder="0.00"
+              />
+              <Input
+                label="Nota"
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder="Opcional"
+                maxLength={300}
+              />
+              <Button type="submit" variant={movementType === 'deposito' ? 'success' : 'danger'} loading={submitting} disabled={!canOperateTarget}>
+                {movementType === 'deposito' ? <ArrowDownCircle size={16} /> : <ArrowUpCircle size={16} />}
+                Registrar {movementType}
+              </Button>
+            </form>
+            {!canOperateTarget && selectedTarget && (
+              <p className="mt-3 text-xs text-amber-700">
+                No puedes registrar movimientos sobre este usuario. Solo admin/asociados pueden operar y nunca sobre si mismos.
+              </p>
+            )}
+          </CardBody>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <CircleDollarSign size={18} className="text-slate-700" />
+            <h2 className="font-semibold text-slate-900">Historial de movimientos</h2>
+          </div>
+        </CardHeader>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">Fecha</th>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">Tipo</th>
+                <th className="text-right px-4 py-3 text-slate-600 font-medium">Monto</th>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">Registrado por</th>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">Nota</th>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                    {loading ? 'Cargando movimientos...' : 'No hay movimientos para este usuario.'}
+                  </td>
+                </tr>
+              ) : (
+                rows.map((row) => (
+                  <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50">
+                    <td className="px-4 py-3 text-slate-700">{formatDateTime(row.createdAt)}</td>
+                    <td className="px-4 py-3">
+                      <Badge variant={row.type === 'deposito' ? 'success' : 'danger'} className="capitalize">
+                        {row.type}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(row.amount)}</td>
+                    <td className="px-4 py-3 text-slate-700">{row.createdBy.fullName}</td>
+                    <td className="px-4 py-3 text-slate-600">{row.note || '-'}</td>
+                    <td className="px-4 py-3">
+                      {canCancelMovement(row) ? (
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={() => {
+                            setCancellingMovementId(row.id);
+                            setCancelReason('');
+                            setShowCancelModal(true);
+                          }}
+                          disabled={canceling}
+                        >
+                          <Trash2 size={14} />
+                          Cancelar
+                        </Button>
+                      ) : row.canceledAt ? (
+                        <Badge variant="warning" className="text-xs">Cancelado</Badge>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Modal
+        open={showCancelModal}
+        onClose={() => {
+          setShowCancelModal(false);
+          setCancellingMovementId(null);
+          setCancelReason('');
+        }}
+        title="Cancelar movimiento"
+        size="md"
+      >
+        <div className="space-y-4 px-6 py-4">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+            ¿Estás seguro de que deseas cancelar este movimiento? Esta acción se registrará en el historial de auditoría.
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Razón de cancelación (opcional)</label>
+            <Input
+              type="text"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="Ej: Error de registro, duplicado, etc."
+              maxLength={300}
+            />
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setShowCancelModal(false);
+                setCancellingMovementId(null);
+                setCancelReason('');
+              }}
+              disabled={canceling}
+            >
+              Cerrar
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleCancelMovement}
+              loading={canceling}
+            >
+              <Trash2 size={16} />
+              Cancelar movimiento
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}

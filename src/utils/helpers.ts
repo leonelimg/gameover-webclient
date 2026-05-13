@@ -38,6 +38,19 @@ export function formatDateTime(iso: string): string {
   });
 }
 
+export function formatDrawLabel(draw: { name: string; closeTime?: string }): string {
+  if (!draw.closeTime) {
+    return draw.name;
+  }
+
+  const date = formatDate(draw.closeTime);
+  const time = new Date(draw.closeTime).toLocaleTimeString('es-NI', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return `${draw.name} - ${date} ${time}`;
+}
+
 export function isDrawOpen(closeTime: string, minutosPreviosCierre: number = 10): boolean {
   const now = Date.now();
   const close = new Date(closeTime).getTime();

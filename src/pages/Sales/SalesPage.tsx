@@ -4,7 +4,7 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
-import { generateId, formatCurrency, formatDateTime, isDrawOpen } from '@/utils/helpers';
+import { generateId, formatCurrency, formatDateTime, formatDrawLabel, isDrawOpen } from '@/utils/helpers';
 import { Draw, PrintJob, PrintJobStatus, Ticket, User } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { drawsApi, ticketsApi, reportsApi, CreateTicketPayload, TopNumber } from '@/services/api';
@@ -101,7 +101,7 @@ export default function SalesPage() {
   const drawOptions = useMemo(
     () => [
       { value: '', label: 'Selecciona un sorteo...' },
-      ...openDraws.map((d) => ({ value: d.id, label: d.name })),
+      ...openDraws.map((d) => ({ value: d.id, label: formatDrawLabel(d) })),
     ],
     [openDraws],
   );
@@ -829,7 +829,7 @@ function TicketPrintView({
       <div className="space-y-1 text-xs mb-4">
         <div className="flex justify-between">
           <span className="text-slate-500">Sorteo:</span>
-          <span>{draw?.name ?? ticket.drawId}</span>
+          <span>{draw ? formatDrawLabel(draw) : ticket.drawId}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-slate-500">Cliente:</span>

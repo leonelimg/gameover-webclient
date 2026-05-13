@@ -15,17 +15,16 @@ import {
   X,
   PrinterCheck,
   Zap,
+  Wallet,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { UserRole } from '@/types';
 
 interface NavItem {
   to?: string;
   label: string;
   icon: React.ReactNode;
-  roles: UserRole[];
-  children?: Array<{ to: string; label: string; roles: UserRole[] }>;
+  children?: Array<{ to: string; label: string }>;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -33,88 +32,79 @@ const NAV_ITEMS: NavItem[] = [
     to: '/dashboard',
     label: 'Dashboard',
     icon: <LayoutDashboard size={18} />,
-    roles: ['admin', 'asociado', 'vendedor'],
   },
   {
     to: '/users',
     label: 'Usuarios',
     icon: <Users size={18} />,
-    roles: ['admin', 'asociado'],
   },
   {
     to: '/roles',
     label: 'Roles',
     icon: <ShieldCheck size={18} />,
-    roles: ['admin'],
   },
   {
     to: '/plans',
     label: 'Planes',
     icon: <CreditCard size={18} />,
-    roles: ['admin', 'asociado'],
   },
   {
     to: '/draws',
     label: 'Sorteos',
     icon: <Ticket size={18} />,
-    roles: ['admin', 'asociado'],
   },
   {
     to: '/multiplicadores',
     label: 'Multiplicadores especiales',
     icon: <Zap size={18} />,
-    roles: ['admin'],
   },
   {
     to: '/sales',
     label: 'Ventas',
     icon: <ShoppingCart size={18} />,
-    roles: ['admin', 'asociado', 'vendedor'],
   },
   {
     to: '/ticket-payments',
     label: 'Pago de tickets',
     icon: <HandCoins size={18} />,
-    roles: ['admin', 'asociado', 'vendedor'],
+  },
+  {
+    to: '/cash-movements',
+    label: 'Depositos y retiros',
+    icon: <Wallet size={18} />,
   },
   {
     to: '/print-queue',
     label: 'Cola de impresión',
     icon: <PrinterCheck size={18} />,
-    roles: ['admin', 'asociado', 'vendedor'],
   },
   {
     to: '/reports',
     label: 'Reportes',
     icon: <BarChart3 size={18} />,
-    roles: ['admin', 'asociado'],
     children: [
       {
         to: '/reports/sales-stats',
         label: 'Estadisctica de ventas',
-        roles: ['admin', 'asociado'],
       },
       {
         to: '/reports/balance-breakdown',
         label: 'Desglose de balance por asociados/vendedores',
-        roles: ['admin', 'asociado'],
       },
       {
         to: '/reports/sales-by-user',
         label: 'Ventas por usuario / tickets',
-        roles: ['admin', 'asociado'],
       },
       {
         to: '/reports/draw-lists',
         label: 'Listas de sorteos',
-        roles: ['admin', 'asociado'],
       },
     ],
   },
 ];
 
 export function Sidebar() {
-  const { user, logout } = useAuth();
+  const { user, logout, hasPermission } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -129,9 +119,7 @@ export function Sidebar() {
     navigate('/login');
   };
 
-  const visibleItems = NAV_ITEMS.filter(
-    (item) => user && item.roles.includes(user.role)
-  );
+  const visibleItems = NAV_ITEMS.filter((item) => item.to && hasPermission(item.to));
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
@@ -150,7 +138,7 @@ export function Sidebar() {
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {visibleItems.map((item) => {
           if (item.children && item.children.length > 0) {
-            const childItems = item.children.filter((child) => user && child.roles.includes(user.role));
+            const childItems = item.children.filter((child) => hasPermission(child.to));
             if (childItems.length === 0) return null;
 
             const isParentActive = childItems.some((child) => location.pathname.startsWith(child.to));

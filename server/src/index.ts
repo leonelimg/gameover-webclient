@@ -16,6 +16,8 @@ import reportRoutes from './routes/reports.js';
 import printBridgeRoutes from './routes/printBridge.js';
 import specialMultiplierRoutes from './routes/specialMultipliers.js';
 import paymentRoutes from './routes/payments.js';
+import cashMovementRoutes from './routes/cashMovements.js';
+import roleRoutes from './routes/roles.js';
 
 const app = express();
 
@@ -70,6 +72,8 @@ app.use('/api/reports', apiLimiter, reportRoutes);
 app.use('/api/print-bridge', apiLimiter, printBridgeRoutes);
 app.use('/api/special-multipliers', apiLimiter, specialMultiplierRoutes);
 app.use('/api/payments', apiLimiter, paymentRoutes);
+app.use('/api/cash-movements', apiLimiter, cashMovementRoutes);
+app.use('/api/roles', apiLimiter, roleRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((_req, res) => {
