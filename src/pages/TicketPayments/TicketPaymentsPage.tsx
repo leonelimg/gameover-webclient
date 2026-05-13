@@ -36,7 +36,9 @@ export default function TicketPaymentsPage() {
 
   const [loading, setLoading] = useState(false);
   const [processingCode, setProcessingCode] = useState<string | null>(null);
+  const [scanLookupLoading, setScanLookupLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [hasWinnerNumber, setHasWinnerNumber] = useState(false);
   const [winnerNumber, setWinnerNumber] = useState<string | null>(null);
@@ -45,6 +47,8 @@ export default function TicketPaymentsPage() {
   const [totals, setTotals] = useState<PaymentsTotals>(EMPTY_TOTALS);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [selectedTicketWinner, setSelectedTicketWinner] = useState<string | null>(null);
+  const [selectedTicketPrizeAmount, setSelectedTicketPrizeAmount] = useState<number | null>(null);
+  const [selectedTicketPaymentStatus, setSelectedTicketPaymentStatus] = useState<'pendiente' | 'pagado' | null>(null);
 
   useEffect(() => {
     drawsApi
@@ -124,27 +128,60 @@ export default function TicketPaymentsPage() {
     return maybe?.response?.data?.message ?? maybe?.message ?? fallback;
   };
 
+  const closeDetailModal = () => {
+    setSelectedTicket(null);
+    setSelectedTicketWinner(null);
+    setSelectedTicketPrizeAmount(null);
+    setSelectedTicketPaymentStatus(null);
+  };
+
   const handleMarkPaidByCode = async () => {
     const code = normalizeTicketCodeInput(quickPayCode);
     if (!code) return;
 
-    setProcessingCode(code);
+    if (!selectedDrawId) {
+      setError('Seleccione un sorteo antes de escanear un ticket.');
+      return;
+    }
+
+    setScanLookupLoading(true);
     setError(null);
+    setSuccessMessage(null);
     try {
-      await paymentsApi.markPaid({ code });
+      const data = await paymentsApi.listWinningTickets({
+        drawId: selectedDrawId,
+        status: 'all',
+        code,
+      });
+
+      const normalizedCode = normalizeTicketCodeInput(code);
+      const ticketMatch =
+        data.tickets.find((item) => normalizeTicketCodeInput(item.code) === normalizedCode) ??
+        data.paidTickets.find((item) => normalizeTicketCodeInput(item.code) === normalizedCode);
+
+      if (!ticketMatch) {
+        setError(`No se encontro el ticket ${code} como ganador en este sorteo.`);
+        return;
+      }
+
+      const ticketDetail = await ticketsApi.get(ticketMatch.ticketId);
+      setSelectedTicket(ticketDetail);
+      setSelectedTicketWinner(data.draw.winnerNumber ?? ticketDetail.draw?.winnerNumber ?? null);
+      setSelectedTicketPrizeAmount(ticketMatch.prizeAmount);
+      setSelectedTicketPaymentStatus(ticketMatch.paymentStatus);
       setQuickPayCode('');
-      await loadData();
     } catch (err) {
-      const message = getApiErrorMessage(err, 'No se pudo registrar el pago.');
+      const message = getApiErrorMessage(err, 'No se pudo buscar el ticket.');
       setError(message);
     } finally {
-      setProcessingCode(null);
+      setScanLookupLoading(false);
     }
   };
 
   const handleMarkPaid = async (ticketId: string) => {
     setProcessingCode(ticketId);
     setError(null);
+    setSuccessMessage(null);
     try {
       await paymentsApi.markPaid({ ticketId });
       await loadData();
@@ -159,6 +196,7 @@ export default function TicketPaymentsPage() {
   const handleRevert = async (ticketId: string) => {
     setProcessingCode(ticketId);
     setError(null);
+    setSuccessMessage(null);
     try {
       await paymentsApi.revertPayment(ticketId);
       await loadData();
@@ -172,15 +210,37 @@ export default function TicketPaymentsPage() {
 
   const normalizeNumber = (value: string) => value.trim().replace(/^0+(?=\d)/, '');
 
-  const handleViewDetail = async (ticketId: string) => {
+  const handleViewDetail = async (ticket: PaymentWinningTicket) => {
     setError(null);
     try {
-      const ticket = await ticketsApi.get(ticketId);
-      setSelectedTicket(ticket);
-      setSelectedTicketWinner(ticket.draw?.winnerNumber ?? null);
+      const detail = await ticketsApi.get(ticket.ticketId);
+      setSelectedTicket(detail);
+      setSelectedTicketWinner(detail.draw?.winnerNumber ?? null);
+      setSelectedTicketPrizeAmount(ticket.prizeAmount);
+      setSelectedTicketPaymentStatus(ticket.paymentStatus);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'No se pudo cargar el detalle del ticket.';
       setError(message);
+    }
+  };
+
+  const handlePayFromDetail = async () => {
+    if (!selectedTicket) return;
+
+    setProcessingCode(selectedTicket.id);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      const result = await paymentsApi.markPaid({ ticketId: selectedTicket.id });
+      setSelectedTicketPaymentStatus('pagado');
+      setSelectedTicketPrizeAmount(result.prizeAmount);
+      setSuccessMessage(`Ticket ${result.ticket.code} pagado correctamente por ${formatCurrency(result.prizeAmount)}.`);
+      await loadData();
+    } catch (err) {
+      const message = getApiErrorMessage(err, 'No se pudo registrar el pago.');
+      setError(message);
+    } finally {
+      setProcessingCode(null);
     }
   };
 
@@ -230,7 +290,7 @@ export default function TicketPaymentsPage() {
           <div className="mt-4 grid grid-cols-1 md:grid-cols-5 gap-2 items-end">
             <div className="md:col-span-4">
               <Input
-                label="Digitar/escanear ticket a pagar"
+                label="Digitar/escanear ticket"
                 placeholder="XXXXXX-XXXX"
                 value={quickPayCode}
                 onChange={(event) => setQuickPayCode(event.target.value)}
@@ -246,10 +306,10 @@ export default function TicketPaymentsPage() {
               variant="success"
               onClick={handleMarkPaidByCode}
               disabled={!quickPayCode.trim()}
-              loading={processingCode === quickPayCode.trim()}
+              loading={scanLookupLoading}
             >
               <ScanLine size={16} />
-              Pagar ticket
+              Buscar ticket
             </Button>
           </div>
 
@@ -266,6 +326,20 @@ export default function TicketPaymentsPage() {
             <div className="mt-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               <AlertCircle size={16} />
               {error}
+            </div>
+          )}
+
+          {successMessage && (
+            <div className="mt-4 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+              <CheckCircle2 size={16} />
+              {successMessage}
+            </div>
+          )}
+
+          {scanLookupLoading && (
+            <div className="mt-3 flex items-center gap-2 text-sm text-slate-600">
+              <Loader2 size={15} className="animate-spin" />
+              Buscando ticket escaneado...
             </div>
           )}
         </CardBody>
@@ -361,7 +435,7 @@ export default function TicketPaymentsPage() {
                         <Button
                           size="sm"
                           variant="secondary"
-                          onClick={() => handleViewDetail(ticket.ticketId)}
+                          onClick={() => handleViewDetail(ticket)}
                         >
                           Ver detalle
                         </Button>
@@ -415,7 +489,7 @@ export default function TicketPaymentsPage() {
             <tbody>
               {paidTickets.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
                     No hay tickets pagados para este sorteo.
                   </td>
                 </tr>
@@ -451,7 +525,7 @@ export default function TicketPaymentsPage() {
 
       <Modal
         open={!!selectedTicket}
-        onClose={() => setSelectedTicket(null)}
+        onClose={closeDetailModal}
         title={selectedTicket ? `Ticket ${selectedTicket.code}` : 'Detalle de ticket'}
         size="lg"
       >
@@ -481,6 +555,21 @@ export default function TicketPaymentsPage() {
                 Numero ganador del sorteo: <span className="font-semibold">{selectedTicketWinner}</span>
               </div>
             )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs text-slate-500">Monto a pagar</p>
+                <p className="text-xl font-bold text-emerald-700">{formatCurrency(selectedTicketPrizeAmount ?? 0)}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs text-slate-500">Estado de pago</p>
+                <div className="mt-1">
+                  <Badge variant={selectedTicketPaymentStatus === 'pagado' ? 'success' : 'warning'}>
+                    {selectedTicketPaymentStatus ?? 'pendiente'}
+                  </Badge>
+                </div>
+              </div>
+            </div>
 
             <div className="overflow-x-auto border border-slate-200 rounded-lg">
               <table className="w-full text-sm">
@@ -523,8 +612,18 @@ export default function TicketPaymentsPage() {
               <p className="font-bold text-lg text-slate-900">{formatCurrency(selectedTicket.total)}</p>
             </div>
 
-            <div className="flex justify-end">
-              <Button variant="secondary" onClick={() => setSelectedTicket(null)}>
+            <div className="flex justify-end gap-2">
+              {selectedTicketPaymentStatus !== 'pagado' && (
+                <Button
+                  variant="success"
+                  onClick={handlePayFromDetail}
+                  loading={processingCode === selectedTicket.id}
+                >
+                  <CheckCircle2 size={14} />
+                  Pagar ticket
+                </Button>
+              )}
+              <Button variant="secondary" onClick={closeDetailModal}>
                 Cerrar
               </Button>
             </div>
