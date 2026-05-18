@@ -8,8 +8,5 @@ kotlin {
 
 dependencies {
     implementation(project(":core-common"))
-}
-
-dependencies {
     testImplementation(libs.junit4)
 }

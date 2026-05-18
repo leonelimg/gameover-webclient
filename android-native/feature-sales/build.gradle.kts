@@ -31,12 +31,6 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
-}
-
-dependencies {
-    testImplementation(libs.junit4)
-}
-
-dependencies {
     implementation(libs.moshi.kotlin)
+    testImplementation(libs.junit4)
 }
