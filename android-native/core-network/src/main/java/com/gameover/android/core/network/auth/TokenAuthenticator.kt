@@ -10,8 +10,13 @@ class TokenAuthenticator(
     private val sessionManager: AuthSessionManager,
     private val tokenStorage: SecureTokenStorage
 ) : Authenticator {
+    // Prevent infinite refresh recursion: first failed call + one retry with fresh token.
+    private companion object {
+        const val MAX_AUTH_CHAIN = 2
+    }
+
     override fun authenticate(route: Route?, response: Response): Request? {
-        if (responseCount(response) >= 2) return null
+        if (responseCount(response) >= MAX_AUTH_CHAIN) return null
 
         val refresh = tokenStorage.getRefresh() ?: return null
         val refreshed = runBlocking { runCatching { sessionManager.refreshTokenLocked(refresh) }.getOrNull() } ?: return null

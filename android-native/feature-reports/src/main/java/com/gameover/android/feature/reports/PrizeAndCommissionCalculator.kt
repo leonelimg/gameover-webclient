@@ -20,12 +20,12 @@ data class FinancialOutput(
 
 object PrizeAndCommissionCalculator {
     fun calculate(input: FinancialInput): FinancialOutput {
-        val normalizedWinner = input.winnerNumber?.trim()?.trimStart('0')
+        val normalizedWinner = normalizeNumber(input.winnerNumber)
         val prize = if (normalizedWinner.isNullOrBlank()) {
             0.0
         } else {
             input.lines.sumOf { line ->
-                val lineNumber = line.number.trim().trimStart('0')
+                val lineNumber = normalizeNumber(line.number)
                 if (lineNumber != normalizedWinner) return@sumOf 0.0
 
                 val special = line.specialAmount ?: 0.0
@@ -42,4 +42,8 @@ object PrizeAndCommissionCalculator {
     }
 
     private fun round2(value: Double): Double = round(value * 100.0) / 100.0
+
+    private fun normalizeNumber(value: String?): String {
+        return value.orEmpty().trim().trimStart('0')
+    }
 }

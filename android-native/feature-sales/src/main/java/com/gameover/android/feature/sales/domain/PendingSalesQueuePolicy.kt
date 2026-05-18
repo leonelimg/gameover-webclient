@@ -1,8 +1,13 @@
 package com.gameover.android.feature.sales.domain
 
+import java.io.IOException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+
 object PendingSalesQueuePolicy {
     fun shouldQueueOffline(error: Throwable): Boolean {
-        val message = error.message?.lowercase().orEmpty()
-        return "timeout" in message || "network" in message || "conex" in message
+        return error is SocketTimeoutException ||
+            error is UnknownHostException ||
+            error is IOException
     }
 }

@@ -25,8 +25,8 @@ class SalesValidation {
         }
 
         val closeTime = Instant.parse(draw.closeTimeIso).toEpochMilli()
-        val cutoff = closeTime - draw.minutosPreviosCierre * 60_000L
-        if (nowMs >= cutoff || nowMs > closeTime) {
+        val salesCutoffMs = closeTime - draw.minutosPreviosCierre * 60_000L
+        if (nowMs >= salesCutoffMs || nowMs > closeTime) {
             throw IllegalArgumentException("El sorteo no está en horario de venta.")
         }
 
