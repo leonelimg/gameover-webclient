@@ -12,18 +12,41 @@ import kotlinx.coroutines.launch
 class LoginViewModel(
     private val authSessionManager: AuthSessionManager
 ) : ViewModel() {
-    private val _state = MutableStateFlow<ResultState<Unit>>(ResultState.Success(Unit))
-    val state: StateFlow<ResultState<Unit>> = _state
+    private val _state = MutableStateFlow<ResultState<String>>(ResultState.Success(""))
+    val state: StateFlow<ResultState<String>> = _state
+
+    fun restoreSession() {
+        _state.value = ResultState.Loading
+        viewModelScope.launch {
+            _state.value = runCatching {
+                val restored = authSessionManager.restoreSession()
+                if (restored.isAuthenticated) {
+                    ResultState.Success("Sesión restaurada")
+                } else {
+                    ResultState.Success("Sin sesión activa")
+                }
+            }.getOrElse {
+                ResultState.Error(AppError.Network("No se pudo restaurar sesión"))
+            }
+        }
+    }
 
     fun login(username: String, password: String) {
         _state.value = ResultState.Loading
         viewModelScope.launch {
             _state.value = runCatching {
                 authSessionManager.login(username, password)
-                ResultState.Success(Unit)
+                ResultState.Success("Login exitoso")
             }.getOrElse {
                 ResultState.Error(AppError.Http(401, "Usuario o contraseña incorrectos"))
             }
+        }
+    }
+
+    fun logout() {
+        viewModelScope.launch {
+            authSessionManager.logout()
+            _state.value = ResultState.Success("Sesión cerrada")
         }
     }
 }

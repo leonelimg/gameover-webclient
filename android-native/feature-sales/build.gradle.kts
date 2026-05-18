@@ -36,3 +36,7 @@ dependencies {
 dependencies {
     testImplementation(libs.junit4)
 }
+
+dependencies {
+    implementation(libs.moshi.kotlin)
+}
