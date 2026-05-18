@@ -17,6 +17,7 @@ import SalesByUserPage from '@/pages/Reports/SalesByUserPage';
 import DrawListsPage from '@/pages/Reports/DrawListsPage';
 import PrintQueuePage from '@/pages/PrintQueue/PrintQueuePage';
 import TicketPaymentsPage from '@/pages/TicketPayments/TicketPaymentsPage';
+import CommissionsPage from '@/pages/Reports/CommissionsPage';
 import CashMovementsPage from '@/pages/CashMovements/CashMovementsPage';
 
 function ProtectedByPermission({ resourceKey, element }: { resourceKey: string; element: ReactElement }) {
@@ -50,6 +51,7 @@ export default function App() {
             <Route path="/reports/balance-breakdown" element={<ProtectedByPermission resourceKey="/reports/balance-breakdown" element={<BalanceBreakdownPage />} />} />
             <Route path="/reports/sales-by-user" element={<ProtectedByPermission resourceKey="/reports/sales-by-user" element={<SalesByUserPage />} />} />
             <Route path="/reports/draw-lists" element={<ProtectedByPermission resourceKey="/reports/draw-lists" element={<DrawListsPage />} />} />
+            <Route path="/reports/commissions" element={<ProtectedByPermission resourceKey="/reports/commissions" element={<CommissionsPage />} />} />
             <Route path="/print-queue" element={<ProtectedByPermission resourceKey="/print-queue" element={<PrintQueuePage />} />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -1103,4 +1103,181 @@ router.get('/draw-lists', authorizeResource('/reports/draw-lists'), async (req, 
   });
 });
 
+// ── GET /api/reports/commissions ───────────────────────────────────────────
+
+router.get('/commissions', authorizeResource('/reports/commissions'), async (req, res) => {
+  const query = req.query as Record<string, string>;
+  const { drawId, userId } = query;
+
+  const { filter: createdAtFilter, error } = parseCreatedAtFilter(query);
+  if (error) {
+    res.status(400).json({ message: error });
+    return;
+  }
+
+  const users = await getHierarchyUsers();
+
+  let allowedUserIds: Set<string>;
+  if (req.user!.role === 'admin') {
+    allowedUserIds = new Set(users.map((u) => u.id));
+  } else if (req.user!.role === 'asociado') {
+    allowedUserIds = getDescendantUserIds(users, req.user!.sub);
+  } else {
+    allowedUserIds = new Set([req.user!.sub]);
+  }
+
+  if (userId && !allowedUserIds.has(userId)) {
+    res.status(403).json({ message: 'No tienes permisos para consultar ese usuario.' });
+    return;
+  }
+
+  const scopedUserIds = userId
+    ? getDescendantUserIds(users, userId)
+    : allowedUserIds;
+
+  const sellerIds = users
+    .filter((u) => allowedUserIds.has(u.id) && scopedUserIds.has(u.id))
+    .map((u) => u.id);
+
+  const where: Record<string, unknown> = {
+    sellerId: { in: sellerIds },
+    canceledAt: null,
+  };
+  if (drawId) where['drawId'] = drawId;
+  if (Object.keys(createdAtFilter).length > 0) where['createdAt'] = createdAtFilter;
+
+  interface CommissionTicket {
+    total: number;
+    draw: {
+      id: string;
+      name: string;
+      closeTime: Date;
+    };
+    seller: {
+      id: string;
+      fullName: string;
+      username: string;
+      plan: {
+        commission: number;
+      } | null;
+    };
+    associate: {
+      plan: {
+        commission: number;
+      } | null;
+    };
+  }
+
+  const [tickets, defaultPlan] = await Promise.all([
+    prisma.ticket.findMany({
+      where,
+      select: {
+        total: true,
+        draw: {
+          select: {
+            id: true,
+            name: true,
+            closeTime: true,
+          },
+        },
+        seller: {
+          select: {
+            id: true,
+            fullName: true,
+            username: true,
+            plan: { select: { commission: true } },
+          },
+        },
+        associate: {
+          select: {
+            plan: { select: { commission: true } },
+          },
+        },
+      },
+    }) as Promise<CommissionTicket[]>,
+    prisma.plan.findFirst({
+      orderBy: { createdAt: 'asc' },
+      select: { commission: true },
+    }),
+  ]);
+
+  interface CommissionRow {
+    drawCloseTime: Date;
+    drawName: string;
+    commission: number;
+  }
+
+  interface SellerGroup {
+    sellerId: string;
+    sellerName: string;
+    sellerUsername: string;
+    rows: CommissionRow[];
+    subtotal: number;
+  }
+
+  // Group by seller and collect aggregated commissions per draw
+  const sellerMap = new Map<string, SellerGroup>();
+
+  for (const ticket of tickets) {
+    const sellerId = ticket.seller.id;
+    if (!sellerMap.has(sellerId)) {
+      sellerMap.set(sellerId, {
+        sellerId,
+        sellerName: ticket.seller.fullName,
+        sellerUsername: ticket.seller.username,
+        rows: [],
+        subtotal: 0,
+      });
+    }
+
+    const sellerGroup = sellerMap.get(sellerId)!;
+    const effectivePlan = ticket.seller.plan ?? ticket.associate.plan ?? defaultPlan;
+    const commissionRate = (effectivePlan?.commission ?? 0) / 100;
+    const commission = ticket.total * commissionRate;
+
+    // Check if this draw already exists in seller's rows
+    const existingRow = sellerGroup.rows.find(
+      (r) => r.drawCloseTime.getTime() === ticket.draw.closeTime.getTime() && r.drawName === ticket.draw.name
+    );
+
+    if (existingRow) {
+      existingRow.commission += commission;
+    } else {
+      sellerGroup.rows.push({
+        drawCloseTime: ticket.draw.closeTime,
+        drawName: ticket.draw.name,
+        commission,
+      });
+    }
+  }
+
+  // Calculate subtotals and sort rows within each seller
+  for (const sellerGroup of sellerMap.values()) {
+    sellerGroup.rows.sort(
+      (a, b) => new Date(b.drawCloseTime).getTime() - new Date(a.drawCloseTime).getTime()
+    );
+    sellerGroup.subtotal = sellerGroup.rows.reduce((sum, row) => sum + row.commission, 0);
+  }
+
+  // Sort sellers by name
+  const bySeller = Array.from(sellerMap.values()).sort((a, b) =>
+    a.sellerName.localeCompare(b.sellerName)
+  );
+
+  const totalCommissions = bySeller.reduce((sum, seller) => sum + seller.subtotal, 0);
+
+  res.json({
+    filters: {
+      drawId: drawId || null,
+      userId: userId || null,
+      fromDate: query.fromDate || null,
+      toDate: query.toDate || null,
+    },
+    totals: {
+      totalCommissions,
+    },
+    bySeller,
+  });
+});
+
 export default router;

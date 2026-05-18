@@ -99,6 +99,10 @@ const NAV_ITEMS: NavItem[] = [
         to: '/reports/draw-lists',
         label: 'Listas de sorteos',
       },
+      {
+        to: '/reports/commissions',
+        label: 'Comisiones',
+      },
     ],
   },
 ];

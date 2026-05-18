@@ -17,15 +17,67 @@ const planSchema = z.object({
 
 const masterInclude = { master: { select: { id: true, fullName: true } } };
 
+async function getVisiblePlanIds(userId: string): Promise<Set<string>> {
+  const users = await prisma.user.findMany({
+    select: { id: true, parentId: true, planId: true },
+  });
+
+  const visiblePlanIds = new Set<string>();
+  const visit = (currentUserId: string): void => {
+    const currentUser = users.find((user) => user.id === currentUserId);
+    if (!currentUser) return;
+
+    if (currentUser.planId) {
+      visiblePlanIds.add(currentUser.planId);
+    }
+
+    users
+      .filter((user) => user.parentId === currentUserId)
+      .forEach((child) => visit(child.id));
+  };
+
+  visit(userId);
+  return visiblePlanIds;
+}
+
 // GET /api/plans
-router.get('/', authorizeAnyResource('/plans', '/users'), async (_req, res) => {
-  const plans = await prisma.plan.findMany({ include: masterInclude, orderBy: { createdAt: 'desc' } });
+router.get('/', authorizeAnyResource('/plans', '/users'), async (req, res) => {
+  if (req.user!.role === 'admin') {
+    const plans = await prisma.plan.findMany({ include: masterInclude, orderBy: { createdAt: 'desc' } });
+    res.json(plans);
+    return;
+  }
+
+  const visiblePlanIds = await getVisiblePlanIds(req.user!.sub);
+  if (visiblePlanIds.size === 0) {
+    res.json([]);
+    return;
+  }
+
+  const plans = await prisma.plan.findMany({
+    where: { id: { in: Array.from(visiblePlanIds) } },
+    include: masterInclude,
+    orderBy: { createdAt: 'desc' },
+  });
   res.json(plans);
 });
 
 // GET /api/plans/:id
 router.get('/:id', authorizeAnyResource('/plans', '/users'), async (req, res) => {
   const id = param(req, 'id');
+  if (req.user!.role === 'admin') {
+    const plan = await prisma.plan.findUnique({ where: { id }, include: masterInclude });
+    if (!plan) { res.status(404).json({ message: 'Plan no encontrado.' }); return; }
+    res.json(plan);
+    return;
+  }
+
+  const visiblePlanIds = await getVisiblePlanIds(req.user!.sub);
+  if (!visiblePlanIds.has(id)) {
+    res.status(404).json({ message: 'Plan no encontrado.' });
+    return;
+  }
+
   const plan = await prisma.plan.findUnique({ where: { id }, include: masterInclude });
   if (!plan) { res.status(404).json({ message: 'Plan no encontrado.' }); return; }
   res.json(plan);

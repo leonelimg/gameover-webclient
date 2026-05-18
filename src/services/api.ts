@@ -597,6 +597,33 @@ export interface DrawListsResponse {
   numbers: DrawListNumberRow[];
 }
 
+export interface CommissionRowDetail {
+  drawCloseTime: string;
+  drawName: string;
+  commission: number;
+}
+
+export interface CommissionsSellerGroup {
+  sellerId: string;
+  sellerName: string;
+  sellerUsername: string;
+  rows: CommissionRowDetail[];
+  subtotal: number;
+}
+
+export interface CommissionsReportResponse {
+  filters: {
+    drawId: string | null;
+    userId: string | null;
+    fromDate: string | null;
+    toDate: string | null;
+  };
+  totals: {
+    totalCommissions: number;
+  };
+  bySeller: CommissionsSellerGroup[];
+}
+
 export const reportsApi = {
   summary: async (drawId?: string, fromDate?: string, toDate?: string): Promise<ReportSummary> => {
     const res = await api.get<ReportSummary>('/api/reports/summary', { params: { drawId, fromDate, toDate } });
@@ -639,6 +666,15 @@ export const reportsApi = {
     toDate?: string;
   }): Promise<DrawListsResponse> => {
     const res = await api.get<DrawListsResponse>('/api/reports/draw-lists', { params });
+    return res.data;
+  },
+  commissions: async (params?: {
+    drawId?: string;
+    userId?: string;
+    fromDate?: string;
+    toDate?: string;
+  }): Promise<CommissionsReportResponse> => {
+    const res = await api.get<CommissionsReportResponse>('/api/reports/commissions', { params });
     return res.data;
   },
 };
