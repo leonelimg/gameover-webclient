@@ -6,7 +6,8 @@ plugins {
     alias(libs.plugins.hilt.android)
 }
 
-val apiBaseUrl: String = (project.findProperty("GO_API_BASE_URL") as String?) ?: "http://10.0.2.2:4000"
+val debugApiBaseUrl: String = (project.findProperty("GO_API_BASE_URL") as String?) ?: "http://10.0.2.2:4000"
+val releaseApiBaseUrl: String = (project.findProperty("GO_API_BASE_URL_RELEASE") as String?) ?: "https://api.gameover.local"
 
 android {
     namespace = "com.gameover.android.app"
@@ -18,13 +19,17 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
-        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+        buildConfigField("String", "API_BASE_URL", "\"$debugApiBaseUrl\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "API_BASE_URL", "\"$debugApiBaseUrl\"")
+        }
         release {
             isMinifyEnabled = false
+            buildConfigField("String", "API_BASE_URL", "\"$releaseApiBaseUrl\"")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

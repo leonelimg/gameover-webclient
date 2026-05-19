@@ -91,7 +91,7 @@ interface PrintJobDao {
     fun observeJobs(): Flow<List<PrintJobEntity>>
 
     @Query("SELECT * FROM print_jobs WHERE status IN (:statuses) ORDER BY nextAttemptAt ASC")
-    suspend fun nextPending(statuses: List<String> = listOf("pending", "retrying")): List<PrintJobEntity>
+    suspend fun nextPending(statuses: List<String>): List<PrintJobEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(item: PrintJobEntity)

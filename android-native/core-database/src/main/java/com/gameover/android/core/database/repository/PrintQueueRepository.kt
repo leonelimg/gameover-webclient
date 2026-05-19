@@ -28,7 +28,7 @@ class PrintQueueRepository @Inject constructor(
         return id
     }
 
-    suspend fun nextPending(): List<PrintJobEntity> = dao.nextPending()
+    suspend fun nextPending(): List<PrintJobEntity> = dao.nextPending(listOf(STATUS_PENDING, STATUS_RETRYING))
 
     suspend fun markProcessing(id: String, attempts: Int) {
         dao.updateStatus(id, STATUS_PROCESSING, attempts, System.currentTimeMillis(), null)

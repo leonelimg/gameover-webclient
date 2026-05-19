@@ -282,6 +282,7 @@ private fun SalesRoute(viewModel: SalesViewModel = hiltViewModel()) {
     var number by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     var special by remember { mutableStateOf("") }
+    var validationError by remember { mutableStateOf<String?>(null) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val queueStatus by viewModel.queueStatus.collectAsStateWithLifecycle()
 
@@ -296,14 +297,27 @@ private fun SalesRoute(viewModel: SalesViewModel = hiltViewModel()) {
         }
         Button(
             onClick = {
+                val normalizedNumber = number.trim()
+                val parsedAmount = amount.toDoubleOrNull()
+                val parsedSpecial = special.toDoubleOrNull() ?: 0.0
+                validationError = when {
+                    !Regex("^\\d{2}$").matches(normalizedNumber) -> "El número debe tener exactamente 2 dígitos."
+                    parsedAmount == null || parsedAmount <= 0.0 -> "El monto regular debe ser mayor que 0."
+                    parsedSpecial < 0 -> "El monto especial no puede ser negativo."
+                    parsedAmount != null && parsedSpecial > parsedAmount -> "El monto especial no puede superar el monto regular."
+                    drawId.isBlank() -> "Debe seleccionar/ingresar un sorteo."
+                    else -> null
+                }
+                if (validationError != null) return@Button
+
                 val payload = com.gameover.android.core.network.model.CreateTicketRequest(
                     drawId = drawId,
                     customerName = customerName,
                     lines = listOf(
                         com.gameover.android.core.network.model.TicketLineRequest(
-                            number = number.take(2),
-                            amount = amount.toDoubleOrNull() ?: 0.0,
-                            specialAmount = special.toDoubleOrNull(),
+                            number = normalizedNumber,
+                            amount = parsedAmount ?: 0.0,
+                            specialAmount = parsedSpecial,
                             isNicaEspecial = false
                         )
                     )
@@ -317,6 +331,7 @@ private fun SalesRoute(viewModel: SalesViewModel = hiltViewModel()) {
             modifier = Modifier.fillMaxWidth()
         ) { Text("Sincronizar cola offline") }
         Text(queueStatus)
+        validationError?.let { ErrorText(it) }
 
         when (val value = state) {
             is ResultState.Error -> ErrorText(value.error.toString())

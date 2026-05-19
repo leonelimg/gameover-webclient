@@ -28,6 +28,8 @@ Proyecto Android nativo multi-módulo con Kotlin + MVVM + Room, alineado con reg
 
 ## Configuración API base URL
 
-- Por defecto la app usa `http://10.0.2.2:4000`.
+- Debug por defecto: `http://10.0.2.2:4000`.
+- Release por defecto: `https://api.gameover.local`.
 - Puede sobreescribirse con propiedad Gradle:
   - `./gradlew assembleDebug -PGO_API_BASE_URL=https://tu-api`
+  - `./gradlew assembleRelease -PGO_API_BASE_URL_RELEASE=https://tu-api`
