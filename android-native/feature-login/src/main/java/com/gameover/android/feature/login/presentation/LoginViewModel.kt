@@ -5,11 +5,14 @@ import androidx.lifecycle.viewModelScope
 import com.gameover.android.core.common.AppError
 import com.gameover.android.core.common.ResultState
 import com.gameover.android.core.network.auth.AuthSessionManager
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class LoginViewModel(
+@HiltViewModel
+class LoginViewModel @Inject constructor(
     private val authSessionManager: AuthSessionManager
 ) : ViewModel() {
     private val _state = MutableStateFlow<ResultState<String>>(ResultState.Success(""))
