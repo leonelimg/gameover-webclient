@@ -26,4 +26,8 @@ android {
 dependencies {
     // Coroutines only — no Android-specific dependencies
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+    // JSR-330 for @Inject annotations (Hilt-compatible, no Hilt dependency needed)
+    implementation("javax.inject:javax.inject:1")
+    // Gson for use-case serialization
+    implementation("com.google.code.gson:gson:2.10.1")
 }
