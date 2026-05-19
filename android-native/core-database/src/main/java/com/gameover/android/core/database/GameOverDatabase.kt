@@ -23,7 +23,10 @@ import com.gameover.android.core.database.entity.*
 abstract class GameOverDatabase : RoomDatabase() {
     abstract fun sessionDao(): SessionDao
     abstract fun drawCacheDao(): DrawCacheDao
+    abstract fun recentTicketDao(): RecentTicketDao
+    abstract fun summaryCacheDao(): SummaryCacheDao
     abstract fun pendingSalesDao(): PendingSalesDao
+    abstract fun printerDeviceDao(): PrinterDeviceDao
     abstract fun printJobDao(): PrintJobDao
 
     companion object {

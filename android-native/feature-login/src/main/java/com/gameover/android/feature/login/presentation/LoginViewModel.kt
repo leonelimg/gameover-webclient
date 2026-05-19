@@ -4,12 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gameover.android.core.common.AppError
 import com.gameover.android.core.common.ResultState
+import com.gameover.android.core.network.NetworkErrorMapper
 import com.gameover.android.core.network.auth.AuthSessionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 @HiltViewModel
 class LoginViewModel @Inject constructor(
@@ -29,7 +30,7 @@ class LoginViewModel @Inject constructor(
                     ResultState.Success("Sin sesión activa")
                 }
             }.getOrElse {
-                ResultState.Error(AppError.Network("No se pudo restaurar sesión"))
+                ResultState.Error(NetworkErrorMapper.toAppError(it, "No se pudo restaurar sesión"))
             }
         }
     }
@@ -41,7 +42,7 @@ class LoginViewModel @Inject constructor(
                 authSessionManager.login(username, password)
                 ResultState.Success("Login exitoso")
             }.getOrElse {
-                ResultState.Error(AppError.Http(401, "Usuario o contraseña incorrectos"))
+                ResultState.Error(NetworkErrorMapper.toAppError(it, "Usuario o contraseña incorrectos"))
             }
         }
     }

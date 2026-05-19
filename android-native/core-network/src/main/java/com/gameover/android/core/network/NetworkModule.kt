@@ -7,6 +7,8 @@ import com.gameover.android.core.network.auth.AuthInterceptor
 import com.gameover.android.core.network.auth.AuthSessionManager
 import com.gameover.android.core.network.auth.SecureTokenStorage
 import com.gameover.android.core.network.auth.TokenAuthenticator
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -28,16 +30,22 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    fun provideMoshi(): Moshi = Moshi.Builder()
+        .addLast(KotlinJsonAdapterFactory())
+        .build()
+
+    @Provides
+    @Singleton
     fun provideTokenStorage(@ApplicationContext context: Context): SecureTokenStorage {
         return SecureTokenStorage(context)
     }
 
     @Provides
     @Singleton
-    fun provideAuthApi(baseUrl: String): AuthApi {
+    fun provideAuthApi(baseUrl: String, moshi: Moshi): AuthApi {
         return Retrofit.Builder()
             .baseUrl(baseUrl)
-            .addConverterFactory(MoshiConverterFactory.create())
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
             .create(AuthApi::class.java)
     }
@@ -71,12 +79,13 @@ object NetworkModule {
     @Singleton
     fun provideBusinessApi(
         baseUrl: String,
-        client: OkHttpClient
+        client: OkHttpClient,
+        moshi: Moshi
     ): BusinessApi {
         return Retrofit.Builder()
             .baseUrl(baseUrl)
             .client(client)
-            .addConverterFactory(MoshiConverterFactory.create())
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
             .create(BusinessApi::class.java)
     }

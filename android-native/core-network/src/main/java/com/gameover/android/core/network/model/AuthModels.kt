@@ -23,3 +23,5 @@ data class UserDto(
 )
 
 data class PermissionsResponse(val permissions: List<String>)
+
+data class ApiErrorResponse(val message: String? = null, val error: String? = null)

@@ -11,6 +11,15 @@ data class ReportSummaryDto(
 
 data class TopNumberDto(val number: String, val total: Double)
 
+data class RecentTicketDto(
+    val id: String,
+    val code: String,
+    val drawId: String,
+    val total: Double,
+    val createdAt: String,
+    val canceledAt: String? = null
+)
+
 data class WinningTicketsResponseDto(
     val draw: DrawWinnerDto,
     val tickets: List<WinningTicketDto>,
@@ -30,7 +39,8 @@ data class WinningTicketDto(
     val code: String,
     val customerName: String,
     val prizeAmount: Double,
-    val paymentStatus: String
+    val paymentStatus: String,
+    val winningNumbers: List<String> = emptyList()
 )
 
 data class WinningTotalsDto(

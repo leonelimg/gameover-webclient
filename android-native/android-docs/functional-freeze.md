@@ -10,6 +10,40 @@
 - Commission report is read-only.
 - Permissions must use backend `resourceKey` semantics unchanged.
 
+## Frozen scope checklist
+
+- Android base: **Kotlin + MVVM + Compose Material 3 + Navigation + Hilt + Room + Retrofit + Coroutines/Flow**.
+- Platform baseline: **Android 8+** (`minSdk 26`).
+- Winner tickets: **read-only report only** (no `mark-paid`/`revert` in Android).
+- Commissions: **read-only**.
+- Offline basic: **sales queue for deferred sync**.
+- Ticket scanning by camera: **required**.
+- Ticket format: **same web parity** (ESC/POS, QR, cut).
+- Permissions: **same backend `resourceKey` rules**.
+
+## Web/Backend → Android parity matrix by screen
+
+| Android screen/module | Backend endpoints | Notes |
+|---|---|---|
+| Login | `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/roles/my-permissions` | Session restore + rotating refresh + permission bootstrap |
+| Dashboard | `GET /api/reports/summary`, `GET /api/reports/recent-tickets`, `GET /api/reports/top-numbers` | Same date-range behavior (`today/last7/week/month/custom`) |
+| Sales / Ventas | `GET /api/draws`, `POST /api/tickets` | Business rules must match backend before submit |
+| Ticket management (list/filter/detail) | `GET /api/reports/sales-by-user`, `GET /api/tickets/:id` | Uses same hierarchy/resource permissions |
+| Ticket reprint | `PATCH /api/tickets/:id/print` | Must block canceled tickets |
+| Ticket cancel | `PATCH /api/tickets/:id/cancel` | Optional reason, keep backend messages |
+| Winner tickets report (read-only) | `GET /api/payments/winning-tickets` | No mark-paid/revert in Android scope |
+| Commissions report (read-only) | `GET /api/reports/balance-breakdown` | Read-only analytics |
+
+## Critical business rules to replicate 1:1
+
+- Sales window open only before cutoff: `closeTime - minutosPreviosCierre`.
+- Numbers must be exactly **2 digits**.
+- Regular amount must be **> 0**.
+- `specialAmount <= regularAmount` when special multiplier exists.
+- Restricted numbers must not exceed configured draw limit.
+- Sales are forbidden for draws with `status = finalizado`.
+- Reprint is forbidden for canceled tickets (`canceledAt != null`).
+
 ## Auth & session
 
 - `POST /api/auth/login`

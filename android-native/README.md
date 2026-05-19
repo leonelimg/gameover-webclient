@@ -25,3 +25,11 @@ Proyecto Android nativo multi-módulo con Kotlin + MVVM + Room, alineado con reg
 - Offline básico con cola para registrar ventas cuando no hay conexión
 - Permisos alineados por `resourceKey` del backend
 - Contrato para búsqueda por cámara de código de ticket
+
+## Configuración API base URL
+
+- Debug por defecto: `http://10.0.2.2:4000`.
+- Release por defecto: `https://api.gameover.local`.
+- Puede sobreescribirse con propiedad Gradle:
+  - `./gradlew assembleDebug -PGO_API_BASE_URL=https://tu-api`
+  - `./gradlew assembleRelease -PGO_API_BASE_URL_RELEASE=https://tu-api`
