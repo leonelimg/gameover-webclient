@@ -42,9 +42,14 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideAuthApi(baseUrl: String, moshi: Moshi): AuthApi {
+    fun provideAuthApi(
+        baseUrl: String,
+        client: OkHttpClient,
+        moshi: Moshi
+    ): AuthApi {
         return Retrofit.Builder()
             .baseUrl(baseUrl)
+            .client(client)
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
             .create(AuthApi::class.java)
@@ -52,25 +57,16 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideAuthSessionManager(
-        authApi: AuthApi,
-        storage: SecureTokenStorage
-    ): AuthSessionManager {
-        return AuthSessionManager(authApi, storage)
-    }
-
-    @Provides
-    @Singleton
     fun provideOkHttpClient(
-        sessionManager: AuthSessionManager,
-        storage: SecureTokenStorage
+        interceptor: AuthInterceptor,
+        authenticator: TokenAuthenticator
     ): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
         }
         return OkHttpClient.Builder()
-            .addInterceptor(AuthInterceptor(sessionManager))
-            .authenticator(TokenAuthenticator(sessionManager, storage))
+            .addInterceptor(interceptor)
+            .authenticator(authenticator)
             .addInterceptor(logging)
             .build()
     }

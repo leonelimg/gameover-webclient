@@ -5,9 +5,11 @@ import okhttp3.Authenticator
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.Route
+import javax.inject.Inject
+import javax.inject.Provider
 
-class TokenAuthenticator(
-    private val sessionManager: AuthSessionManager,
+class TokenAuthenticator @Inject constructor(
+    private val sessionManagerProvider: Provider<AuthSessionManager>,
     private val tokenStorage: SecureTokenStorage
 ) : Authenticator {
     // Prevent infinite refresh recursion: first failed call + one retry with fresh token.
@@ -19,7 +21,9 @@ class TokenAuthenticator(
         if (responseCount(response) >= MAX_AUTH_CHAIN) return null
 
         val refresh = tokenStorage.getRefresh() ?: return null
-        val refreshed = runBlocking { runCatching { sessionManager.refreshTokenLocked(refresh) }.getOrNull() } ?: return null
+        val refreshed = runBlocking { 
+            runCatching { sessionManagerProvider.get().refreshTokenLocked(refresh) }.getOrNull() 
+        } ?: return null
 
         return response.request.newBuilder()
             .header("Authorization", "Bearer ${refreshed.accessToken}")
