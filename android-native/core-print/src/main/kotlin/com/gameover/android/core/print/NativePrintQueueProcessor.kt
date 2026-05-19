@@ -27,13 +27,7 @@ class NativePrintQueueProcessor @Inject constructor(
         runCatching { if (!printerManager.isConnected()) printerManager.connect(printer.macAddress) }
             .onFailure {
                 jobs.forEach { job ->
-                    val attempt = job.attempts + 1
-                    val next = System.currentTimeMillis() + PrintRetryPolicy.nextDelayMs(attempt)
-                    if (attempt >= job.maxAttempts) {
-                        queueRepository.markFailed(job.id, attempt, it.message ?: "No se pudo conectar a impresora")
-                    } else {
-                        queueRepository.markRetrying(job.id, attempt, next, it.message ?: "No se pudo conectar a impresora")
-                    }
+                    handleRetry(job, it.message ?: "No se pudo conectar a impresora")
                 }
                 return
             }
@@ -47,13 +41,18 @@ class NativePrintQueueProcessor @Inject constructor(
                 printerManager.printRaw(bytes)
                 queueRepository.markCompleted(job.id)
             }.onFailure {
-                val next = System.currentTimeMillis() + PrintRetryPolicy.nextDelayMs(attempt)
-                if (attempt >= job.maxAttempts) {
-                    queueRepository.markFailed(job.id, attempt, it.message ?: "Error imprimiendo")
-                } else {
-                    queueRepository.markRetrying(job.id, attempt, next, it.message ?: "Error imprimiendo")
-                }
+                handleRetry(job, it.message ?: "Error imprimiendo")
             }
+        }
+    }
+
+    private suspend fun handleRetry(job: com.gameover.android.core.database.entity.PrintJobEntity, error: String) {
+        val attempt = job.attempts + 1
+        val next = System.currentTimeMillis() + PrintRetryPolicy.nextDelayMs(attempt)
+        if (attempt >= job.maxAttempts) {
+            queueRepository.markFailed(job.id, attempt, error)
+        } else {
+            queueRepository.markRetrying(job.id, attempt, next, error)
         }
     }
 }

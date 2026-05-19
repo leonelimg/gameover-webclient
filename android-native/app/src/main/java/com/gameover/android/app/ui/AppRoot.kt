@@ -55,6 +55,7 @@ import com.gameover.android.feature.dashboard.DashboardDateRange
 import com.gameover.android.feature.dashboard.presentation.DashboardViewModel
 import com.gameover.android.feature.reports.presentation.CommissionReportViewModel
 import com.gameover.android.feature.reports.presentation.WinningTicketsReportViewModel
+import com.gameover.android.feature.sales.domain.SalesInputRules
 import com.gameover.android.feature.sales.presentation.SalesViewModel
 import com.gameover.android.feature.tickets.presentation.TicketsViewModel
 import kotlinx.coroutines.launch
@@ -301,7 +302,7 @@ private fun SalesRoute(viewModel: SalesViewModel = hiltViewModel()) {
                 val parsedAmount = amount.toDoubleOrNull()
                 val parsedSpecial = special.toDoubleOrNull() ?: 0.0
                 validationError = when {
-                    !Regex("^\\d{2}$").matches(normalizedNumber) -> "El número debe tener exactamente 2 dígitos."
+                    !SalesInputRules.isTwoDigitNumber(normalizedNumber) -> "El número debe tener exactamente 2 dígitos."
                     parsedAmount == null || parsedAmount <= 0.0 -> "El monto regular debe ser mayor que 0."
                     parsedSpecial < 0 -> "El monto especial no puede ser negativo."
                     parsedAmount != null && parsedSpecial > parsedAmount -> "El monto especial no puede superar el monto regular."
