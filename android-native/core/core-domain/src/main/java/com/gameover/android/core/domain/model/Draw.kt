@@ -16,7 +16,7 @@ data class Draw(
             val closeMs = java.time.Instant.parse(closeTime).toEpochMilli()
             val cutoff = closeMs - minutosPreviosCierre * 60_000L
             val now = System.currentTimeMillis()
-            status != DrawStatus.finalizado && now < cutoff && now <= closeMs
+            status != DrawStatus.finalizado && now < cutoff
         } catch (e: Exception) { false }
     }
 }

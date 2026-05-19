@@ -55,14 +55,20 @@ class SyncWorker @AssistedInject constructor(
                 offlineQueueRepository.markSuccess(sale.id)
                 showNotification("Venta sincronizada", "Ticket registrado correctamente.")
             } catch (e: Exception) {
-                // Treat HTTP 5xx or ambiguous server errors as retryable
-                val isServerError = e.message?.contains("5") == true
+                // Business logic errors (4xx): do not retry
+                val errorMsg = e.message ?: "Error desconocido"
+                val isRetryable = e is java.net.ConnectException ||
+                    e is java.net.SocketTimeoutException ||
+                    e is java.net.UnknownHostException ||
+                    errorMsg.contains("server error", ignoreCase = true) ||
+                    errorMsg.contains("500") || errorMsg.contains("502") ||
+                    errorMsg.contains("503") || errorMsg.contains("504")
                 val newRetryCount = sale.retryCount + 1
-                if (newRetryCount >= 5 || !isServerError) {
-                    offlineQueueRepository.markFailed(sale.id, e.message ?: "Error desconocido", newRetryCount)
-                    showNotification("Error en venta offline", "No se pudo sincronizar la venta: ${e.message}")
+                if (newRetryCount >= 5 || !isRetryable) {
+                    offlineQueueRepository.markFailed(sale.id, errorMsg, newRetryCount)
+                    showNotification("Error en venta offline", "No se pudo sincronizar la venta: $errorMsg")
                 } else {
-                    offlineQueueRepository.markFailed(sale.id, e.message ?: "Error", newRetryCount)
+                    offlineQueueRepository.markFailed(sale.id, errorMsg, newRetryCount)
                     allSuccess = false
                 }
             }

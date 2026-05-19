@@ -168,13 +168,13 @@ fun SalesScreen(
                 }
             }
 
-            // Submit — disabled when offline or no draw selected
+            // Submit — always enabled when a draw is selected (offline sales queue if no connection)
             item {
                 GoButton(
                     text = "Registrar Venta",
                     onClick = viewModel::sell,
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = uiState.selectedDrawId.isNotEmpty() && uiState.isOnline,
+                    enabled = uiState.selectedDrawId.isNotEmpty(),
                     loading = uiState.saleResult is SaleResult.Loading,
                 )
             }

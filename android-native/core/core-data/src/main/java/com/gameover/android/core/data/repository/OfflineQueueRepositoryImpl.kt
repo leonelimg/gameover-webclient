@@ -2,8 +2,8 @@ package com.gameover.android.core.data.repository
 
 import com.gameover.android.core.data.local.db.PendingSaleDao
 import com.gameover.android.core.data.local.db.PendingSaleEntity
-import com.gameover.android.core.domain.model.PendingSale
 import com.gameover.android.core.domain.repository.OfflineQueueRepository
+import com.gameover.android.core.domain.repository.PendingSale
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 

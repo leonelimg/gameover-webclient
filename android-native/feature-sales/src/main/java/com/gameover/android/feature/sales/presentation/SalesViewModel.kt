@@ -194,8 +194,9 @@ class SalesViewModel @Inject constructor(
         return error is java.net.ConnectException ||
                error is java.net.SocketTimeoutException ||
                error is java.net.UnknownHostException ||
-               error.message?.contains("Unable to resolve host") == true ||
-               error.message?.contains("timeout") == true
+               error.message?.contains("Unable to resolve host", ignoreCase = true) == true ||
+               error.message?.contains("timeout", ignoreCase = true) == true ||
+               error.message?.contains("network", ignoreCase = true) == true
     }
 
     fun clearError() {
