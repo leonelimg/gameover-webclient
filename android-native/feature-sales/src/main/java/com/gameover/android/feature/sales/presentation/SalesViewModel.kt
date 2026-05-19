@@ -18,10 +18,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 @HiltViewModel
-class SalesViewModel(
-    @Inject private val businessApi: BusinessApi,
-    @Inject private val queueRepository: PendingSalesQueueRepository,
-    @Inject private val pendingSyncUseCase: PendingSalesSyncUseCase
+class SalesViewModel @Inject constructor(
+    private val businessApi: BusinessApi,
+    private val queueRepository: PendingSalesQueueRepository,
+    private val pendingSyncUseCase: PendingSalesSyncUseCase
 ) : ViewModel() {
     private val _state = MutableStateFlow<ResultState<String>>(ResultState.Success(""))
     val state: StateFlow<ResultState<String>> = _state

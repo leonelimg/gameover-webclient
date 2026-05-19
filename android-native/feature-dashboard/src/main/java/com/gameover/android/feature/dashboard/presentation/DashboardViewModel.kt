@@ -30,9 +30,9 @@ data class DashboardUiState(
 )
 
 @HiltViewModel
-class DashboardViewModel(
-    @Inject private val businessApi: BusinessApi,
-    @Inject private val cacheRepository: DashboardCacheRepository
+class DashboardViewModel @Inject constructor(
+    private val businessApi: BusinessApi,
+    private val cacheRepository: DashboardCacheRepository
 ) : ViewModel() {
     private val _state = MutableStateFlow<ResultState<DashboardUiState>>(ResultState.Loading)
     val state: StateFlow<ResultState<DashboardUiState>> = _state

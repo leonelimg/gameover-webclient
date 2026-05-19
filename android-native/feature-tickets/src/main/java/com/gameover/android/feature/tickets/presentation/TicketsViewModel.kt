@@ -21,11 +21,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 @HiltViewModel
-class TicketsViewModel(
-    @Inject private val businessApi: BusinessApi,
-    @Inject private val printQueueProcessor: NativePrintQueueProcessor,
-    @Inject private val printerDeviceRepository: PrinterDeviceRepository,
-    @Inject private val bluetoothPrinterManager: BluetoothPrinterManager
+class TicketsViewModel @Inject constructor(
+    private val businessApi: BusinessApi,
+    private val printQueueProcessor: NativePrintQueueProcessor,
+    private val printerDeviceRepository: PrinterDeviceRepository,
+    private val bluetoothPrinterManager: BluetoothPrinterManager
 ) : ViewModel() {
     private val _state = MutableStateFlow<ResultState<String>>(ResultState.Success(""))
     val state: StateFlow<ResultState<String>> = _state

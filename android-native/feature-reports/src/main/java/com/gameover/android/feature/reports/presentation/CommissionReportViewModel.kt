@@ -13,8 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 @HiltViewModel
-class CommissionReportViewModel(
-    @Inject private val businessApi: BusinessApi
+class CommissionReportViewModel @Inject constructor(
+    private val businessApi: BusinessApi
 ) : ViewModel() {
     private val _state = MutableStateFlow<ResultState<Map<String, Any?>>>(ResultState.Loading)
     val state: StateFlow<ResultState<Map<String, Any?>>> = _state

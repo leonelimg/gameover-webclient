@@ -25,3 +25,9 @@ Proyecto Android nativo multi-módulo con Kotlin + MVVM + Room, alineado con reg
 - Offline básico con cola para registrar ventas cuando no hay conexión
 - Permisos alineados por `resourceKey` del backend
 - Contrato para búsqueda por cámara de código de ticket
+
+## Configuración API base URL
+
+- Por defecto la app usa `http://10.0.2.2:4000`.
+- Puede sobreescribirse con propiedad Gradle:
+  - `./gradlew assembleDebug -PGO_API_BASE_URL=https://tu-api`

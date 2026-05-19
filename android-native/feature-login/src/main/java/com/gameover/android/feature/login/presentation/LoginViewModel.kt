@@ -13,8 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 @HiltViewModel
-class LoginViewModel(
-    @Inject
+class LoginViewModel @Inject constructor(
     private val authSessionManager: AuthSessionManager
 ) : ViewModel() {
     private val _state = MutableStateFlow<ResultState<String>>(ResultState.Success(""))

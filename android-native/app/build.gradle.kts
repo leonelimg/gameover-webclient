@@ -6,6 +6,8 @@ plugins {
     alias(libs.plugins.hilt.android)
 }
 
+val apiBaseUrl: String = (project.findProperty("GO_API_BASE_URL") as String?) ?: "http://10.0.2.2:4000"
+
 android {
     namespace = "com.gameover.android.app"
     compileSdk = 35
@@ -16,7 +18,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
-        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:4000\"")
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
