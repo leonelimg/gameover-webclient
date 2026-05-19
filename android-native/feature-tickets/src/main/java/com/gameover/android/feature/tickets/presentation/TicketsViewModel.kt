@@ -92,9 +92,9 @@ class TicketsViewModel @Inject constructor(
                     qrText = ticket.code
                 )
                 printQueueProcessor.enqueue(printTicket)
-                printQueueProcessor.processQueue()
                 businessApi.markTicketPrinted(ticketId)
-                ResultState.Success("Ticket marcado como impreso")
+                runCatching { printQueueProcessor.processQueue() }
+                ResultState.Success("Ticket marcado como impreso y encolado para impresión")
             }.getOrElse {
                 ResultState.Error(NetworkErrorMapper.toAppError(it, "No se pudo reimprimir"))
             }

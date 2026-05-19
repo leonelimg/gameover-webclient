@@ -302,7 +302,7 @@ private fun SalesRoute(viewModel: SalesViewModel = hiltViewModel()) {
                 val parsedAmount = amount.toDoubleOrNull()
                 val parsedSpecial = special.toDoubleOrNull() ?: 0.0
                 validationError = when {
-                    !SalesInputRules.isTwoDigitNumber(normalizedNumber) -> "El número debe tener exactamente 2 dígitos."
+                    !SalesInputRules.isTwoDigitNumber(normalizedNumber) -> "El número debe ser de 00 a 99 (2 dígitos)."
                     parsedAmount == null || parsedAmount <= 0.0 -> "El monto regular debe ser mayor que 0."
                     parsedSpecial < 0 -> "El monto especial no puede ser negativo."
                     parsedAmount != null && parsedSpecial > parsedAmount -> "El monto especial no puede superar el monto regular."

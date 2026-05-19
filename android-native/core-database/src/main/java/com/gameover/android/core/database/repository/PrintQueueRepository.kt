@@ -9,6 +9,14 @@ import kotlinx.coroutines.flow.Flow
 class PrintQueueRepository @Inject constructor(
     private val dao: PrintJobDao
 ) {
+    companion object {
+        const val STATUS_PENDING = "pending"
+        const val STATUS_PROCESSING = "processing"
+        const val STATUS_RETRYING = "retrying"
+        const val STATUS_COMPLETED = "completed"
+        const val STATUS_FAILED = "failed"
+    }
+
     fun observeJobs(): Flow<List<PrintJobEntity>> = dao.observeJobs()
 
     suspend fun enqueue(ticketJson: String, maxAttempts: Int = 5): String {
@@ -44,13 +52,5 @@ class PrintQueueRepository @Inject constructor(
 
     suspend fun markFailed(id: String, attempts: Int, error: String?) {
         dao.updateStatus(id, STATUS_FAILED, attempts, System.currentTimeMillis(), error)
-    }
-
-    companion object {
-        const val STATUS_PENDING = "pending"
-        const val STATUS_PROCESSING = "processing"
-        const val STATUS_RETRYING = "retrying"
-        const val STATUS_COMPLETED = "completed"
-        const val STATUS_FAILED = "failed"
     }
 }
