@@ -5,8 +5,9 @@ import com.gameover.android.core.network.model.LoginRequest
 import com.gameover.android.core.network.model.RefreshRequest
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import javax.inject.Inject
 
-class AuthSessionManager(
+class AuthSessionManager @Inject constructor(
     private val authApi: AuthApi,
     private val tokenStorage: SecureTokenStorage
 ) {
