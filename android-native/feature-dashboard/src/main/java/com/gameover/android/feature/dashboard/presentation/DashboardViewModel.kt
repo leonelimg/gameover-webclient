@@ -1,0 +1,94 @@
+package com.gameover.android.feature.dashboard.presentation
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.gameover.android.core.domain.repository.DrawsRepository
+import com.gameover.android.core.domain.repository.ReportsRepository
+import com.gameover.android.core.domain.repository.TicketsRepository
+import com.gameover.android.core.ui.util.NetworkMonitor
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import javax.inject.Inject
+
+@HiltViewModel
+class DashboardViewModel @Inject constructor(
+    private val reportsRepository: ReportsRepository,
+    private val ticketsRepository: TicketsRepository,
+    private val drawsRepository: DrawsRepository,
+    private val networkMonitor: NetworkMonitor,
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(DashboardUiState())
+    val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
+
+    private val fmt = DateTimeFormatter.ISO_LOCAL_DATE
+
+    init {
+        viewModelScope.launch {
+            networkMonitor.isOnline.collect { online ->
+                _uiState.update { it.copy(isOnline = online) }
+                if (online) loadData()
+            }
+        }
+        loadData()
+    }
+
+    fun onRangeSelected(range: DashboardRange) {
+        _uiState.update { it.copy(selectedRange = range) }
+        if (range != DashboardRange.CUSTOM) loadData()
+    }
+
+    fun onCustomDateChanged(from: String, to: String) {
+        _uiState.update { it.copy(customFromDate = from, customToDate = to) }
+        if (from.isNotBlank() && to.isNotBlank()) loadData()
+    }
+
+    fun refresh() = loadData()
+
+    private fun loadData() {
+        val (from, to) = getDateRange()
+        _uiState.update { it.copy(isLoading = true, error = null) }
+        viewModelScope.launch {
+            try {
+                val summaryDeferred = async { reportsRepository.getSummary(fromDate = from, toDate = to) }
+                val recentDeferred = async { ticketsRepository.getTickets() }
+                val summary = summaryDeferred.await()
+                val recent = recentDeferred.await().take(5)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        summary = summary,
+                        recentTickets = recent,
+                        error = null,
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, error = e.message) }
+            }
+        }
+    }
+
+    private fun getDateRange(): Pair<String, String> {
+        val today = LocalDate.now()
+        return when (_uiState.value.selectedRange) {
+            DashboardRange.TODAY -> Pair(today.format(fmt), today.format(fmt))
+            DashboardRange.LAST7 -> Pair(today.minusDays(6).format(fmt), today.format(fmt))
+            DashboardRange.WEEK -> {
+                val monday = today.minusDays(today.dayOfWeek.value.toLong() - 1)
+                Pair(monday.format(fmt), today.format(fmt))
+            }
+            DashboardRange.MONTH -> Pair(today.withDayOfMonth(1).format(fmt), today.format(fmt))
+            DashboardRange.CUSTOM -> {
+                val state = _uiState.value
+                Pair(state.customFromDate, state.customToDate)
+            }
+        }
+    }
+}
