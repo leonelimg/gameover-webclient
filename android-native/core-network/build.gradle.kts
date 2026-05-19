@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.kapt)
+    alias(libs.plugins.hilt.android)
 }
 
 android {
@@ -34,4 +36,6 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.moshi.kotlin)
     implementation(libs.androidx.security.crypto)
+    implementation(libs.hilt.android)
+    kapt(libs.hilt.compiler)
 }

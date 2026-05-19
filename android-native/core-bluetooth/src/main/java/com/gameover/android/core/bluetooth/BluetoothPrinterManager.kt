@@ -6,8 +6,10 @@ import android.bluetooth.BluetoothSocket
 import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.IOException
 import java.util.UUID
+import javax.inject.Inject
 
 private val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb")
 
@@ -16,7 +18,9 @@ data class BluetoothPrinterDevice(
     val address: String
 )
 
-class BluetoothPrinterManager(private val context: Context) {
+class BluetoothPrinterManager @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
     private val adapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     private var socket: BluetoothSocket? = null
 
@@ -48,6 +52,8 @@ class BluetoothPrinterManager(private val context: Context) {
         socket?.closeSilently()
         socket = null
     }
+
+    fun isConnected(): Boolean = socket?.isConnected == true
 
     private fun hasConnectPermission(): Boolean {
         return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
