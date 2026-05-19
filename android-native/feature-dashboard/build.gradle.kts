@@ -3,12 +3,11 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
     id("com.google.dagger.hilt.android")
-    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
     namespace = "com.gameover.android.feature.dashboard"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         minSdk = 26

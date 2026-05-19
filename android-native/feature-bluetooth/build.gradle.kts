@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.gameover.android.feature.bluetooth"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         minSdk = 26

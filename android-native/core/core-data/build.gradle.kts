@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.gameover.android.core.data"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         minSdk = 26
@@ -28,6 +28,12 @@ android {
 dependencies {
     implementation(project(":core:core-domain"))
     implementation(project(":core:core-network"))
+
+    // JSON
+    implementation("com.google.code.gson:gson:2.10.1")
+
+    // Retrofit (needed to access retrofit2.Response in repository impls)
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
 
     // Room
     implementation("androidx.room:room-runtime:2.6.1")

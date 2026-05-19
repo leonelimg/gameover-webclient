@@ -1,23 +1,27 @@
 package com.gameover.android.core.ui.util
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class NetworkMonitor @Inject constructor(@ApplicationContext private val context: Context) {
+class NetworkMonitor(private val context: Context) {
 
+    @Suppress("MissingPermission")
     val isOnline: Flow<Boolean> = callbackFlow {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        if (context.checkSelfPermission(Manifest.permission.ACCESS_NETWORK_STATE) != PackageManager.PERMISSION_GRANTED) {
+            trySend(false)
+            close()
+            return@callbackFlow
+        }
 
         val callback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) { trySend(true) }
@@ -34,7 +38,11 @@ class NetworkMonitor @Inject constructor(@ApplicationContext private val context
         awaitClose { cm.unregisterNetworkCallback(callback) }
     }.distinctUntilChanged()
 
+    @Suppress("MissingPermission")
     private fun isCurrentlyConnected(): Boolean {
+        if (context.checkSelfPermission(Manifest.permission.ACCESS_NETWORK_STATE) != PackageManager.PERMISSION_GRANTED) {
+            return false
+        }
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val network = cm.activeNetwork ?: return false
         val caps = cm.getNetworkCapabilities(network) ?: return false

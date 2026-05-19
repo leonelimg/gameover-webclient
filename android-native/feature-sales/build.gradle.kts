@@ -3,12 +3,11 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
     id("com.google.dagger.hilt.android")
-    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
     namespace = "com.gameover.android.feature.sales"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         minSdk = 26
@@ -56,6 +55,14 @@ dependencies {
     // Hilt
     implementation("com.google.dagger:hilt-android:2.51.1")
     ksp("com.google.dagger:hilt-compiler:2.51.1")
+
+    // Gson (used in SalesViewModel and SyncWorker)
+    implementation("com.google.code.gson:gson:2.10.1")
+
+    // WorkManager + Hilt Worker (SyncWorker)
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("androidx.hilt:hilt-work:1.2.0")
+    ksp("androidx.hilt:hilt-compiler:1.2.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

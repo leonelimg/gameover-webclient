@@ -1,7 +1,8 @@
 package com.gameover.android.app.di
 
 import android.content.Context
-import com.gameover.android.app.BuildConfig
+import com.gameover.android.BuildConfig
+import com.gameover.android.core.ui.util.NetworkMonitor
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -15,6 +16,10 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
+
+    @Provides
+    @Singleton
+    fun provideNetworkMonitor(@ApplicationContext context: Context): NetworkMonitor = NetworkMonitor(context)
 
     @Provides
     @Named("baseUrl")
