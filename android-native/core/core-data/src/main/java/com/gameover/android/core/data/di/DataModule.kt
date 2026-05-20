@@ -59,4 +59,7 @@ abstract class DataBindsModule {
 
     @Binds
     abstract fun bindOfflineQueueRepository(impl: OfflineQueueRepositoryImpl): OfflineQueueRepository
+
+    @Binds
+    abstract fun bindDataRefreshNotifier(impl: DataRefreshNotifierImpl): DataRefreshNotifier
 }

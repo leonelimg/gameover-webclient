@@ -9,6 +9,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -22,23 +23,33 @@ class AuthViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<LoginUiState>(LoginUiState.Idle)
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
-    // Persist form fields across process death
-    var username: String
-        get() = savedStateHandle["username"] ?: ""
-        set(value) { savedStateHandle["username"] = value }
+    private val _username = MutableStateFlow(savedStateHandle["username"] ?: "")
+    val username: StateFlow<String> = _username.asStateFlow()
 
-    var password: String
-        get() = savedStateHandle["password"] ?: ""
-        set(value) { savedStateHandle["password"] = value }
+    private val _password = MutableStateFlow(savedStateHandle["password"] ?: "")
+    val password: StateFlow<String> = _password.asStateFlow()
+
+    fun onUsernameChange(value: String) {
+        _username.update { value }
+        savedStateHandle["username"] = value
+    }
+
+    fun onPasswordChange(value: String) {
+        _password.update { value }
+        savedStateHandle["password"] = value
+    }
 
     fun login() {
-        if (username.isBlank() || password.isBlank()) {
+        val currentUsername = username.value
+        val currentPassword = password.value
+
+        if (currentUsername.isBlank() || currentPassword.isBlank()) {
             _uiState.value = LoginUiState.Error("Ingresa usuario y contraseña.")
             return
         }
         _uiState.value = LoginUiState.Loading
         viewModelScope.launch {
-            val result = loginUseCase(username, password)
+            val result = loginUseCase(currentUsername, currentPassword)
             _uiState.value = result.fold(
                 onSuccess = { LoginUiState.Success },
                 onFailure = { LoginUiState.Error(it.message ?: "Error al iniciar sesión") },

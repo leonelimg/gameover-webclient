@@ -37,6 +37,7 @@ dependencies {
     implementation(project(":core:core-ui"))
     implementation(project(":core:core-domain"))
     implementation(project(":core:core-data"))
+    implementation(project(":feature-bluetooth"))
 
     // Compose BOM
     val composeBom = platform("androidx.compose:compose-bom:2024.05.00")

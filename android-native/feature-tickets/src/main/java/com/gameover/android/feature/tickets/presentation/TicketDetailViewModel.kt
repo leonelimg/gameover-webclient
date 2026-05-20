@@ -3,10 +3,15 @@ package com.gameover.android.feature.tickets.presentation
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gameover.android.core.data.local.TokenDataStore
 import com.gameover.android.core.domain.model.User
 import com.gameover.android.core.domain.repository.AuthRepository
+import com.gameover.android.core.domain.repository.DrawsRepository
 import com.gameover.android.core.domain.repository.TicketsRepository
 import com.gameover.android.core.domain.util.PermissionChecker
+import com.gameover.android.feature.bluetooth.BluetoothPrinterManager
+import com.gameover.android.feature.bluetooth.BtState
+import com.gameover.android.feature.bluetooth.escpos.TicketFormatter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +25,9 @@ import javax.inject.Inject
 class TicketDetailViewModel @Inject constructor(
     private val ticketsRepository: TicketsRepository,
     private val authRepository: AuthRepository,
+    private val drawsRepository: DrawsRepository,
+    private val bluetoothPrinterManager: BluetoothPrinterManager,
+    private val tokenDataStore: TokenDataStore,
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -77,12 +85,58 @@ class TicketDetailViewModel @Inject constructor(
         _uiState.update { it.copy(isMarkingPrinted = true) }
         viewModelScope.launch {
             try {
+                val printerAddress = tokenDataStore.printerAddress.first().orEmpty()
+                if (printerAddress.isBlank()) {
+                    _uiState.update {
+                        it.copy(
+                            isMarkingPrinted = false,
+                            error = "No hay impresora configurada. Ve a Configuración > Impresora Bluetooth.",
+                        )
+                    }
+                    return@launch
+                }
+                if (!ensureConnectedToSavedPrinter(printerAddress)) {
+                    _uiState.update {
+                        it.copy(
+                            isMarkingPrinted = false,
+                            error = "No se pudo conectar a la impresora guardada.",
+                        )
+                    }
+                    return@launch
+                }
+
+                val draw = runCatching { drawsRepository.getDraws().find { it.id == ticket.drawId } }.getOrNull()
+                val sellerName = ticket.seller?.fullName
+                    ?: currentUser?.fullName
+                    ?: currentUser?.username
+                    ?: "Caja"
+                val data = TicketFormatter.format(ticket = ticket, draw = draw, sellerName = sellerName)
+                val printResult = bluetoothPrinterManager.print(data)
+                if (printResult.isFailure) {
+                    _uiState.update {
+                        it.copy(
+                            isMarkingPrinted = false,
+                            error = "Error al imprimir: ${printResult.exceptionOrNull()?.message ?: "desconocido"}",
+                        )
+                    }
+                    return@launch
+                }
+
                 val updated = ticketsRepository.markPrinted(ticket.id)
-                _uiState.update { it.copy(ticket = updated, isMarkingPrinted = false, operationSuccess = "Ticket marcado como impreso.") }
+                _uiState.update { it.copy(ticket = updated, isMarkingPrinted = false, operationSuccess = "Ticket impreso correctamente.") }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isMarkingPrinted = false, error = e.message) }
             }
         }
+    }
+
+    private suspend fun ensureConnectedToSavedPrinter(printerAddress: String): Boolean {
+        val currentConnection = bluetoothPrinterManager.connectionState.value as? BtState.Connected
+        if (currentConnection?.deviceAddress.equals(printerAddress, ignoreCase = true)) {
+            return true
+        }
+        val device = bluetoothPrinterManager.findPairedDevice(printerAddress) ?: return false
+        return bluetoothPrinterManager.connect(device)
     }
 
     fun clearOperationResult() = _uiState.update { it.copy(operationSuccess = null, error = null) }

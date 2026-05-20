@@ -133,7 +133,7 @@ private fun TicketDetailContent(
         // Lines table
         GoCard {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Apuestas", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text("Números", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                 Divider()
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Text("Núm.", modifier = Modifier.weight(1f), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = GoNeutral)

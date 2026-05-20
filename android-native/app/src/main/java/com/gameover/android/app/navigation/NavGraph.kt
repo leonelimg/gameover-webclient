@@ -1,12 +1,16 @@
 package com.gameover.android.app.navigation
 
-import androidx.compose.foundation.layout.Box
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -28,7 +32,6 @@ import com.gameover.android.feature.settings.presentation.SettingsScreen
 import com.gameover.android.feature.tickets.presentation.TicketDetailScreen
 import com.gameover.android.feature.tickets.presentation.TicketsScreen
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 
 object Routes {
     const val LOGIN = "login"
@@ -44,7 +47,8 @@ object Routes {
 data class BottomNavItem(
     val route: String,
     val label: String,
-    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val icon: ImageVector,
+    val selectedIcon: ImageVector,
     val requiredPermission: String? = null,
 )
 
@@ -55,7 +59,6 @@ fun AppNavGraph(
     authRepository: AuthRepository,
 ) {
     val navController = rememberNavController()
-    val coroutineScope = rememberCoroutineScope()
     val isAuthenticated by sessionManager.isAuthenticated.collectAsState(initial = null)
     var currentUser by remember { mutableStateOf<User?>(null) }
 
@@ -80,10 +83,10 @@ fun AppNavGraph(
     }
 
     val bottomNavItems = listOf(
-        BottomNavItem(Routes.DASHBOARD, "Dashboard", Icons.Default.Dashboard),
-        BottomNavItem(Routes.SALES, "Ventas", Icons.Default.ShoppingCart, "/sales:create"),
-        BottomNavItem(Routes.TICKETS, "Tickets", Icons.Default.ConfirmationNumber, "/sales"),
-        BottomNavItem(Routes.SETTINGS, "Config", Icons.Default.Settings),
+        BottomNavItem(Routes.DASHBOARD, "Dashboard", Icons.Default.Dashboard, Icons.Default.Dashboard),
+        BottomNavItem(Routes.SALES, "Ventas", Icons.Default.ShoppingCart, Icons.Default.ShoppingCart),
+        BottomNavItem(Routes.TICKETS, "Tickets", Icons.Default.List, Icons.Default.List),
+        BottomNavItem(Routes.SETTINGS, "Config", Icons.Default.Settings, Icons.Default.Settings),
     )
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -93,14 +96,19 @@ fun AppNavGraph(
     Scaffold(
         bottomBar = {
             if (showBottomBar) {
-                NavigationBar {
+                NavigationBar(
+                    modifier = Modifier,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 8.dp,
+                ) {
                     val user = currentUser
                     bottomNavItems.forEach { item ->
                         val hasAccess = item.requiredPermission == null ||
                             user?.let { PermissionChecker.hasPermission(it, item.requiredPermission) } == true
                         if (hasAccess) {
+                            val isSelected = navBackStackEntry?.destination?.hierarchy?.any { it.route == item.route } == true
                             NavigationBarItem(
-                                selected = navBackStackEntry?.destination?.hierarchy?.any { it.route == item.route } == true,
+                                selected = isSelected,
                                 onClick = {
                                     navController.navigate(item.route) {
                                         popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -108,8 +116,14 @@ fun AppNavGraph(
                                         restoreState = true
                                     }
                                 },
-                                icon = { Icon(item.icon, contentDescription = item.label) },
-                                label = { Text(item.label) },
+                                icon = {
+                                    Icon(
+                                        if (isSelected) item.selectedIcon else item.icon,
+                                        contentDescription = item.label
+                                    )
+                                },
+                                label = { Text(item.label, style = MaterialTheme.typography.labelSmall) },
+                                alwaysShowLabel = true,
                             )
                         }
                     }
@@ -121,6 +135,8 @@ fun AppNavGraph(
             navController = navController,
             startDestination = if (isAuthenticated == true) Routes.DASHBOARD else Routes.LOGIN,
             modifier = Modifier.padding(paddingValues),
+            enterTransition = { fadeIn(animationSpec = tween(300)) },
+            exitTransition = { fadeOut(animationSpec = tween(300)) },
         ) {
             composable(Routes.LOGIN) {
                 LoginScreen(

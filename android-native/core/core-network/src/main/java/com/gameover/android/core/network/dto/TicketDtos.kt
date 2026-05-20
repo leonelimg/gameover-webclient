@@ -39,7 +39,14 @@ data class UserSummaryDto(val id: String, val fullName: String, val username: St
 data class CreateTicketRequest(
     val drawId: String,
     val customerName: String,
-    val lines: List<TicketLineDto>,
+    val lines: List<CreateTicketLineRequestDto>,
+)
+
+data class CreateTicketLineRequestDto(
+    val number: String,
+    val amount: Double,
+    val specialAmount: Double,
+    val isNicaEspecial: Boolean = false,
 )
 
 data class CancelTicketRequest(val reason: String? = null)

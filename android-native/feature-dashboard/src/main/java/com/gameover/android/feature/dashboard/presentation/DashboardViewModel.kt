@@ -2,6 +2,7 @@ package com.gameover.android.feature.dashboard.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gameover.android.core.domain.repository.DataRefreshNotifier
 import com.gameover.android.core.domain.repository.DrawsRepository
 import com.gameover.android.core.domain.repository.ReportsRepository
 import com.gameover.android.core.domain.repository.TicketsRepository
@@ -23,6 +24,7 @@ class DashboardViewModel @Inject constructor(
     private val ticketsRepository: TicketsRepository,
     private val drawsRepository: DrawsRepository,
     private val networkMonitor: NetworkMonitor,
+    private val dataRefreshNotifier: DataRefreshNotifier,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardUiState())
@@ -35,6 +37,11 @@ class DashboardViewModel @Inject constructor(
             networkMonitor.isOnline.collect { online ->
                 _uiState.update { it.copy(isOnline = online) }
                 if (online) loadData()
+            }
+        }
+        viewModelScope.launch {
+            dataRefreshNotifier.refreshEvents.collect {
+                if (_uiState.value.isOnline) loadData()
             }
         }
         loadData()
@@ -51,6 +58,7 @@ class DashboardViewModel @Inject constructor(
     }
 
     fun refresh() = loadData()
+
 
     private fun loadData() {
         val (from, to) = getDateRange()

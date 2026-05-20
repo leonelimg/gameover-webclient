@@ -2,6 +2,7 @@ package com.gameover.android.feature.tickets.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gameover.android.core.domain.repository.DataRefreshNotifier
 import com.gameover.android.core.domain.repository.DrawsRepository
 import com.gameover.android.core.domain.repository.TicketsRepository
 import com.gameover.android.core.ui.util.NetworkMonitor
@@ -18,6 +19,7 @@ class TicketsViewModel @Inject constructor(
     private val ticketsRepository: TicketsRepository,
     private val drawsRepository: DrawsRepository,
     private val networkMonitor: NetworkMonitor,
+    private val dataRefreshNotifier: DataRefreshNotifier,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TicketsUiState())
@@ -29,6 +31,11 @@ class TicketsViewModel @Inject constructor(
             networkMonitor.isOnline.collect { online ->
                 _uiState.update { it.copy(isOnline = online) }
                 if (online) loadData()
+            }
+        }
+        viewModelScope.launch {
+            dataRefreshNotifier.refreshEvents.collect {
+                if (_uiState.value.isOnline) loadData()
             }
         }
     }

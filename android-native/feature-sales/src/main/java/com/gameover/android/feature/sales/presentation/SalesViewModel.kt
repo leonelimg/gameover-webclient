@@ -2,17 +2,24 @@ package com.gameover.android.feature.sales.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gameover.android.core.data.local.TokenDataStore
 import com.gameover.android.core.domain.repository.CreateTicketLine
+import com.gameover.android.core.domain.repository.AuthRepository
 import com.gameover.android.core.domain.repository.DrawsRepository
 import com.gameover.android.core.domain.repository.OfflineQueueRepository
+import com.gameover.android.core.domain.repository.TicketsRepository
 import com.gameover.android.core.domain.usecase.CreateTicketUseCase
 import com.gameover.android.core.domain.usecase.EnqueueOfflineSaleUseCase
 import com.gameover.android.core.ui.util.NetworkMonitor
+import com.gameover.android.feature.bluetooth.BluetoothPrinterManager
+import com.gameover.android.feature.bluetooth.BtState
+import com.gameover.android.feature.bluetooth.escpos.TicketFormatter
 import com.google.gson.Gson
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -25,6 +32,10 @@ class SalesViewModel @Inject constructor(
     private val offlineQueueRepository: OfflineQueueRepository,
     private val networkMonitor: NetworkMonitor,
     private val gson: Gson,
+    private val bluetoothPrinterManager: BluetoothPrinterManager,
+    private val tokenDataStore: TokenDataStore,
+    private val authRepository: AuthRepository,
+    private val ticketsRepository: TicketsRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SalesUiState())
@@ -102,7 +113,66 @@ class SalesViewModel @Inject constructor(
     }
 
     fun clearLastTicket() {
-        _uiState.update { it.copy(lastTicket = null, saleResult = SaleResult.Idle) }
+        _uiState.update { it.copy(lastTicket = null, saleResult = SaleResult.Idle, printStatusMessage = null, isPrintingTicket = false) }
+    }
+
+    fun clearPrintStatus() {
+        _uiState.update { it.copy(printStatusMessage = null) }
+    }
+
+    fun printLastTicket() {
+        val ticket = _uiState.value.lastTicket ?: return
+        _uiState.update { it.copy(isPrintingTicket = true) }
+        viewModelScope.launch {
+            val printerAddress = tokenDataStore.printerAddress.first().orEmpty()
+            if (printerAddress.isBlank()) {
+                _uiState.update {
+                    it.copy(
+                        isPrintingTicket = false,
+                        printStatusMessage = "No hay impresora configurada. Ve a Configuración > Impresora Bluetooth.",
+                    )
+                }
+                return@launch
+            }
+
+            if (!ensureConnectedToSavedPrinter(printerAddress)) {
+                _uiState.update {
+                    it.copy(
+                        isPrintingTicket = false,
+                        printStatusMessage = "No se pudo conectar a la impresora guardada.",
+                    )
+                }
+                return@launch
+            }
+
+            val draw = _uiState.value.draws.find { it.id == ticket.drawId }
+            val currentUser = authRepository.getStoredUser().first()
+            val sellerName = ticket.seller?.fullName
+                ?: currentUser?.fullName
+                ?: currentUser?.username
+                ?: "Caja"
+
+            val data = TicketFormatter.format(ticket = ticket, draw = draw, sellerName = sellerName)
+            val result = bluetoothPrinterManager.print(data)
+            if (result.isSuccess) {
+                val updated = runCatching { ticketsRepository.markPrinted(ticket.id) }.getOrNull()
+                _uiState.update {
+                    it.copy(
+                        lastTicket = updated ?: ticket,
+                        saleResult = SaleResult.Success(updated ?: ticket),
+                        isPrintingTicket = false,
+                        printStatusMessage = "Ticket impreso correctamente.",
+                    )
+                }
+            } else {
+                _uiState.update {
+                    it.copy(
+                        isPrintingTicket = false,
+                        printStatusMessage = "Error al imprimir: ${result.exceptionOrNull()?.message ?: "desconocido"}",
+                    )
+                }
+            }
+        }
     }
 
     fun sell() {
@@ -197,6 +267,15 @@ class SalesViewModel @Inject constructor(
                error.message?.contains("Unable to resolve host", ignoreCase = true) == true ||
                error.message?.contains("timeout", ignoreCase = true) == true ||
                error.message?.contains("network", ignoreCase = true) == true
+    }
+
+    private suspend fun ensureConnectedToSavedPrinter(printerAddress: String): Boolean {
+        val currentConnection = bluetoothPrinterManager.connectionState.value as? BtState.Connected
+        if (currentConnection?.deviceAddress.equals(printerAddress, ignoreCase = true)) {
+            return true
+        }
+        val device = bluetoothPrinterManager.findPairedDevice(printerAddress) ?: return false
+        return bluetoothPrinterManager.connect(device)
     }
 
     fun clearError() {

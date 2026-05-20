@@ -2,16 +2,18 @@ package com.gameover.android.core.data.repository
 
 import com.gameover.android.core.domain.model.Ticket
 import com.gameover.android.core.domain.repository.CreateTicketLine
+import com.gameover.android.core.domain.repository.DataRefreshNotifier
 import com.gameover.android.core.domain.repository.TicketsRepository
 import com.gameover.android.core.network.api.TicketsApi
 import com.gameover.android.core.network.dto.CancelTicketRequest
+import com.gameover.android.core.network.dto.CreateTicketLineRequestDto
 import com.gameover.android.core.network.dto.CreateTicketRequest
-import com.gameover.android.core.network.dto.TicketLineDto
 import com.gameover.android.core.network.mapper.toDomain
 import javax.inject.Inject
 
 class TicketsRepositoryImpl @Inject constructor(
     private val ticketsApi: TicketsApi,
+    private val dataRefreshNotifier: DataRefreshNotifier,
 ) : TicketsRepository {
     override suspend fun getTickets(drawId: String?, includeCanceled: Boolean): List<Ticket> {
         val response = ticketsApi.getTickets(drawId = drawId, includeCanceled = if (includeCanceled) true else null)
@@ -22,14 +24,23 @@ class TicketsRepositoryImpl @Inject constructor(
     override suspend fun getTicket(id: String): Ticket {
         val response = ticketsApi.getTicket(id)
         if (!response.isSuccessful) throw Exception("Ticket no encontrado")
-        return response.body()!!.toDomain()
+        val createdTicket = response.body()!!.toDomain()
+        dataRefreshNotifier.notifyDataChanged()
+        return createdTicket
     }
 
     override suspend fun createTicket(drawId: String, customerName: String, lines: List<CreateTicketLine>): Ticket {
         val request = CreateTicketRequest(
             drawId = drawId,
             customerName = customerName,
-            lines = lines.map { TicketLineDto(it.number, it.amount, it.specialAmount, it.isNicaEspecial) },
+            lines = lines.map {
+                CreateTicketLineRequestDto(
+                    number = it.number,
+                    amount = it.amount,
+                    specialAmount = it.specialAmount ?: 0.0,
+                    isNicaEspecial = it.isNicaEspecial,
+                )
+            },
         )
         val response = ticketsApi.createTicket(request)
         if (!response.isSuccessful) {
@@ -39,7 +50,9 @@ class TicketsRepositoryImpl @Inject constructor(
             } catch (_: Exception) { "Error al registrar venta" }
             throw Exception(msg)
         }
-        return response.body()!!.toDomain()
+        val updatedTicket = response.body()!!.toDomain()
+        dataRefreshNotifier.notifyDataChanged()
+        return updatedTicket
     }
 
     override suspend fun markPrinted(id: String): Ticket {
@@ -57,6 +70,8 @@ class TicketsRepositoryImpl @Inject constructor(
             } catch (_: Exception) { "Error al anular ticket" }
             throw Exception(msg)
         }
-        return response.body()!!.toDomain()
+        val updatedTicket = response.body()!!.toDomain()
+        dataRefreshNotifier.notifyDataChanged()
+        return updatedTicket
     }
 }
