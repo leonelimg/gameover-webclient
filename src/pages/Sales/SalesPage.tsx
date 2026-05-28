@@ -17,6 +17,8 @@ interface SaleLine {
   specialAmount: string;
 }
 
+type SaleLineField = 'number' | 'amount' | 'specialAmount';
+
 const NATIVE_PRINT_STATUS_LABEL: Record<PrintJobStatus, string> = {
   pending: 'Pendiente',
   processing: 'Procesando',
@@ -81,7 +83,14 @@ export default function SalesPage() {
   const readSessionTicket = (): Ticket | null => {
     try {
       const raw = sessionStorage.getItem('go_last_ticket');
-      return raw ? (JSON.parse(raw) as Ticket) : null;
+      if (!raw) {
+        return null;
+      }
+      const ticket = JSON.parse(raw) as Ticket;
+      if (!user || ticket.sellerId !== user.id) {
+        return null;
+      }
+      return ticket;
     } catch {
       return null;
     }
@@ -109,6 +118,7 @@ export default function SalesPage() {
 
   const [selectedDrawId, setSelectedDrawId] = useState(() => readSessionString('go_sales_selected_draw'));
   const [customerName, setCustomerName] = useState(() => readSessionString('go_sales_customer_name'));
+  const [pullTicketCode, setPullTicketCode] = useState('');
   const [lines, setLines] = useState<SaleLine[]>(readSessionLines);
   const [error, setError] = useState(() => readSessionString('go_sales_error'));
   const [lastTicket, setLastTicket] = useState<Ticket | null>(readSessionTicket);
@@ -166,6 +176,16 @@ export default function SalesPage() {
     }
     sessionStorage.setItem('go_last_ticket', JSON.stringify(lastTicket));
   }, [lastTicket]);
+
+  useEffect(() => {
+    if (!lastTicket || !user) {
+      return;
+    }
+    if (lastTicket.sellerId !== user.id) {
+      setLastTicket(null);
+      sessionStorage.removeItem('go_last_ticket');
+    }
+  }, [lastTicket, user]);
 
   useEffect(() => {
     sessionStorage.setItem('go_sales_print_mode', printMode ? '1' : '0');
@@ -233,11 +253,20 @@ export default function SalesPage() {
   );
 
   const restrictedSummary = useMemo(() => {
-    const soldFor = (number: string) =>
-      drawTickets.flatMap((t) => t.lines).filter((l) => l.number === number).reduce((sum, l) => sum + l.amount, 0);
-    return (selectedDraw?.restrictedNumbers ?? [])
+    const restrictedNumbers = selectedDraw?.restrictedNumbers ?? [];
+    if (restrictedNumbers.length === 0) return [];
+
+    // Build a sold-amount map in a single O(N) pass instead of O(N×M)
+    const soldByNumber = new Map<string, number>();
+    for (const ticket of drawTickets) {
+      for (const line of ticket.lines) {
+        soldByNumber.set(line.number, (soldByNumber.get(line.number) ?? 0) + line.amount);
+      }
+    }
+
+    return restrictedNumbers
       .map((rn) => {
-        const sold = soldFor(rn.number);
+        const sold = soldByNumber.get(rn.number) ?? 0;
         const remaining = Math.max(0, rn.limit - sold);
         return { ...rn, sold, remaining };
       })
@@ -273,6 +302,63 @@ export default function SalesPage() {
     setLines(lines.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   };
 
+  const focusLineField = (lineId: string, field: SaleLineField) => {
+    requestAnimationFrame(() => {
+      const target = document.querySelector<HTMLInputElement>(`input[data-line-id="${lineId}"][data-field="${field}"]`);
+      if (target) {
+        target.focus();
+        target.select();
+      }
+    });
+  };
+
+  const isLineReadyForNext = (line: SaleLine, requireSpecial: boolean) => {
+    const numberOk = /^\d{2}$/.test(line.number.trim());
+    const amount = parseFloat(line.amount);
+    const amountOk = Number.isFinite(amount) && amount > 0;
+    if (!numberOk || !amountOk) {
+      return false;
+    }
+    if (!requireSpecial) {
+      return true;
+    }
+    const specialAmount = parseFloat(line.specialAmount || '0');
+    return Number.isFinite(specialAmount) && specialAmount >= 0 && specialAmount <= amount;
+  };
+
+  const handleLineEnter = (lineId: string, field: SaleLineField) => {
+    const index = lines.findIndex((line) => line.id === lineId);
+    if (index === -1) {
+      return;
+    }
+
+    if (field === 'number') {
+      focusLineField(lineId, 'amount');
+      return;
+    }
+
+    if (field === 'amount' && activeSpecialMultiplier) {
+      focusLineField(lineId, 'specialAmount');
+      return;
+    }
+
+    const currentLine = lines[index];
+    if (!isLineReadyForNext(currentLine, !!activeSpecialMultiplier)) {
+      return;
+    }
+
+    const nextLine = lines[index + 1];
+    if (nextLine) {
+      focusLineField(nextLine.id, 'number');
+      return;
+    }
+
+    const lastAmount = [...lines].reverse().find((line) => line.amount.trim() !== '')?.amount ?? '';
+    const newLine: SaleLine = { id: generateId(), number: '', amount: lastAmount, specialAmount: '' };
+    setLines((prev) => [...prev, newLine]);
+    focusLineField(newLine.id, 'number');
+  };
+
   const handleSell = async () => {
     setError('');
 
@@ -288,7 +374,20 @@ export default function SalesPage() {
       setError('El sorteo seleccionado no está en horario de venta.');
       return;
     }
-    for (const line of lines) {
+    const linesToSell = lines.filter((line, index) => {
+      const isLastLine = index === lines.length - 1;
+      if (!isLastLine) {
+        return true;
+      }
+      return isLineReadyForNext(line, !!activeSpecialMultiplier);
+    });
+
+    if (linesToSell.length === 0) {
+      setError('Ingresa al menos una línea válida antes de registrar la venta.');
+      return;
+    }
+
+    for (const line of linesToSell) {
       if (!/^\d{2}$/.test(line.number.trim()) || !line.amount || parseFloat(line.amount) <= 0) {
         setError('Todos los números deben tener exactamente 2 dígitos y montos válidos.');
         return;
@@ -310,7 +409,7 @@ export default function SalesPage() {
     const payload: CreateTicketPayload = {
       drawId: selectedDraw.id,
       customerName: customerName.trim() || '',
-      lines: lines.map((l) => ({
+      lines: linesToSell.map((l) => ({
         number: l.number.trim(),
         amount: parseFloat(l.amount),
         specialAmount: activeSpecialMultiplier ? (parseFloat(l.specialAmount) || 0) : undefined,
@@ -321,7 +420,11 @@ export default function SalesPage() {
     setSubmitting(true);
     try {
       const ticket = await ticketsApi.create(payload);
-      setLastTicket(ticket);
+      if (user && ticket.sellerId === user.id) {
+        setLastTicket(ticket);
+      } else {
+        setLastTicket(null);
+      }
       setNativePrintMsg('');
       setNativePrintJobId('');
       setNativePrintJob(null);
@@ -333,6 +436,48 @@ export default function SalesPage() {
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setError(msg ?? 'Error al registrar la venta. Intenta de nuevo.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handlePullPreviousTicket = async () => {
+    setError('');
+
+    if (!selectedDraw) {
+      setError('Selecciona un sorteo abierto antes de jalar un ticket.');
+      return;
+    }
+
+    const code = pullTicketCode.trim();
+    if (!code) {
+      setError('Ingresa el código del ticket que deseas cargar.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const results = await ticketsApi.list({ code, includeCanceled: false });
+      const sourceTicket = results[0];
+      if (!sourceTicket) {
+        setError('No se encontró un ticket con ese código.');
+        return;
+      }
+
+      const includeSpecial = !!selectedDraw.specialMultiplier;
+      const copiedLines: SaleLine[] = sourceTicket.lines.map((line) => ({
+        id: generateId(),
+        number: line.number,
+        amount: line.amount.toString(),
+        specialAmount: includeSpecial ? (line.specialAmount ?? 0).toString() : '',
+      }));
+
+      setCustomerName(sourceTicket.customerName ?? '');
+      setLines(copiedLines.length > 0 ? copiedLines : [{ id: generateId(), number: '', amount: '', specialAmount: '' }]);
+      setPullTicketCode(sourceTicket.code);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'No se pudo cargar el ticket indicado.';
+      setError(message);
     } finally {
       setSubmitting(false);
     }
@@ -418,6 +563,28 @@ export default function SalesPage() {
                 onChange={(e) => setCustomerName(e.target.value)}
                 placeholder="Ej: Juan Perez (opcional)"
               />
+
+              <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-2 items-end">
+                <Input
+                  label="Jalar ticket previo por código"
+                  value={pullTicketCode}
+                  onChange={(e) => setPullTicketCode(e.target.value.toUpperCase())}
+                  placeholder="Ej: ABC12-3DEF4"
+                />
+                <Button
+                  variant="secondary"
+                  onClick={handlePullPreviousTicket}
+                  disabled={!selectedDrawId || submitting}
+                >
+                  Cargar ticket
+                </Button>
+              </div>
+
+              {selectedDraw && !selectedDraw.specialMultiplier && (
+                <p className="text-xs text-slate-500">
+                  Al cargar un ticket en este sorteo, los montos especiales se omiten porque este sorteo no tiene especial activo.
+                </p>
+              )}
             </CardBody>
           </Card>
 
@@ -458,8 +625,15 @@ export default function SalesPage() {
                         <input
                           className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                           placeholder="00"
+                          data-line-id={line.id}
+                          data-field="number"
                           value={line.number}
                           onChange={(e) => updateLine(line.id, { number: e.target.value.replace(/\D/g, '').slice(0, 2) })}
+                          onKeyDown={(e) => {
+                            if (e.key !== 'Enter') return;
+                            e.preventDefault();
+                            handleLineEnter(line.id, 'number');
+                          }}
                           maxLength={2}
                         />
                       </div>
@@ -469,8 +643,15 @@ export default function SalesPage() {
                           type="number"
                           placeholder="0.00"
                           min="1"
+                          data-line-id={line.id}
+                          data-field="amount"
                           value={line.amount}
                           onChange={(e) => updateLine(line.id, { amount: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key !== 'Enter') return;
+                            e.preventDefault();
+                            handleLineEnter(line.id, 'amount');
+                          }}
                         />
                       </div>
                       {activeSpecialMultiplier && (
@@ -480,8 +661,15 @@ export default function SalesPage() {
                             type="number"
                             placeholder="0.00"
                             min="0"
+                            data-line-id={line.id}
+                            data-field="specialAmount"
                             value={line.specialAmount}
                             onChange={(e) => updateLine(line.id, { specialAmount: e.target.value })}
+                            onKeyDown={(e) => {
+                              if (e.key !== 'Enter') return;
+                              e.preventDefault();
+                              handleLineEnter(line.id, 'specialAmount');
+                            }}
                           />
                         </div>
                       )}

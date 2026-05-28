@@ -4,9 +4,11 @@ import {
   Plan,
   Draw,
   Ticket,
-  SpecialMultiplier,
-  PaymentsWinningTicketsResponse,
+  Announcement,
+  AnnouncementPayload,
   RolePermissionRow,
+  PaymentsWinningTicketsResponse,
+  SpecialMultiplier,
 } from '@/types';
 
 // ─── Base URL ─────────────────────────────────────────────────────────────────
@@ -120,6 +122,27 @@ export const authApi = {
   },
 };
 
+// ─── Roles API ───────────────────────────────────────────────────────────────
+
+export const rolesApi = {
+  myPermissions: async (): Promise<string[]> => {
+    const res = await api.get<{ permissions: string[] }>('/api/roles/my-permissions');
+    return res.data.permissions;
+  },
+  getPermissions: async (): Promise<RolePermissionRow[]> => {
+    const res = await api.get<{ permissions: RolePermissionRow[] }>('/api/roles/permissions');
+    return res.data.permissions;
+  },
+  updatePermissions: async (
+    permissions: Array<Pick<RolePermissionRow, 'resourceKey' | 'asociado' | 'vendedor'>>
+  ): Promise<RolePermissionRow[]> => {
+    const res = await api.patch<{ permissions: RolePermissionRow[] }>('/api/roles/permissions', {
+      permissions,
+    });
+    return res.data.permissions;
+  },
+};
+
 // ─── Users API ────────────────────────────────────────────────────────────────
 
 export interface CreateUserPayload {
@@ -168,52 +191,6 @@ export const usersApi = {
   },
 };
 
-// ─── Roles Permissions API ──────────────────────────────────────────────────
-
-export const rolesApi = {
-  myPermissions: async (): Promise<string[]> => {
-    const res = await api.get<{ permissions: string[] }>('/api/roles/my-permissions');
-    return res.data.permissions;
-  },
-  getPermissions: async (): Promise<RolePermissionRow[]> => {
-    const res = await api.get<{ permissions: RolePermissionRow[] }>('/api/roles/permissions');
-    return res.data.permissions;
-  },
-  updatePermissions: async (
-    permissions: Array<{ resourceKey: string; asociado: boolean; vendedor: boolean }>
-  ): Promise<RolePermissionRow[]> => {
-    const res = await api.patch<{ permissions: RolePermissionRow[] }>('/api/roles/permissions', { permissions });
-    return res.data.permissions;
-  },
-};
-// ─── Special Multipliers API ─────────────────────────────────────────────────────
-
-export interface SpecialMultiplierPayload {
-  name: string;
-  value: number;
-}
-
-export const specialMultipliersApi = {
-  list: async (): Promise<SpecialMultiplier[]> => {
-    const res = await api.get<SpecialMultiplier[]>('/api/special-multipliers');
-    return res.data;
-  },
-  get: async (id: string): Promise<SpecialMultiplier> => {
-    const res = await api.get<SpecialMultiplier>(`/api/special-multipliers/${id}`);
-    return res.data;
-  },
-  create: async (data: SpecialMultiplierPayload): Promise<SpecialMultiplier> => {
-    const res = await api.post<SpecialMultiplier>('/api/special-multipliers', data);
-    return res.data;
-  },
-  update: async (id: string, data: Partial<SpecialMultiplierPayload>): Promise<SpecialMultiplier> => {
-    const res = await api.patch<SpecialMultiplier>(`/api/special-multipliers/${id}`, data);
-    return res.data;
-  },
-  delete: async (id: string): Promise<void> => {
-    await api.delete(`/api/special-multipliers/${id}`);
-  },
-};
 // ─── Plans API ────────────────────────────────────────────────────────────────
 
 export interface PlanPayload {
@@ -250,19 +227,19 @@ export const plansApi = {
 export interface DrawPayload {
   name: string;
   closeTime: string;
-  minutosPreviosCierre?: number;
+  minutosPreviosCierre: number;
   winnerNumber?: string | null;
   specialMultiplierId?: string | null;
 }
 
-export interface DrawListParams {
+export interface DrawListPagedParams {
   fromDate?: string;
   toDate?: string;
   page?: number;
   pageSize?: number;
 }
 
-export interface DrawListResponse {
+export interface DrawListPagedResponse {
   items: Draw[];
   total: number;
   page: number;
@@ -275,8 +252,8 @@ export const drawsApi = {
     const res = await api.get<Draw[]>('/api/draws');
     return res.data;
   },
-  listPaged: async (params?: DrawListParams): Promise<DrawListResponse> => {
-    const res = await api.get<DrawListResponse>('/api/draws/search', { params });
+  listPaged: async (params?: DrawListPagedParams): Promise<DrawListPagedResponse> => {
+    const res = await api.get<DrawListPagedResponse>('/api/draws/search', { params });
     return res.data;
   },
   get: async (id: string): Promise<Draw> => {
@@ -307,8 +284,8 @@ export const drawsApi = {
 
 export interface CreateTicketPayload {
   drawId: string;
-  customerName?: string;
-  lines: { number: string; amount: number; specialAmount?: number; isNicaEspecial: boolean }[];
+  customerName: string;
+  lines: { number: string; amount: number; isNicaEspecial: boolean }[];
 }
 
 export const ticketsApi = {
@@ -316,6 +293,7 @@ export const ticketsApi = {
     drawId?: string;
     sellerId?: string;
     associateId?: string;
+    code?: string;
     includeCanceled?: boolean;
   }): Promise<Ticket[]> => {
     const res = await api.get<Ticket[]>('/api/tickets', { params });
@@ -339,56 +317,48 @@ export const ticketsApi = {
   },
 };
 
-// ─── Payments API ─────────────────────────────────────────────────────────────
-
-export const paymentsApi = {
-  listWinningTickets: async (params: {
-    drawId: string;
-    status?: 'all' | 'pendiente' | 'pagado';
-    code?: string;
-  }): Promise<PaymentsWinningTicketsResponse> => {
-    const res = await api.get<PaymentsWinningTicketsResponse>('/api/payments/winning-tickets', { params });
-    return res.data;
-  },
-  markPaid: async (payload: { ticketId?: string; code?: string }): Promise<{ ticket: Ticket; prizeAmount: number }> => {
-    const res = await api.patch<{ ticket: Ticket; prizeAmount: number }>('/api/payments/mark-paid', payload);
-    return res.data;
-  },
-  revertPayment: async (ticketId: string): Promise<Ticket> => {
-    const res = await api.patch<Ticket>(`/api/payments/${ticketId}/revert`);
-    return res.data;
-  },
-};
-
 // ─── Cash Movements API ──────────────────────────────────────────────────────
 
 export type CashMovementType = 'deposito' | 'retiro';
+
+export interface CashMovementActor {
+  id: string;
+  fullName: string;
+  username: string;
+  role: 'admin' | 'asociado' | 'vendedor';
+}
 
 export interface CashMovementUserSummary {
   id: string;
   fullName: string;
   username: string;
-  role: 'admin' | 'asociado' | 'vendedor';
-  status?: 'activo' | 'bloqueado' | 'archivado';
-  canOperate?: boolean;
+  role: 'asociado' | 'vendedor';
+  status: 'activo' | 'bloqueado' | 'archivado';
+  canOperate: boolean;
 }
 
 export interface CashMovement {
   id: string;
+  targetUserId: string;
+  createdById: string;
   type: CashMovementType;
   amount: number;
-  note: string | null;
+  note?: string | null;
   createdAt: string;
-  createdById: string;
-  targetUserId: string;
-  canceledAt: string | null;
-  canceledById: string | null;
-  createdBy: CashMovementUserSummary;
-  targetUser: CashMovementUserSummary;
+  canceledAt?: string | null;
+  canceledById?: string | null;
+  createdBy: CashMovementActor;
+  targetUser: CashMovementActor;
 }
 
 export interface CashMovementBalanceResponse {
-  targetUser: CashMovementUserSummary;
+  targetUser: {
+    id: string;
+    fullName: string;
+    username: string;
+    role: 'admin' | 'asociado' | 'vendedor';
+    status: 'activo' | 'bloqueado' | 'archivado';
+  };
   totals: {
     totalDeposits: number;
     totalWithdrawals: number;
@@ -401,6 +371,13 @@ export interface CashMovementBalanceResponse {
     fromDate: string | null;
     toDate: string | null;
   };
+}
+
+export interface CreateCashMovementPayload {
+  targetUserId: string;
+  type: CashMovementType;
+  amount: number;
+  note?: string;
 }
 
 export const cashMovementsApi = {
@@ -426,18 +403,125 @@ export const cashMovementsApi = {
     const res = await api.get<CashMovementBalanceResponse>('/api/cash-movements/balance', { params });
     return res.data;
   },
-  create: async (payload: {
-    targetUserId: string;
-    type: CashMovementType;
-    amount: number;
-    note?: string;
-  }): Promise<CashMovement> => {
+  create: async (payload: CreateCashMovementPayload): Promise<CashMovement> => {
     const res = await api.post<CashMovement>('/api/cash-movements', payload);
     return res.data;
   },
-  cancel: async (movementId: string, reason?: string): Promise<CashMovement> => {
-    const res = await api.patch<CashMovement>(`/api/cash-movements/${movementId}/cancel`, { reason });
+  cancel: async (id: string, reason?: string): Promise<CashMovement> => {
+    const res = await api.patch<CashMovement>(`/api/cash-movements/${id}/cancel`, { reason });
     return res.data;
+  },
+};
+
+// ─── Special Multipliers API ─────────────────────────────────────────────────
+
+export interface SpecialMultiplierPayload {
+  name: string;
+  value: number;
+}
+
+export const specialMultipliersApi = {
+  list: async (): Promise<SpecialMultiplier[]> => {
+    const res = await api.get<SpecialMultiplier[]>('/api/special-multipliers');
+    return res.data;
+  },
+  get: async (id: string): Promise<SpecialMultiplier> => {
+    const res = await api.get<SpecialMultiplier>(`/api/special-multipliers/${id}`);
+    return res.data;
+  },
+  create: async (payload: SpecialMultiplierPayload): Promise<SpecialMultiplier> => {
+    const res = await api.post<SpecialMultiplier>('/api/special-multipliers', payload);
+    return res.data;
+  },
+  update: async (id: string, payload: Partial<SpecialMultiplierPayload>): Promise<SpecialMultiplier> => {
+    const res = await api.patch<SpecialMultiplier>(`/api/special-multipliers/${id}`, payload);
+    return res.data;
+  },
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/api/special-multipliers/${id}`);
+  },
+};
+
+// ─── Payments API ────────────────────────────────────────────────────────────
+
+export interface ListWinningTicketsParams {
+  drawId: string;
+  status?: 'all' | 'pendiente' | 'pagado';
+  code?: string;
+}
+
+export interface MarkPaidPayload {
+  ticketId?: string;
+  code?: string;
+}
+
+export interface MarkPaidResponse {
+  ticket: Ticket;
+  prizeAmount: number;
+}
+
+export const paymentsApi = {
+  listWinningTickets: async (params: ListWinningTicketsParams): Promise<PaymentsWinningTicketsResponse> => {
+    const res = await api.get<PaymentsWinningTicketsResponse>('/api/payments/winning-tickets', { params });
+    return res.data;
+  },
+  markPaid: async (payload: MarkPaidPayload): Promise<MarkPaidResponse> => {
+    const res = await api.patch<MarkPaidResponse>('/api/payments/mark-paid', payload);
+    return res.data;
+  },
+  revertPayment: async (ticketId: string): Promise<Ticket> => {
+    const res = await api.patch<Ticket>(`/api/payments/${ticketId}/revert`);
+    return res.data;
+  },
+};
+
+// ─── Announcements API ───────────────────────────────────────────────────────
+
+const toAnnouncementFormData = (payload: AnnouncementPayload): FormData => {
+  const formData = new FormData();
+  formData.append('name', payload.name);
+  formData.append('startDate', payload.startDate);
+  formData.append('endDate', payload.endDate);
+
+  if (payload.message !== undefined) {
+    formData.append('message', payload.message);
+  }
+  if (payload.image) {
+    formData.append('image', payload.image);
+  }
+  if (payload.clearImage !== undefined) {
+    formData.append('clearImage', String(payload.clearImage));
+  }
+
+  return formData;
+};
+
+export const announcementsApi = {
+  active: async (): Promise<Announcement[]> => {
+    const res = await api.get<Announcement[]>('/api/announcements/active');
+    return res.data;
+  },
+  list: async (): Promise<Announcement[]> => {
+    const res = await api.get<Announcement[]>('/api/announcements');
+    return res.data;
+  },
+  create: async (payload: AnnouncementPayload): Promise<Announcement> => {
+    const res = await api.post<Announcement>('/api/announcements', toAnnouncementFormData(payload), {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data;
+  },
+  update: async (id: string, payload: AnnouncementPayload): Promise<Announcement> => {
+    const res = await api.patch<Announcement>(`/api/announcements/${id}`, toAnnouncementFormData(payload), {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data;
+  },
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/api/announcements/${id}`);
+  },
+  dismiss: async (id: string): Promise<void> => {
+    await api.post(`/api/announcements/${id}/dismiss`);
   },
 };
 
@@ -446,10 +530,10 @@ export const cashMovementsApi = {
 export interface ReportSummary {
   ticketCount: number;
   totalSales: number;
-  totalPrizes: number;
-  totalCommissions: number;
   userCount: number;
   drawCount: number;
+  totalPrizes: number;
+  totalCommissions: number;
 }
 
 export interface TopNumber {
@@ -500,7 +584,7 @@ export interface DrawBreakdownRow {
 export interface AssociateDrawBreakdownRow {
   drawId: string;
   drawName: string;
-  drawCloseTime: string;
+  drawCloseTime?: string;
   ticketCount: number;
   totalSales: number;
   totalPrizes: number;
@@ -530,7 +614,7 @@ export interface BalanceBreakdownTotals {
 export interface BalanceBreakdownResponse {
   filters: {
     drawId: string | null;
-    userId: string | null;
+    userId?: string | null;
     fromDate: string | null;
     toDate: string | null;
   };
@@ -597,9 +681,10 @@ export interface DrawListsResponse {
   numbers: DrawListNumberRow[];
 }
 
-export interface CommissionRowDetail {
-  drawCloseTime: string;
+export interface CommissionsReportRow {
+  drawId?: string;
   drawName: string;
+  drawCloseTime: string;
   commission: number;
 }
 
@@ -607,8 +692,8 @@ export interface CommissionsSellerGroup {
   sellerId: string;
   sellerName: string;
   sellerUsername: string;
-  rows: CommissionRowDetail[];
   subtotal: number;
+  rows: CommissionsReportRow[];
 }
 
 export interface CommissionsReportResponse {
@@ -686,26 +771,54 @@ export interface PrintBridgeInstallerInfo {
   downloadUrl: string;
 }
 
+const parseDownloadFilename = (contentDisposition?: string): string => {
+  if (!contentDisposition) return 'gameover-print-bridge-installer.exe';
+
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch {
+      return utf8Match[1];
+    }
+  }
+
+  const quotedMatch = contentDisposition.match(/filename="([^"]+)"/i);
+  if (quotedMatch?.[1]) return quotedMatch[1];
+
+  const plainMatch = contentDisposition.match(/filename=([^;]+)/i);
+  if (plainMatch?.[1]) return plainMatch[1].trim();
+
+  return 'gameover-print-bridge-installer.exe';
+};
+
 export const printBridgeInstallerApi = {
   getInfo: async (): Promise<PrintBridgeInstallerInfo> => {
     const res = await api.get<PrintBridgeInstallerInfo>('/api/print-bridge/installer');
     return res.data;
   },
 
-  download: async (downloadUrl: string, fileName: string): Promise<void> => {
-    // Descargar el archivo desde el endpoint API que devuelve el blob
-    const res = await api.get<Blob>(downloadUrl, {
+  download: async (downloadUrl?: string, preferredFileName?: string): Promise<{ blob: Blob; fileName: string }> => {
+    const res = await api.get<Blob>(downloadUrl ?? '/api/print-bridge/installer/download', {
       responseType: 'blob',
     });
 
-    const url = URL.createObjectURL(res.data);
+    const fileName = preferredFileName ?? parseDownloadFilename(res.headers['content-disposition']);
+    const result = {
+      blob: res.data,
+      fileName,
+    };
+
+    const downloadHref = URL.createObjectURL(result.blob);
     const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
+    link.href = downloadHref;
+    link.download = result.fileName;
     document.body.appendChild(link);
     link.click();
     link.remove();
-    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(downloadHref);
+
+    return result;
   },
 };
 

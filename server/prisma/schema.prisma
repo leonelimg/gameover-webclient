@@ -24,49 +24,13 @@ model User {
   masterOfPlans    Plan[]         @relation("PlanMaster")
   refreshTokens    RefreshToken[]
   associateTickets Ticket[]       @relation("AssociateTickets")
-  cashMovementsCreated CashMovement[] @relation("CashMovementCreatedBy")
-  cashMovementsReceived CashMovement[] @relation("CashMovementTargetUser")
-  cashMovementsCanceled CashMovement[] @relation("CashMovementCanceledBy")
   canceledTickets  Ticket[]       @relation("CanceledTickets")
-  paidTickets      Ticket[]       @relation("PaidTickets")
   soldTickets      Ticket[]       @relation("SellerTickets")
   parent           User?          @relation("UserHierarchy", fields: [parentId], references: [id])
   children         User[]         @relation("UserHierarchy")
   plan             Plan?          @relation("PlanUsers", fields: [planId], references: [id])
 
   @@map("users")
-}
-
-model RolePermission {
-  id          String   @id @default(cuid())
-  resourceKey String
-  role        UserRole
-  allowed     Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@unique([resourceKey, role])
-  @@index([resourceKey])
-  @@map("role_permissions")
-}
-
-model CashMovement {
-  id           String           @id @default(cuid())
-  type         CashMovementType
-  amount       Float
-  note         String?
-  createdAt    DateTime         @default(now())
-  createdById  String
-  targetUserId String
-  canceledAt   DateTime?
-  canceledById String?
-  createdBy    User             @relation("CashMovementCreatedBy", fields: [createdById], references: [id])
-  targetUser   User             @relation("CashMovementTargetUser", fields: [targetUserId], references: [id])
-  canceledBy   User?            @relation("CashMovementCanceledBy", fields: [canceledById], references: [id])
-
-  @@index([targetUserId, createdAt])
-  @@index([createdById, createdAt])
-  @@map("cash_movements")
 }
 
 model RefreshToken {
@@ -95,30 +59,17 @@ model Plan {
   @@map("plans")
 }
 
-model SpecialMultiplier {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  value     Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  draws     Draw[]
-
-  @@map("special_multipliers")
-}
-
 model Draw {
-  id                  String              @id @default(cuid())
-  name                String
-  closeTime           DateTime
-  minutosPreviosCierre Int                @default(10)
-  winnerNumber        String?
-  status              DrawStatus          @default(pendiente)
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-  specialMultiplierId String?
-  specialMultiplier   SpecialMultiplier?  @relation(fields: [specialMultiplierId], references: [id], onDelete: SetNull)
-  restrictedNumbers   RestrictedNumber[]
-  tickets             Ticket[]
+  id                String             @id @default(cuid())
+  name              String
+  openTime          DateTime
+  closeTime         DateTime
+  winnerNumber      String?
+  status            DrawStatus         @default(pendiente)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  restrictedNumbers RestrictedNumber[]
+  tickets           Ticket[]
 
   @@map("draws")
 }
@@ -147,13 +98,9 @@ model Ticket {
   cancelReason String?
   canceledAt   DateTime?
   canceledById String?
-  paymentStatus PaymentStatus @default(pendiente)
-  paidAt       DateTime?
-  paidById     String?
   lines        TicketLine[]
   associate    User         @relation("AssociateTickets", fields: [associateId], references: [id])
   canceledBy   User?        @relation("CanceledTickets", fields: [canceledById], references: [id])
-  paidBy       User?        @relation("PaidTickets", fields: [paidById], references: [id])
   draw         Draw         @relation(fields: [drawId], references: [id])
   seller       User         @relation("SellerTickets", fields: [sellerId], references: [id])
 
@@ -161,13 +108,12 @@ model Ticket {
 }
 
 model TicketLine {
-  id              String  @id @default(cuid())
-  number          String
-  amount          Float
-  specialAmount   Float?
-  isNicaEspecial  Boolean @default(false)
-  ticketId        String
-  ticket          Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  id             String  @id @default(cuid())
+  number         String
+  amount         Float
+  isNicaEspecial Boolean @default(false)
+  ticketId       String
+  ticket         Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@map("ticket_lines")
 }
@@ -202,14 +148,4 @@ enum DrawStatus {
   abierto
   cerrado
   finalizado
-}
-
-enum PaymentStatus {
-  pendiente
-  pagado
-}
-
-enum CashMovementType {
-  deposito
-  retiro
 }

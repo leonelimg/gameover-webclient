@@ -3,20 +3,85 @@ import { prisma } from '../config/prisma.js';
 import { authenticate, authorizeAnyResource, authorizeResource } from '../middleware/auth.js';
 
 type Stats = { totalSales: number; ticketCount: number };
-type Role = 'admin' | 'asociado' | 'vendedor';
 
-interface HierarchyUser {
+interface SummaryTicket {
+  total: number;
+  lines: Array<{
+    number: string;
+    amount: number;
+    specialAmount: number | null;
+  }>;
+  draw: {
+    winnerNumber: string | null;
+    specialMultiplier: { value: number } | null;
+  };
+  seller: {
+    plan: {
+      multiplier: number;
+      commission: number;
+    } | null;
+  };
+  associate: {
+    plan: {
+      multiplier: number;
+      commission: number;
+    } | null;
+  };
+}
+
+type ReportUser = {
   id: string;
   fullName: string;
   username: string;
-  role: Role;
+  role: 'admin' | 'asociado' | 'vendedor';
   parentId: string | null;
-}
+};
 
 const router = Router();
 router.use(authenticate);
 
-async function getHierarchyUsers(): Promise<HierarchyUser[]> {
+function parseCreatedAtFilter(fromDate?: string, toDate?: string): { filter: Record<string, Date>; error?: string } {
+  const filter: Record<string, Date> = {};
+
+  if (fromDate) {
+    const parsed = new Date(`${fromDate}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) {
+      return { filter, error: 'fromDate inválida. Use formato YYYY-MM-DD.' };
+    }
+    filter['gte'] = parsed;
+  }
+
+  if (toDate) {
+    const parsed = new Date(`${toDate}T23:59:59.999`);
+    if (Number.isNaN(parsed.getTime())) {
+      return { filter, error: 'toDate inválida. Use formato YYYY-MM-DD.' };
+    }
+    filter['lte'] = parsed;
+  }
+
+  if (filter['gte'] && filter['lte'] && filter['gte'] > filter['lte']) {
+    return { filter, error: 'Rango de fechas inválido.' };
+  }
+
+  return { filter };
+}
+
+function getDescendantUserIds(users: ReportUser[], rootId: string): Set<string> {
+  const ids = new Set<string>();
+
+  const walk = (parentId: string) => {
+    if (ids.has(parentId)) return;
+    ids.add(parentId);
+    users
+      .filter((user) => user.parentId === parentId)
+      .forEach((child) => walk(child.id));
+  };
+
+  walk(rootId);
+  return ids;
+}
+
+async function getScopedUsers() {
   return prisma.user.findMany({
     select: {
       id: true,
@@ -25,61 +90,57 @@ async function getHierarchyUsers(): Promise<HierarchyUser[]> {
       role: true,
       parentId: true,
     },
-  }) as Promise<HierarchyUser[]>;
+  }) as Promise<ReportUser[]>;
 }
 
-function getDescendantUserIds(users: HierarchyUser[], rootId: string): Set<string> {
-  const ids = new Set<string>();
+function getScopedSellerIds(users: ReportUser[], user: { sub: string; role: 'admin' | 'asociado' | 'vendedor' }): Set<string> | null {
+  if (user.role === 'admin') {
+    return null;
+  }
 
-  const walk = (parentId: string) => {
-    if (ids.has(parentId)) return;
-    ids.add(parentId);
-    users
-      .filter((u) => u.parentId === parentId)
-      .forEach((child) => walk(child.id));
-  };
+  if (user.role === 'vendedor') {
+    return new Set([user.sub]);
+  }
 
-  walk(rootId);
-  return ids;
+  return getDescendantUserIds(users, user.sub);
 }
 
-function parseCreatedAtFilter(query: Record<string, string>): {
-  filter: Record<string, Date>;
-  error?: string;
-} {
-  const { fromDate, toDate } = query;
-  const filter: Record<string, Date> = {};
+function normalizeNumber(value: string): string {
+  const trimmed = value.trim();
+  return trimmed.replace(/^0+(?=\d)/, '');
+}
 
-  if (fromDate) {
-    const parsed = new Date(`${fromDate}T00:00:00`);
-    if (Number.isNaN(parsed.getTime())) {
-      return { filter: {}, error: 'fromDate inválida. Use formato YYYY-MM-DD.' };
+function calculatePrizeForTicket(
+  ticket: SummaryTicket,
+  defaultPlan: { multiplier: number; commission: number } | null
+): number {
+  const winnerNumber = ticket.draw.winnerNumber;
+  if (!winnerNumber) return 0;
+
+  const effectivePlan = ticket.seller.plan ?? ticket.associate.plan ?? defaultPlan;
+  const regularMultiplier = effectivePlan?.multiplier ?? 0;
+  const specialMultiplierValue = ticket.draw.specialMultiplier?.value ?? null;
+  const normalizedWinner = normalizeNumber(winnerNumber);
+
+  return ticket.lines.reduce((sum, line) => {
+    if (normalizeNumber(line.number) !== normalizedWinner) {
+      return sum;
     }
-    filter['gte'] = parsed;
-  }
 
-  if (toDate) {
-    const parsed = new Date(`${toDate}T23:59:59.999`);
-    if (Number.isNaN(parsed.getTime())) {
-      return { filter: {}, error: 'toDate inválida. Use formato YYYY-MM-DD.' };
+    if (specialMultiplierValue !== null && (line.specialAmount ?? 0) > 0) {
+      return sum + (line.amount + (line.specialAmount ?? 0)) * regularMultiplier * specialMultiplierValue;
     }
-    filter['lte'] = parsed;
-  }
 
-  if (filter['gte'] && filter['lte'] && filter['gte'] > filter['lte']) {
-    return { filter: {}, error: 'Rango de fechas inválido.' };
-  }
-
-  return { filter };
+    return sum + line.amount * regularMultiplier;
+  }, 0);
 }
 
 // ── GET /api/reports/summary ──────────────────────────────────────────────────
 
-router.get('/summary', authorizeAnyResource('/dashboard', '/reports/sales-stats'), async (req, res) => {
-  const query = req.query as Record<string, string>;
-  const { drawId } = query;
+router.get('/summary', authorizeAnyResource('/reports/sales-stats', '/dashboard'), async (req, res) => {
+  const { drawId, fromDate, toDate } = req.query as Record<string, string>;
 
-  const { filter: createdAtFilter, error } = parseCreatedAtFilter(query);
+  const { filter: createdAtFilter, error } = parseCreatedAtFilter(fromDate, toDate);
   if (error) {
     res.status(400).json({ message: error });
     return;
@@ -88,48 +149,28 @@ router.get('/summary', authorizeAnyResource('/dashboard', '/reports/sales-stats'
   const ticketWhere: Record<string, unknown> = {};
   if (drawId) ticketWhere['drawId'] = drawId;
   if (Object.keys(createdAtFilter).length > 0) ticketWhere['createdAt'] = createdAtFilter;
-  ticketWhere['canceledAt'] = null;
-
-  let scopedUserIds: Set<string> | null = null;
-
-  if (req.user!.role !== 'admin') {
-    const users = await getHierarchyUsers();
-    const currentScopedUserIds =
-      req.user!.role === 'asociado'
-        ? getDescendantUserIds(users, req.user!.sub)
-        : new Set<string>([req.user!.sub]);
-    scopedUserIds = currentScopedUserIds;
-
-    const sellerIds = users
-      .filter((u) => currentScopedUserIds.has(u.id))
-      .map((u) => u.id);
-
-    ticketWhere['sellerId'] = { in: sellerIds };
+  if (req.user!.role === 'asociado') {
+    ticketWhere['associateId'] = req.user!.sub;
+  } else if (req.user!.role === 'vendedor') {
+    ticketWhere['sellerId'] = req.user!.sub;
   }
 
-  const userCountWhere: Record<string, unknown> = { status: 'activo' };
-  if (scopedUserIds) {
-    userCountWhere['id'] = { in: Array.from(scopedUserIds) };
-  }
+  const activeTicketWhere: Record<string, unknown> = {
+    ...ticketWhere,
+    canceledAt: null,
+  };
 
-  interface SummaryTicket {
-    total: number;
-    lines: Array<{ number: string; amount: number; specialAmount: number | null }>;
-    draw: {
-      winnerNumber: string | null;
-      specialMultiplier: { value: number } | null;
-    };
-    seller: { plan: { multiplier: number; commission: number } | null };
-    associate: { plan: { multiplier: number; commission: number } | null };
-  }
-
-  const [ticketCount, totalResult, userCount, drawCount, tickets, defaultPlan] = await Promise.all([
-    prisma.ticket.count({ where: ticketWhere }),
-    prisma.ticket.aggregate({ where: ticketWhere, _sum: { total: true } }),
-    prisma.user.count({ where: userCountWhere }),
+  const [ticketCount, totalResult, userCount, drawCount, defaultPlan, ticketsForFinancials] = await Promise.all([
+    prisma.ticket.count({ where: activeTicketWhere }),
+    prisma.ticket.aggregate({ where: activeTicketWhere, _sum: { total: true } }),
+    prisma.user.count({ where: { status: 'activo' } }),
     prisma.draw.count(),
+    prisma.plan.findFirst({
+      orderBy: { createdAt: 'asc' },
+      select: { multiplier: true, commission: true },
+    }),
     prisma.ticket.findMany({
-      where: ticketWhere,
+      where: activeTicketWhere,
       select: {
         total: true,
         lines: { select: { number: true, amount: true, specialAmount: true } },
@@ -139,63 +180,27 @@ router.get('/summary', authorizeAnyResource('/dashboard', '/reports/sales-stats'
             specialMultiplier: { select: { value: true } },
           },
         },
-        seller: {
-          select: {
-            plan: { select: { multiplier: true, commission: true } },
-          },
-        },
-        associate: {
-          select: {
-            plan: { select: { multiplier: true, commission: true } },
-          },
-        },
+        seller: { select: { plan: { select: { multiplier: true, commission: true } } } },
+        associate: { select: { plan: { select: { multiplier: true, commission: true } } } },
       },
     }) as Promise<SummaryTicket[]>,
-    prisma.plan.findFirst({
-      orderBy: { createdAt: 'asc' },
-      select: { multiplier: true, commission: true },
-    }),
   ]);
 
-  function normalizeNumber(value: string): string {
-    const trimmed = value.trim();
-    return trimmed.replace(/^0+(?=\d)/, '');
+  let totalPrizes = 0;
+  let totalCommissions = 0;
+
+  for (const ticket of ticketsForFinancials) {
+    const effectivePlan = ticket.seller.plan ?? ticket.associate.plan ?? defaultPlan;
+    const commissionRate = (effectivePlan?.commission ?? 0) / 100;
+    totalCommissions += ticket.total * commissionRate;
+    totalPrizes += calculatePrizeForTicket(ticket, defaultPlan);
   }
-
-  const financialTotals = tickets.reduce(
-    (acc, ticket) => {
-      const effectivePlan = ticket.seller.plan ?? ticket.associate.plan ?? defaultPlan;
-      const regularMultiplier = effectivePlan?.multiplier ?? 0;
-      const commissionRate = (effectivePlan?.commission ?? 0) / 100;
-      const specialMultiplierValue = ticket.draw.specialMultiplier?.value ?? null;
-
-      acc.totalCommissions += ticket.total * commissionRate;
-
-      const winnerNumber = ticket.draw.winnerNumber;
-      if (!winnerNumber) {
-        return acc;
-      }
-
-      const normalizedWinner = normalizeNumber(winnerNumber);
-      const prizeForTicket = ticket.lines.reduce((sum, line) => {
-        if (normalizeNumber(line.number) !== normalizedWinner) return sum;
-        if (specialMultiplierValue !== null && (line.specialAmount ?? 0) > 0) {
-          return sum + (line.amount + (line.specialAmount ?? 0)) * regularMultiplier * specialMultiplierValue;
-        }
-        return sum + line.amount * regularMultiplier;
-      }, 0);
-
-      acc.totalPrizes += prizeForTicket;
-      return acc;
-    },
-    { totalPrizes: 0, totalCommissions: 0 }
-  );
 
   res.json({
     ticketCount,
     totalSales: totalResult._sum.total ?? 0,
-    totalPrizes: financialTotals.totalPrizes,
-    totalCommissions: financialTotals.totalCommissions,
+    totalPrizes,
+    totalCommissions,
     userCount,
     drawCount,
   });
@@ -203,11 +208,10 @@ router.get('/summary', authorizeAnyResource('/dashboard', '/reports/sales-stats'
 
 // ── GET /api/reports/top-numbers ──────────────────────────────────────────────
 
-router.get('/top-numbers', async (req, res) => {
-  const query = req.query as Record<string, string>;
-  const { drawId, limit = '10' } = query;
+router.get('/top-numbers', authorizeAnyResource('/reports/sales-stats', '/dashboard', '/sales'), async (req, res) => {
+  const { drawId, limit = '10', fromDate, toDate } = req.query as Record<string, string>;
 
-  const { filter: createdAtFilter, error } = parseCreatedAtFilter(query);
+  const { filter: createdAtFilter, error } = parseCreatedAtFilter(fromDate, toDate);
   if (error) {
     res.status(400).json({ message: error });
     return;
@@ -219,6 +223,8 @@ router.get('/top-numbers', async (req, res) => {
   ticketWhere['canceledAt'] = null;
   if (req.user!.role === 'asociado') {
     ticketWhere['associateId'] = req.user!.sub;
+  } else if (req.user!.role === 'vendedor') {
+    ticketWhere['sellerId'] = req.user!.sub;
   }
 
   // Get all ticket IDs matching filter
@@ -244,62 +250,10 @@ router.get('/top-numbers', async (req, res) => {
   res.json(result);
 });
 
-// ── GET /api/reports/recent-tickets ──────────────────────────────────────────
-
-router.get('/recent-tickets', authorizeAnyResource('/dashboard', '/reports/sales-stats'), async (req, res) => {
-  const query = req.query as Record<string, string>;
-  const { drawId, limit = '10' } = query;
-
-  const { filter: createdAtFilter, error } = parseCreatedAtFilter(query);
-  if (error) {
-    res.status(400).json({ message: error });
-    return;
-  }
-
-  const where: Record<string, unknown> = {};
-  if (drawId) where['drawId'] = drawId;
-  if (Object.keys(createdAtFilter).length > 0) where['createdAt'] = createdAtFilter;
-  where['canceledAt'] = null;
-
-  if (req.user!.role !== 'admin') {
-    const users = await getHierarchyUsers();
-    const scopedUserIds =
-      req.user!.role === 'asociado'
-        ? getDescendantUserIds(users, req.user!.sub)
-        : new Set<string>([req.user!.sub]);
-
-    const sellerIds = users
-      .filter((u) => scopedUserIds.has(u.id))
-      .map((u) => u.id);
-
-    where['sellerId'] = { in: sellerIds };
-  }
-
-  const tickets = await prisma.ticket.findMany({
-    where,
-    orderBy: { createdAt: 'desc' },
-    take: parseInt(limit, 10),
-    include: {
-      draw: { select: { name: true } },
-      seller: { select: { fullName: true } },
-    },
-  });
-  res.json(tickets);
-});
-
-router.use(authorizeResource('/reports'));
-
 // ── GET /api/reports/hierarchy ────────────────────────────────────────────────
 
 router.get('/hierarchy', authorizeResource('/reports/sales-stats'), async (req, res) => {
-  const query = req.query as Record<string, string>;
-  const { drawId } = query;
-
-  const { filter: createdAtFilter, error } = parseCreatedAtFilter(query);
-  if (error) {
-    res.status(400).json({ message: error });
-    return;
-  }
+  const { drawId } = req.query as Record<string, string>;
 
   // Fetch all users
   const users = await prisma.user.findMany({
@@ -312,8 +266,6 @@ router.get('/hierarchy', authorizeResource('/reports/sales-stats'), async (req, 
   // Aggregate direct sales by seller, then roll up through the user tree.
   const ticketWhere: Record<string, unknown> = {};
   if (drawId) ticketWhere['drawId'] = drawId;
-  if (Object.keys(createdAtFilter).length > 0) ticketWhere['createdAt'] = createdAtFilter;
-  ticketWhere['canceledAt'] = null;
 
   const aggregates = await prisma.ticket.groupBy({
     by: ['sellerId'],
@@ -381,74 +333,63 @@ router.get('/hierarchy', authorizeResource('/reports/sales-stats'), async (req, 
   res.json(tree);
 });
 
+// ── GET /api/reports/recent-tickets ──────────────────────────────────────────
+
+router.get('/recent-tickets', authorizeAnyResource('/reports/sales-stats', '/dashboard'), async (req, res) => {
+  const { drawId, limit = '10', fromDate, toDate } = req.query as Record<string, string>;
+
+  const { filter: createdAtFilter, error } = parseCreatedAtFilter(fromDate, toDate);
+  if (error) {
+    res.status(400).json({ message: error });
+    return;
+  }
+
+  const where: Record<string, unknown> = {};
+  if (drawId) where['drawId'] = drawId;
+  if (Object.keys(createdAtFilter).length > 0) where['createdAt'] = createdAtFilter;
+  where['canceledAt'] = null;
+  if (req.user!.role === 'asociado') where['associateId'] = req.user!.sub;
+  if (req.user!.role === 'vendedor') where['sellerId'] = req.user!.sub;
+
+  const tickets = await prisma.ticket.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+    take: parseInt(limit, 10),
+    include: {
+      draw: { select: { name: true } },
+      seller: { select: { fullName: true } },
+    },
+  });
+  res.json(tickets);
+});
+
 // ── GET /api/reports/balance-breakdown ──────────────────────────────────────
 
 router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown'), async (req, res) => {
   const { drawId, userId, fromDate, toDate } = req.query as Record<string, string>;
 
-  interface BreakdownUser {
-    id: string;
-    fullName: string;
-    username: string;
-    role: 'admin' | 'asociado' | 'vendedor';
-    parentId: string | null;
-  }
+  const users = await getScopedUsers();
+  const userById = new Map(users.map((user): [string, ReportUser] => [user.id, user]));
+  const scopedSellerIds = getScopedSellerIds(users, req.user as { sub: string; role: 'admin' | 'asociado' | 'vendedor' });
 
-  const users = (await prisma.user.findMany({
-    select: {
-      id: true,
-      fullName: true,
-      username: true,
-      role: true,
-      parentId: true,
-    },
-  })) as BreakdownUser[];
-
-  const userById = new Map<string, BreakdownUser>(
-    users.map((u): [string, BreakdownUser] => [u.id, u])
-  );
-
-  const createdAtFilter: Record<string, Date> = {};
-  if (fromDate) {
-    const parsed = new Date(`${fromDate}T00:00:00`);
-    if (Number.isNaN(parsed.getTime())) {
-      res.status(400).json({ message: 'fromDate inválida. Use formato YYYY-MM-DD.' });
-      return;
-    }
-    createdAtFilter['gte'] = parsed;
-  }
-  if (toDate) {
-    const parsed = new Date(`${toDate}T23:59:59.999`);
-    if (Number.isNaN(parsed.getTime())) {
-      res.status(400).json({ message: 'toDate inválida. Use formato YYYY-MM-DD.' });
-      return;
-    }
-    createdAtFilter['lte'] = parsed;
-  }
-
-  if (createdAtFilter['gte'] && createdAtFilter['lte'] && createdAtFilter['gte'] > createdAtFilter['lte']) {
-    res.status(400).json({ message: 'Rango de fechas inválido.' });
+  if (userId && scopedSellerIds && !scopedSellerIds.has(userId)) {
+    res.status(403).json({ message: 'No tienes permisos para consultar este usuario.' });
     return;
   }
 
-  const descendantSellerIds = new Set<string>();
-  if (req.user!.role === 'asociado') {
-    const walk = (parentId: string) => {
-      descendantSellerIds.add(parentId);
-      users
-        .filter((u: BreakdownUser) => u.parentId === parentId)
-        .forEach((child: BreakdownUser) => walk(child.id));
-    };
-    walk(req.user!.sub);
+  const { filter: createdAtFilter, error } = parseCreatedAtFilter(fromDate, toDate);
+  if (error) {
+    res.status(400).json({ message: error });
+    return;
   }
 
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = { canceledAt: null };
   if (drawId) where['drawId'] = drawId;
-  if (userId) where['sellerId'] = userId;
   if (Object.keys(createdAtFilter).length > 0) where['createdAt'] = createdAtFilter;
-  where['canceledAt'] = null;
-  if (req.user!.role === 'asociado') {
-    where['sellerId'] = { in: Array.from(descendantSellerIds) };
+  if (userId) {
+    where['sellerId'] = userId;
+  } else if (scopedSellerIds) {
+    where['sellerId'] = { in: Array.from(scopedSellerIds) };
   }
 
   interface BreakdownTicket {
@@ -462,18 +403,16 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       } | null;
     };
     total: number;
-    lines: Array<{
-      number: string;
-      amount: number;
-      specialAmount: number | null;
-    }>;
     draw: {
       id: string;
       name: string;
       closeTime: Date;
       winnerNumber: string | null;
-      specialMultiplier: { id: string; name: string; value: number } | null;
     };
+    lines: Array<{
+      number: string;
+      amount: number;
+    }>;
     seller: {
       id: string;
       fullName: string;
@@ -490,16 +429,8 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
   const tickets = (await prisma.ticket.findMany({
     where,
     include: {
-      lines: { select: { number: true, amount: true, specialAmount: true } },
-      draw: {
-        select: {
-          id: true,
-          name: true,
-          closeTime: true,
-          winnerNumber: true,
-          specialMultiplier: { select: { id: true, name: true, value: true } },
-        },
-      },
+      lines: { select: { number: true, amount: true } },
+      draw: { select: { id: true, name: true, closeTime: true, winnerNumber: true } },
       associate: {
         select: {
           id: true,
@@ -532,9 +463,8 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
 
   function calculateTicketFinancials(ticket: BreakdownTicket): { prizeForTicket: number; commissionForTicket: number } {
     const effectivePlan = ticket.seller.plan ?? ticket.associate.plan ?? defaultPlan;
-    const regularMultiplier = effectivePlan?.multiplier ?? 0;
+    const multiplier = effectivePlan?.multiplier ?? 0;
     const commissionRate = (effectivePlan?.commission ?? 0) / 100;
-    const specialMultiplierValue = ticket.draw.specialMultiplier?.value ?? null;
 
     const winnerNumber = ticket.draw.winnerNumber;
     if (!winnerNumber) {
@@ -545,13 +475,9 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     }
 
     const normalizedWinner = normalizeNumber(winnerNumber);
-    const prizeForTicket = ticket.lines.reduce((sum: number, line: { number: string; amount: number; specialAmount: number | null }) => {
+    const prizeForTicket = ticket.lines.reduce((sum, line) => {
       if (normalizeNumber(line.number) !== normalizedWinner) return sum;
-      if (specialMultiplierValue !== null && (line.specialAmount ?? 0) > 0) {
-        // Formula: (montoRegular + montoEspecial) * multiplicadorRegular * multiplicadorEspecial
-        return sum + (line.amount + (line.specialAmount ?? 0)) * regularMultiplier * specialMultiplierValue;
-      }
-      return sum + line.amount * regularMultiplier;
+      return sum + line.amount * multiplier;
     }, 0);
 
     return {
@@ -573,7 +499,6 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
   }
 
   const bySeller = new Map<string, BreakdownAccumulator>();
-
   for (const ticket of tickets) {
     const seller = ticket.seller;
     const { prizeForTicket, commissionForTicket } = calculateTicketFinancials(ticket);
@@ -594,7 +519,6 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     current.totalSales += ticket.total;
     current.totalPrizes += prizeForTicket;
     current.totalCommissions += commissionForTicket;
-
     bySeller.set(seller.id, current);
   }
 
@@ -644,8 +568,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     }
   );
 
-  // Agrupación por vendedor (solo los que son vendedor/asociado, no admin)
-  interface VendorGroup {
+  const byVendor = new Map<string, {
     vendorId: string;
     vendorName: string;
     ticketCount: number;
@@ -653,15 +576,13 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     totalPrizes: number;
     totalCommissions: number;
     balance: number;
-  }
+  }>();
 
-  const byVendor = new Map<string, VendorGroup>();
   for (const ticket of tickets) {
     const seller = ticket.seller;
-    if (seller.role === 'admin') continue; // Skip admin
+    if (seller.role === 'admin') continue;
 
     const { prizeForTicket, commissionForTicket } = calculateTicketFinancials(ticket);
-
     const current = byVendor.get(seller.id) ?? {
       vendorId: seller.id,
       vendorName: seller.fullName,
@@ -677,13 +598,10 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     current.totalPrizes += prizeForTicket;
     current.totalCommissions += commissionForTicket;
     current.balance = current.totalSales - current.totalPrizes - current.totalCommissions;
-
     byVendor.set(seller.id, current);
   }
 
-  const vendorRows = Array.from(byVendor.values())
-    .sort((a, b) => b.totalSales - a.totalSales);
-
+  const vendorRows = Array.from(byVendor.values()).sort((a, b) => b.totalSales - a.totalSales);
   const vendorTotals = vendorRows.reduce(
     (acc, row) => ({
       ticketCount: acc.ticketCount + row.ticketCount,
@@ -701,8 +619,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     }
   );
 
-  // Agrupación por sorteo
-  interface DrawGroup {
+  const byDraw = new Map<string, {
     drawId: string;
     drawName: string;
     ticketCount: number;
@@ -710,16 +627,13 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     totalPrizes: number;
     totalCommissions: number;
     balance: number;
-  }
+  }>();
 
-  const byDraw = new Map<string, DrawGroup>();
   for (const ticket of tickets) {
-    const draw = ticket.draw;
     const { prizeForTicket, commissionForTicket } = calculateTicketFinancials(ticket);
-
-    const current = byDraw.get(draw.id) ?? {
-      drawId: draw.id,
-      drawName: draw.name,
+    const current = byDraw.get(ticket.draw.id) ?? {
+      drawId: ticket.draw.id,
+      drawName: ticket.draw.name,
       ticketCount: 0,
       totalSales: 0,
       totalPrizes: 0,
@@ -732,13 +646,10 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     current.totalPrizes += prizeForTicket;
     current.totalCommissions += commissionForTicket;
     current.balance = current.totalSales - current.totalPrizes - current.totalCommissions;
-
-    byDraw.set(draw.id, current);
+    byDraw.set(ticket.draw.id, current);
   }
 
-  const drawRows = Array.from(byDraw.values())
-    .sort((a, b) => b.totalSales - a.totalSales);
-
+  const drawRows = Array.from(byDraw.values()).sort((a, b) => b.totalSales - a.totalSales);
   const drawTotals = drawRows.reduce(
     (acc, row) => ({
       ticketCount: acc.ticketCount + row.ticketCount,
@@ -756,29 +667,6 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     }
   );
 
-  // Agrupación por asociado, con detalle por sorteo
-  interface AssociateDrawGroup {
-    drawId: string;
-    drawName: string;
-    drawCloseTime: Date;
-    ticketCount: number;
-    totalSales: number;
-    totalPrizes: number;
-    totalCommissions: number;
-    balance: number;
-  }
-
-  interface AssociateGroup {
-    associateId: string;
-    associateName: string;
-    ticketCount: number;
-    totalSales: number;
-    totalPrizes: number;
-    totalCommissions: number;
-    balance: number;
-    draws: AssociateDrawGroup[];
-  }
-
   const byAssociate = new Map<string, {
     associateId: string;
     associateName: string;
@@ -787,23 +675,29 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     totalPrizes: number;
     totalCommissions: number;
     balance: number;
-    draws: Map<string, AssociateDrawGroup>;
+    draws: Map<string, {
+      drawId: string;
+      drawName: string;
+      drawCloseTime: string;
+      ticketCount: number;
+      totalSales: number;
+      totalPrizes: number;
+      totalCommissions: number;
+      balance: number;
+    }>;
   }>();
 
   for (const ticket of tickets) {
     const { prizeForTicket, commissionForTicket } = calculateTicketFinancials(ticket);
-    const associateId = ticket.associateId;
-    const associateName = ticket.associate.fullName;
-
-    const associateCurrent = byAssociate.get(associateId) ?? {
-      associateId,
-      associateName,
+    const associateCurrent = byAssociate.get(ticket.associateId) ?? {
+      associateId: ticket.associateId,
+      associateName: ticket.associate.fullName,
       ticketCount: 0,
       totalSales: 0,
       totalPrizes: 0,
       totalCommissions: 0,
       balance: 0,
-      draws: new Map<string, AssociateDrawGroup>(),
+      draws: new Map(),
     };
 
     associateCurrent.ticketCount += 1;
@@ -815,7 +709,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     const drawCurrent = associateCurrent.draws.get(ticket.draw.id) ?? {
       drawId: ticket.draw.id,
       drawName: ticket.draw.name,
-      drawCloseTime: ticket.draw.closeTime,
+      drawCloseTime: ticket.draw.closeTime.toISOString(),
       ticketCount: 0,
       totalSales: 0,
       totalPrizes: 0,
@@ -830,10 +724,10 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     drawCurrent.balance = drawCurrent.totalSales - drawCurrent.totalPrizes - drawCurrent.totalCommissions;
 
     associateCurrent.draws.set(ticket.draw.id, drawCurrent);
-    byAssociate.set(associateId, associateCurrent);
+    byAssociate.set(ticket.associateId, associateCurrent);
   }
 
-  const associateRows: AssociateGroup[] = Array.from(byAssociate.values())
+  const associateRows = Array.from(byAssociate.values())
     .map((associate) => ({
       associateId: associate.associateId,
       associateName: associate.associateName,
@@ -842,7 +736,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       totalPrizes: associate.totalPrizes,
       totalCommissions: associate.totalCommissions,
       balance: associate.balance,
-      draws: Array.from(associate.draws.values()).sort((a, b) => new Date(b.drawCloseTime).getTime() - new Date(a.drawCloseTime).getTime()),
+      draws: Array.from(associate.draws.values()).sort((a, b) => b.totalSales - a.totalSales),
     }))
     .sort((a, b) => b.totalSales - a.totalSales);
 
@@ -887,80 +781,91 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
   });
 });
 
-// ── GET /api/reports/sales-by-user ─────────────────────────────────────────
+// ── GET /api/reports/sales-by-user ──────────────────────────────────────────
 
 router.get('/sales-by-user', authorizeResource('/reports/sales-by-user'), async (req, res) => {
-  const query = req.query as Record<string, string>;
-  const { drawId, userId } = query;
+  const { drawId, userId, fromDate, toDate } = req.query as Record<string, string>;
 
-  const { filter: createdAtFilter, error } = parseCreatedAtFilter(query);
+  const users = await getScopedUsers();
+  const scopedSellerIds = getScopedSellerIds(users, req.user as { sub: string; role: 'admin' | 'asociado' | 'vendedor' });
+
+  if (userId && scopedSellerIds && !scopedSellerIds.has(userId)) {
+    res.status(403).json({ message: 'No tienes permisos para consultar este usuario.' });
+    return;
+  }
+
+  const { filter: createdAtFilter, error } = parseCreatedAtFilter(fromDate, toDate);
   if (error) {
     res.status(400).json({ message: error });
     return;
   }
 
-  const users = await getHierarchyUsers();
-
-  let allowedUserIds: Set<string>;
-  if (req.user!.role === 'admin') {
-    allowedUserIds = new Set(users.map((u) => u.id));
-  } else if (req.user!.role === 'asociado') {
-    allowedUserIds = getDescendantUserIds(users, req.user!.sub);
-  } else {
-    allowedUserIds = new Set([req.user!.sub]);
-  }
-
-  if (userId && !allowedUserIds.has(userId)) {
-    res.status(403).json({ message: 'No tienes permisos para consultar ese usuario.' });
-    return;
-  }
-
-  const scopedUserIds = userId
-    ? getDescendantUserIds(users, userId)
-    : allowedUserIds;
-
-  const sellerIds = users
-    .filter((u) => allowedUserIds.has(u.id) && scopedUserIds.has(u.id))
-    .map((u) => u.id);
-
-  const where: Record<string, unknown> = {
-    sellerId: { in: sellerIds },
-  };
+  const where: Record<string, unknown> = {};
   if (drawId) where['drawId'] = drawId;
   if (Object.keys(createdAtFilter).length > 0) where['createdAt'] = createdAtFilter;
+  if (userId) {
+    where['sellerId'] = userId;
+  } else if (scopedSellerIds) {
+    where['sellerId'] = { in: Array.from(scopedSellerIds) };
+  }
 
   const tickets = await prisma.ticket.findMany({
     where,
     orderBy: { createdAt: 'desc' },
     include: {
-      lines: true,
-      draw: { select: { id: true, name: true } },
-      seller: { select: { id: true, fullName: true, username: true } },
-      associate: { select: { id: true, fullName: true } },
-      canceledBy: { select: { id: true, fullName: true, username: true } },
+      draw: {
+        select: {
+          id: true,
+          name: true,
+          closeTime: true,
+          winnerNumber: true,
+          specialMultiplier: { select: { id: true, name: true, value: true } },
+        },
+      },
+      lines: { select: { number: true, amount: true, specialAmount: true } },
+      seller: {
+        select: {
+          id: true,
+          fullName: true,
+          username: true,
+          plan: { select: { id: true, name: true, multiplier: true } },
+        },
+      },
+      associate: {
+        select: {
+          id: true,
+          fullName: true,
+        },
+      },
+      canceledBy: {
+        select: {
+          id: true,
+          fullName: true,
+          username: true,
+        },
+      },
     },
   });
 
-  const rowsMap = new Map<string, {
+  const bySeller = new Map<string, {
     userId: string;
     fullName: string;
     username: string;
-    role: Role;
+    role: 'admin' | 'asociado' | 'vendedor';
     ticketCount: number;
     activeTicketCount: number;
     canceledTicketCount: number;
     totalSales: number;
   }>();
 
-  for (const t of tickets) {
-    const seller = users.find((u) => u.id === t.sellerId);
-    if (!seller) continue;
-
-    const current = rowsMap.get(seller.id) ?? {
-      userId: seller.id,
-      fullName: seller.fullName,
-      username: seller.username,
-      role: seller.role,
+  for (const ticket of tickets) {
+    const sellerInfo = users.find((user) => user.id === ticket.sellerId);
+    const role = sellerInfo?.role ?? 'vendedor';
+    const current = bySeller.get(ticket.sellerId) ?? {
+      userId: ticket.sellerId,
+      fullName: ticket.seller?.fullName ?? sellerInfo?.fullName ?? 'Sin nombre',
+      username: ticket.seller?.username ?? sellerInfo?.username ?? 'sin-usuario',
+      role,
       ticketCount: 0,
       activeTicketCount: 0,
       canceledTicketCount: 0,
@@ -968,17 +873,28 @@ router.get('/sales-by-user', authorizeResource('/reports/sales-by-user'), async 
     };
 
     current.ticketCount += 1;
-    if (t.canceledAt) {
+    if (ticket.canceledAt) {
       current.canceledTicketCount += 1;
     } else {
       current.activeTicketCount += 1;
-      current.totalSales += t.total;
+      current.totalSales += ticket.total;
     }
 
-    rowsMap.set(seller.id, current);
+    bySeller.set(ticket.sellerId, current);
   }
 
-  const rows = Array.from(rowsMap.values()).sort((a, b) => b.totalSales - a.totalSales);
+  const roleOrder: Record<'admin' | 'asociado' | 'vendedor', number> = {
+    admin: 0,
+    asociado: 1,
+    vendedor: 2,
+  };
+
+  const rows = Array.from(bySeller.values()).sort((a, b) => {
+    if (roleOrder[a.role] !== roleOrder[b.role]) {
+      return roleOrder[a.role] - roleOrder[b.role];
+    }
+    return b.totalSales - a.totalSales;
+  });
 
   const totals = rows.reduce(
     (acc, row) => ({
@@ -999,8 +915,8 @@ router.get('/sales-by-user', authorizeResource('/reports/sales-by-user'), async 
     filters: {
       drawId: drawId || null,
       userId: userId || null,
-      fromDate: query.fromDate || null,
-      toDate: query.toDate || null,
+      fromDate: fromDate || null,
+      toDate: toDate || null,
     },
     totals,
     rows,
@@ -1008,275 +924,191 @@ router.get('/sales-by-user', authorizeResource('/reports/sales-by-user'), async 
   });
 });
 
-// ── GET /api/reports/draw-lists ────────────────────────────────────────────
+// ── GET /api/reports/draw-lists ─────────────────────────────────────────────
 
 router.get('/draw-lists', authorizeResource('/reports/draw-lists'), async (req, res) => {
-  const query = req.query as Record<string, string>;
-  const { drawId, userId } = query;
+  const { drawId, userId, fromDate, toDate } = req.query as Record<string, string>;
 
-  const { filter: createdAtFilter, error } = parseCreatedAtFilter(query);
+  const users = await getScopedUsers();
+  const scopedSellerIds = getScopedSellerIds(users, req.user as { sub: string; role: 'admin' | 'asociado' | 'vendedor' });
+
+  if (userId && scopedSellerIds && !scopedSellerIds.has(userId)) {
+    res.status(403).json({ message: 'No tienes permisos para consultar este usuario.' });
+    return;
+  }
+
+  const { filter: createdAtFilter, error } = parseCreatedAtFilter(fromDate, toDate);
   if (error) {
     res.status(400).json({ message: error });
     return;
   }
 
-  const users = await getHierarchyUsers();
-
-  let allowedUserIds = new Set<string>(users.map((u) => u.id));
-  if (req.user!.role === 'asociado') {
-    allowedUserIds = getDescendantUserIds(users, req.user!.sub);
-  }
-
-  if (userId && !allowedUserIds.has(userId)) {
-    res.status(403).json({ message: 'No tienes permisos para consultar ese usuario.' });
-    return;
-  }
-
-  const sellerIds = userId
-    ? [userId]
-    : users
-      .filter((u) => allowedUserIds.has(u.id))
-      .map((u) => u.id);
-
-  const where: Record<string, unknown> = {
-    sellerId: { in: sellerIds },
-    canceledAt: null,
-  };
+  const where: Record<string, unknown> = { canceledAt: null };
   if (drawId) where['drawId'] = drawId;
   if (Object.keys(createdAtFilter).length > 0) where['createdAt'] = createdAtFilter;
+  if (userId) {
+    where['sellerId'] = userId;
+  } else if (scopedSellerIds) {
+    where['sellerId'] = { in: Array.from(scopedSellerIds) };
+  }
 
   const tickets = await prisma.ticket.findMany({
     where,
     select: {
       id: true,
-      lines: {
-        select: {
-          number: true,
-          amount: true,
-        },
-      },
+      lines: { select: { number: true, amount: true } },
     },
   });
 
-  const numberMap = new Map<string, number>();
-  for (let i = 0; i <= 99; i += 1) {
-    const key = i.toString().padStart(2, '0');
-    numberMap.set(key, 0);
-  }
-
-  const toTwoDigitNumber = (value: string): string | null => {
-    const cleaned = value.trim();
-    if (!/^\d+$/.test(cleaned)) return null;
-    const asNumber = Number.parseInt(cleaned, 10);
-    if (!Number.isFinite(asNumber) || asNumber < 0 || asNumber > 99) return null;
-    return asNumber.toString().padStart(2, '0');
-  };
+  const numbers = Array.from({ length: 100 }, (_, index) => ({
+    number: index.toString().padStart(2, '0'),
+    total: 0,
+  }));
+  const byNumber = new Map(numbers.map((row) => [row.number, row]));
 
   for (const ticket of tickets) {
     for (const line of ticket.lines) {
-      const numberKey = toTwoDigitNumber(line.number);
-      if (!numberKey) continue;
-
-      const current = numberMap.get(numberKey) ?? 0;
-      numberMap.set(numberKey, current + line.amount);
+      const key = line.number.trim().padStart(2, '0').slice(-2);
+      const current = byNumber.get(key);
+      if (!current) continue;
+      current.total += line.amount;
     }
   }
-
-  const numbers = Array.from(numberMap.entries())
-    .map(([number, total]) => ({ number, total }))
-    .sort((a, b) => a.number.localeCompare(b.number));
-
-  const totalAmount = numbers.reduce((acc, row) => acc + row.total, 0);
 
   res.json({
     filters: {
       drawId: drawId || null,
       userId: userId || null,
-      fromDate: query.fromDate || null,
-      toDate: query.toDate || null,
+      fromDate: fromDate || null,
+      toDate: toDate || null,
     },
     totals: {
       ticketCount: tickets.length,
-      totalAmount,
+      totalAmount: numbers.reduce((sum, row) => sum + row.total, 0),
     },
     numbers,
   });
 });
 
-// ── GET /api/reports/commissions ───────────────────────────────────────────
+// ── GET /api/reports/commissions ────────────────────────────────────────────
 
 router.get('/commissions', authorizeResource('/reports/commissions'), async (req, res) => {
-  const query = req.query as Record<string, string>;
-  const { drawId, userId } = query;
+  const { drawId, userId, fromDate, toDate } = req.query as Record<string, string>;
 
-  const { filter: createdAtFilter, error } = parseCreatedAtFilter(query);
+  const users = await getScopedUsers();
+  const scopedSellerIds = getScopedSellerIds(users, req.user as { sub: string; role: 'admin' | 'asociado' | 'vendedor' });
+
+  if (userId && scopedSellerIds && !scopedSellerIds.has(userId)) {
+    res.status(403).json({ message: 'No tienes permisos para consultar este usuario.' });
+    return;
+  }
+
+  const { filter: createdAtFilter, error } = parseCreatedAtFilter(fromDate, toDate);
   if (error) {
     res.status(400).json({ message: error });
     return;
   }
 
-  const users = await getHierarchyUsers();
-
-  let allowedUserIds: Set<string>;
-  if (req.user!.role === 'admin') {
-    allowedUserIds = new Set(users.map((u) => u.id));
-  } else if (req.user!.role === 'asociado') {
-    allowedUserIds = getDescendantUserIds(users, req.user!.sub);
-  } else {
-    allowedUserIds = new Set([req.user!.sub]);
-  }
-
-  if (userId && !allowedUserIds.has(userId)) {
-    res.status(403).json({ message: 'No tienes permisos para consultar ese usuario.' });
-    return;
-  }
-
-  const scopedUserIds = userId
-    ? getDescendantUserIds(users, userId)
-    : allowedUserIds;
-
-  const sellerIds = users
-    .filter((u) => allowedUserIds.has(u.id) && scopedUserIds.has(u.id))
-    .map((u) => u.id);
-
-  const where: Record<string, unknown> = {
-    sellerId: { in: sellerIds },
-    canceledAt: null,
-  };
+  const where: Record<string, unknown> = { canceledAt: null };
   if (drawId) where['drawId'] = drawId;
   if (Object.keys(createdAtFilter).length > 0) where['createdAt'] = createdAtFilter;
-
-  interface CommissionTicket {
-    total: number;
-    draw: {
-      id: string;
-      name: string;
-      closeTime: Date;
-    };
-    seller: {
-      id: string;
-      fullName: string;
-      username: string;
-      plan: {
-        commission: number;
-      } | null;
-    };
-    associate: {
-      plan: {
-        commission: number;
-      } | null;
-    };
+  if (userId) {
+    where['sellerId'] = userId;
+  } else if (scopedSellerIds) {
+    where['sellerId'] = { in: Array.from(scopedSellerIds) };
   }
 
-  const [tickets, defaultPlan] = await Promise.all([
-    prisma.ticket.findMany({
-      where,
-      select: {
-        total: true,
-        draw: {
-          select: {
-            id: true,
-            name: true,
-            closeTime: true,
-          },
-        },
-        seller: {
-          select: {
-            id: true,
-            fullName: true,
-            username: true,
-            plan: { select: { commission: true } },
-          },
-        },
-        associate: {
-          select: {
-            plan: { select: { commission: true } },
-          },
+  const defaultPlan = await prisma.plan.findFirst({
+    orderBy: { createdAt: 'asc' },
+    select: { commission: true },
+  });
+
+  const tickets = await prisma.ticket.findMany({
+    where,
+    select: {
+      total: true,
+      draw: {
+        select: {
+          id: true,
+          name: true,
+          closeTime: true,
         },
       },
-    }) as Promise<CommissionTicket[]>,
-    prisma.plan.findFirst({
-      orderBy: { createdAt: 'asc' },
-      select: { commission: true },
-    }),
-  ]);
+      seller: {
+        select: {
+          id: true,
+          fullName: true,
+          username: true,
+          plan: { select: { commission: true } },
+        },
+      },
+      associate: {
+        select: {
+          plan: { select: { commission: true } },
+        },
+      },
+    },
+    orderBy: [
+      { seller: { fullName: 'asc' } },
+      { draw: { closeTime: 'desc' } },
+    ],
+  });
 
-  interface CommissionRow {
-    drawCloseTime: Date;
-    drawName: string;
-    commission: number;
-  }
-
-  interface SellerGroup {
+  const bySeller = new Map<string, {
     sellerId: string;
     sellerName: string;
     sellerUsername: string;
-    rows: CommissionRow[];
     subtotal: number;
-  }
-
-  // Group by seller and collect aggregated commissions per draw
-  const sellerMap = new Map<string, SellerGroup>();
+    rows: Map<string, { drawId: string; drawName: string; drawCloseTime: string; commission: number }>;
+  }>();
 
   for (const ticket of tickets) {
-    const sellerId = ticket.seller.id;
-    if (!sellerMap.has(sellerId)) {
-      sellerMap.set(sellerId, {
-        sellerId,
-        sellerName: ticket.seller.fullName,
-        sellerUsername: ticket.seller.username,
-        rows: [],
-        subtotal: 0,
-      });
-    }
-
-    const sellerGroup = sellerMap.get(sellerId)!;
-    const effectivePlan = ticket.seller.plan ?? ticket.associate.plan ?? defaultPlan;
-    const commissionRate = (effectivePlan?.commission ?? 0) / 100;
+    const commissionRate = (ticket.seller.plan?.commission ?? ticket.associate.plan?.commission ?? defaultPlan?.commission ?? 0) / 100;
     const commission = ticket.total * commissionRate;
 
-    // Check if this draw already exists in seller's rows
-    const existingRow = sellerGroup.rows.find(
-      (r) => r.drawCloseTime.getTime() === ticket.draw.closeTime.getTime() && r.drawName === ticket.draw.name
-    );
+    const current = bySeller.get(ticket.seller.id) ?? {
+      sellerId: ticket.seller.id,
+      sellerName: ticket.seller.fullName,
+      sellerUsername: ticket.seller.username,
+      subtotal: 0,
+      rows: new Map<string, { drawId: string; drawName: string; drawCloseTime: string; commission: number }>(),
+    };
 
-    if (existingRow) {
-      existingRow.commission += commission;
-    } else {
-      sellerGroup.rows.push({
-        drawCloseTime: ticket.draw.closeTime,
-        drawName: ticket.draw.name,
-        commission,
-      });
-    }
+    current.subtotal += commission;
+
+    const row = current.rows.get(ticket.draw.id) ?? {
+      drawId: ticket.draw.id,
+      drawName: ticket.draw.name,
+      drawCloseTime: ticket.draw.closeTime.toISOString(),
+      commission: 0,
+    };
+    row.commission += commission;
+
+    current.rows.set(ticket.draw.id, row);
+    bySeller.set(ticket.seller.id, current);
   }
 
-  // Calculate subtotals and sort rows within each seller
-  for (const sellerGroup of sellerMap.values()) {
-    sellerGroup.rows.sort(
-      (a, b) => new Date(b.drawCloseTime).getTime() - new Date(a.drawCloseTime).getTime()
-    );
-    sellerGroup.subtotal = sellerGroup.rows.reduce((sum, row) => sum + row.commission, 0);
-  }
-
-  // Sort sellers by name
-  const bySeller = Array.from(sellerMap.values()).sort((a, b) =>
-    a.sellerName.localeCompare(b.sellerName)
-  );
-
-  const totalCommissions = bySeller.reduce((sum, seller) => sum + seller.subtotal, 0);
+  const sellerRows = Array.from(bySeller.values())
+    .map((seller) => ({
+      sellerId: seller.sellerId,
+      sellerName: seller.sellerName,
+      sellerUsername: seller.sellerUsername,
+      subtotal: seller.subtotal,
+      rows: Array.from(seller.rows.values()).sort((a, b) => b.drawCloseTime.localeCompare(a.drawCloseTime)),
+    }))
+    .sort((a, b) => a.sellerName.localeCompare(b.sellerName));
 
   res.json({
     filters: {
       drawId: drawId || null,
       userId: userId || null,
-      fromDate: query.fromDate || null,
-      toDate: query.toDate || null,
+      fromDate: fromDate || null,
+      toDate: toDate || null,
     },
     totals: {
-      totalCommissions,
+      totalCommissions: sellerRows.reduce((sum, seller) => sum + seller.subtotal, 0),
     },
-    bySeller,
+    bySeller: sellerRows,
   });
 });
 

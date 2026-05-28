@@ -45,13 +45,13 @@ const rnInclude = {
 };
 
 // GET /api/draws
-router.get('/', authorizeAnyResource('/draws/list', '/draws', '/sales', '/ticket-payments', '/reports/sales-stats', '/reports/balance-breakdown', '/reports/sales-by-user', '/reports/draw-lists'), async (_req, res) => {
+router.get('/', authorizeAnyResource('/draws/list', '/draws', '/sales', '/ticket-payments', '/reports/sales-stats', '/reports/balance-breakdown', '/reports/sales-by-user', '/reports/draw-lists', '/reports/commissions'), async (_req, res) => {
   const draws = await prisma.draw.findMany({ include: rnInclude, orderBy: { closeTime: 'desc' } });
   res.json(draws);
 });
 
 // GET /api/draws/search
-router.get('/search', authorizeAnyResource('/draws/list', '/draws', '/sales', '/ticket-payments', '/reports/sales-stats', '/reports/balance-breakdown', '/reports/sales-by-user', '/reports/draw-lists'), async (req, res) => {
+router.get('/search', authorizeAnyResource('/draws/list', '/draws', '/sales', '/ticket-payments', '/reports/sales-stats', '/reports/balance-breakdown', '/reports/sales-by-user', '/reports/draw-lists', '/reports/commissions'), async (req, res) => {
   const parsed = drawSearchQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ message: 'Parámetros inválidos para búsqueda de sorteos.' });
@@ -107,7 +107,7 @@ router.get('/search', authorizeAnyResource('/draws/list', '/draws', '/sales', '/
 });
 
 // GET /api/draws/:id
-router.get('/:id', authorizeAnyResource('/draws/list', '/draws', '/sales', '/ticket-payments', '/reports/sales-stats', '/reports/balance-breakdown', '/reports/sales-by-user', '/reports/draw-lists'), async (req, res) => {
+router.get('/:id', authorizeAnyResource('/draws/list', '/draws', '/sales', '/ticket-payments', '/reports/sales-stats', '/reports/balance-breakdown', '/reports/sales-by-user', '/reports/draw-lists', '/reports/commissions'), async (req, res) => {
   const id = param(req, 'id');
   const draw = await prisma.draw.findUnique({ where: { id }, include: rnInclude });
   if (!draw) { res.status(404).json({ message: 'Sorteo no encontrado.' }); return; }

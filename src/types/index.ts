@@ -178,6 +178,34 @@ export interface PaymentsWinningTicketsResponse {
   };
 }
 
+// ─── Announcements ───────────────────────────────────────────────────────────
+
+export interface Announcement {
+  id: string;
+  name: string;
+  message?: string | null;
+  imageUrl?: string | null;
+  startDate: string;
+  endDate: string;
+  createdAt: string;
+  updatedAt: string;
+  createdById: string;
+  createdBy?: {
+    id: string;
+    fullName: string;
+    username: string;
+  };
+}
+
+export interface AnnouncementPayload {
+  name: string;
+  message?: string;
+  startDate: string;
+  endDate: string;
+  image?: File;
+  clearImage?: boolean;
+}
+
 // ─── Print Queue ─────────────────────────────────────────────────────────────
 
 export type PrintJobStatus = 'pending' | 'processing' | 'retrying' | 'completed' | 'failed';

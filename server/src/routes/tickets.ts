@@ -8,21 +8,22 @@ import { param } from '../middleware/params.js';
 const router = Router();
 router.use(authenticate);
 
+type AuthUser = { sub: string; role: 'admin' | 'asociado' | 'vendedor' };
+
 const ticketLineSchema = z.object({
   number: z.string().regex(/^\d{2}$/, 'El número debe tener exactamente 2 dígitos.'),
   amount: z.number().positive(),
-  specialAmount: z.number().min(0).optional().default(0),
   isNicaEspecial: z.boolean().default(false),
 });
 
 const createTicketSchema = z.object({
   drawId: z.string(),
-  customerName: z.string().trim().max(120).optional().default(''),
+  customerName: z.string().min(1),
   lines: z.array(ticketLineSchema).min(1),
 });
 
 const cancelTicketSchema = z.object({
-  reason: z.string().trim().min(3).max(200).optional(),
+  reason: z.string().trim().max(300).optional(),
 });
 
 async function getAllowedSellerIds(userId: string): Promise<string[]> {
@@ -43,7 +44,22 @@ async function getAllowedSellerIds(userId: string): Promise<string[]> {
   return Array.from(allowed);
 }
 
-async function canAccessTicket(ticketId: string, user: { sub: string; role: string }): Promise<boolean> {
+async function buildTicketScopeWhere(user: AuthUser): Promise<Record<string, unknown>> {
+  if (user.role === 'admin') {
+    return {};
+  }
+
+  if (user.role === 'vendedor') {
+    return { sellerId: user.sub };
+  }
+
+  const allowedSellerIds = await getAllowedSellerIds(user.sub);
+  return {
+    OR: [{ associateId: user.sub }, { sellerId: { in: allowedSellerIds } }],
+  };
+}
+
+async function canAccessTicket(ticketId: string, user: AuthUser): Promise<boolean> {
   if (user.role === 'admin') return true;
 
   const ticket = await prisma.ticket.findUnique({
@@ -57,13 +73,12 @@ async function canAccessTicket(ticketId: string, user: { sub: string; role: stri
     return ticket.sellerId === user.sub;
   }
 
-  if (user.role === 'asociado') {
-    if (ticket.associateId === user.sub) return true;
-    const allowedSellerIds = await getAllowedSellerIds(user.sub);
-    return allowedSellerIds.includes(ticket.sellerId);
+  if (ticket.associateId === user.sub) {
+    return true;
   }
 
-  return false;
+  const allowedSellerIds = await getAllowedSellerIds(user.sub);
+  return allowedSellerIds.includes(ticket.sellerId);
 }
 
 function generateCode(): string {
@@ -77,40 +92,25 @@ function generateCode(): string {
 }
 
 // GET /api/tickets
-router.get('/', authorizeResource('/sales'), async (req, res) => {
-  const { drawId, sellerId, associateId, includeCanceled } = req.query as Record<string, string>;
-  const where: Record<string, unknown> = {};
+router.get('/', authorizeAnyResource('/sales', '/reports/sales-by-user'), async (req, res) => {
+  const {
+    drawId,
+    sellerId,
+    associateId,
+    code,
+    includeCanceled,
+  } = req.query as Record<string, string | undefined>;
+  const scopeWhere = await buildTicketScopeWhere(req.user as AuthUser);
+  const where: Record<string, unknown> = { ...scopeWhere };
   if (drawId) where['drawId'] = drawId;
   if (sellerId) where['sellerId'] = sellerId;
   if (associateId) where['associateId'] = associateId;
-  if (req.user!.role === 'vendedor') where['sellerId'] = req.user!.sub;
-  if (req.user!.role === 'asociado') {
-    const allowedSellerIds = await getAllowedSellerIds(req.user!.sub);
-    where['OR'] = [
-      { associateId: req.user!.sub },
-      { sellerId: { in: allowedSellerIds } },
-    ];
-  }
-  if (includeCanceled !== 'true') {
-    where['canceledAt'] = null;
-  }
+  if (code) where['code'] = code.trim().toUpperCase();
+  if (includeCanceled === 'false') where['canceledAt'] = null;
 
   const tickets = await prisma.ticket.findMany({
     where,
-    include: {
-      lines: true,
-      draw: { select: { id: true, name: true, specialMultiplier: { select: { id: true, name: true, value: true } } } },
-      seller: {
-        select: {
-          id: true,
-          fullName: true,
-          username: true,
-          plan: { select: { id: true, name: true, multiplier: true } },
-        },
-      },
-      associate: { select: { id: true, fullName: true } },
-      canceledBy: { select: { id: true, fullName: true, username: true } },
-    },
+    include: { lines: true, draw: { select: { id: true, name: true } } },
     orderBy: { createdAt: 'desc' },
   });
   res.json(tickets);
@@ -119,8 +119,7 @@ router.get('/', authorizeResource('/sales'), async (req, res) => {
 // GET /api/tickets/:id
 router.get('/:id', authorizeAnyResource('/sales', '/ticket-payments', '/reports/sales-by-user'), async (req, res) => {
   const id = param(req, 'id');
-
-  const allowed = await canAccessTicket(id, req.user!);
+  const allowed = await canAccessTicket(id, req.user as AuthUser);
   if (!allowed) {
     res.status(403).json({ message: 'No tienes permisos para ver este ticket.' });
     return;
@@ -130,25 +129,9 @@ router.get('/:id', authorizeAnyResource('/sales', '/ticket-payments', '/reports/
     where: { id },
     include: {
       lines: true,
-      draw: {
-        select: {
-          id: true,
-          name: true,
-          closeTime: true,
-          minutosPreviosCierre: true,
-          specialMultiplier: { select: { id: true, name: true, value: true } },
-        },
-      },
-      seller: {
-        select: {
-          id: true,
-          fullName: true,
-          username: true,
-          plan: { select: { id: true, name: true, multiplier: true } },
-        },
-      },
+      draw: { select: { id: true, name: true, closeTime: true, minutosPreviosCierre: true } },
+      seller: { select: { id: true, fullName: true, username: true } },
       associate: { select: { id: true, fullName: true } },
-      canceledBy: { select: { id: true, fullName: true, username: true } },
     },
   });
   if (!ticket) { res.status(404).json({ message: 'Ticket no encontrado.' }); return; }
@@ -161,10 +144,7 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
 
   const draw = await prisma.draw.findUnique({
     where: { id: body.drawId },
-    include: {
-      restrictedNumbers: true,
-      specialMultiplier: true,
-    },
+    include: { restrictedNumbers: true },
   });
   if (!draw) { res.status(404).json({ message: 'Sorteo no encontrado.' }); return; }
 
@@ -173,24 +153,12 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
     return;
   }
 
-  const now = new Date();
-  const cutoff = new Date(draw.closeTime.getTime() - draw.minutosPreviosCierre * 60 * 1000);
-  if (now >= cutoff || now > draw.closeTime) {
+  const now = Date.now();
+  const closeTime = new Date(draw.closeTime).getTime();
+  const cutoff = closeTime - draw.minutosPreviosCierre * 60 * 1000;
+  if (now >= cutoff) {
     res.status(400).json({ message: 'El sorteo no está en horario de venta.' });
     return;
-  }
-
-  // Validate: specialAmount per line cannot exceed regular amount
-  if (draw.specialMultiplier) {
-    for (const line of body.lines) {
-      const special = line.specialAmount ?? 0;
-      if (special > line.amount) {
-        res.status(400).json({
-          message: `El monto especial del número ${line.number} no puede superar el monto regular (C$ ${line.amount.toFixed(2)}).`,
-        });
-        return;
-      }
-    }
   }
 
   // Check restricted numbers
@@ -213,7 +181,7 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
 
   const seller = await prisma.user.findUnique({ where: { id: req.user!.sub } });
   const associateId = seller?.parentId ?? req.user!.sub;
-  const total = body.lines.reduce((s, l) => s + l.amount + (draw.specialMultiplier ? (l.specialAmount ?? 0) : 0), 0);
+  const total = body.lines.reduce((s, l) => s + l.amount, 0);
 
   let code = generateCode();
   for (let i = 0; i < 5; i++) {
@@ -230,25 +198,9 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
       drawId: body.drawId,
       sellerId: req.user!.sub,
       associateId,
-      lines: { create: body.lines.map((l) => ({
-        number: l.number,
-        amount: l.amount,
-        specialAmount: draw.specialMultiplier ? (l.specialAmount ?? 0) : null,
-        isNicaEspecial: l.isNicaEspecial,
-      })) },
+      lines: { create: body.lines.map((l) => ({ number: l.number, amount: l.amount, isNicaEspecial: l.isNicaEspecial })) },
     },
-    include: {
-      lines: true,
-      draw: { select: { id: true, name: true, specialMultiplier: { select: { id: true, name: true, value: true } } } },
-      seller: {
-        select: {
-          id: true,
-          fullName: true,
-          username: true,
-          plan: { select: { id: true, name: true, multiplier: true } },
-        },
-      },
-    },
+    include: { lines: true, draw: { select: { id: true, name: true } } },
   });
   res.status(201).json(ticket);
 });
@@ -256,12 +208,24 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
 // PATCH /api/tickets/:id/print
 router.patch('/:id/print', authorizeAnyResource('/sales', '/reports/sales-by-user'), async (req, res) => {
   const id = param(req, 'id');
-
-  const allowed = await canAccessTicket(id, req.user!);
+  const allowed = await canAccessTicket(id, req.user as AuthUser);
   if (!allowed) {
-    res.status(403).json({ message: 'No tienes permisos para marcar este ticket como impreso.' });
+    res.status(403).json({ message: 'No tienes permisos para marcar este ticket.' });
     return;
   }
+
+  const ticket = await prisma.ticket.update({
+    where: { id },
+    data: { printedAt: new Date() },
+    include: { lines: true },
+  });
+  res.json(ticket);
+});
+
+// PATCH /api/tickets/:id/cancel
+router.patch('/:id/cancel', authorizeResource('/sales:cancel'), validate(cancelTicketSchema), async (req, res) => {
+  const id = param(req, 'id');
+  const body = req.body as z.infer<typeof cancelTicketSchema>;
 
   const existing = await prisma.ticket.findUnique({
     where: { id },
@@ -273,54 +237,23 @@ router.patch('/:id/print', authorizeAnyResource('/sales', '/reports/sales-by-use
     return;
   }
 
-  if (existing.canceledAt) {
-    res.status(400).json({ message: 'No se puede imprimir un ticket anulado.' });
-    return;
-  }
-
-  const ticket = await prisma.ticket.update({
-    where: { id },
-    data: { printedAt: new Date() },
-    include: {
-      lines: true,
-      canceledBy: { select: { id: true, fullName: true, username: true } },
-    },
-  });
-  res.json(ticket);
-});
-
-// PATCH /api/tickets/:id/cancel
-router.patch('/:id/cancel', authorizeResource('/sales:cancel'), validate(cancelTicketSchema), async (req, res) => {
-  const id = param(req, 'id');
-  const body = req.body as z.infer<typeof cancelTicketSchema>;
-
-  const allowed = await canAccessTicket(id, req.user!);
+  const allowed = await canAccessTicket(id, req.user as AuthUser);
   if (!allowed) {
     res.status(403).json({ message: 'No tienes permisos para anular este ticket.' });
     return;
   }
 
-  const ticket = await prisma.ticket.findUnique({
-    where: { id },
-    select: { id: true, canceledAt: true },
-  });
-
-  if (!ticket) {
-    res.status(404).json({ message: 'Ticket no encontrado.' });
-    return;
-  }
-
-  if (ticket.canceledAt) {
+  if (existing.canceledAt) {
     res.status(400).json({ message: 'El ticket ya fue anulado.' });
     return;
   }
 
-  const canceled = await prisma.ticket.update({
+  const ticket = await prisma.ticket.update({
     where: { id },
     data: {
       canceledAt: new Date(),
       canceledById: req.user!.sub,
-      cancelReason: body.reason ?? null,
+      cancelReason: body.reason?.trim() || null,
     },
     include: {
       lines: true,
@@ -331,17 +264,7 @@ router.patch('/:id/cancel', authorizeResource('/sales:cancel'), validate(cancelT
     },
   });
 
-  await prisma.auditLog.create({
-    data: {
-      action: 'CANCEL_TICKET',
-      entity: 'Ticket',
-      entityId: id,
-      userId: req.user!.sub,
-      details: { reason: body.reason ?? null },
-    },
-  });
-
-  res.json(canceled);
+  res.json(ticket);
 });
 
 export default router;

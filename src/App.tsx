@@ -19,6 +19,7 @@ import PrintQueuePage from '@/pages/PrintQueue/PrintQueuePage';
 import TicketPaymentsPage from '@/pages/TicketPayments/TicketPaymentsPage';
 import CommissionsPage from '@/pages/Reports/CommissionsPage';
 import CashMovementsPage from '@/pages/CashMovements/CashMovementsPage';
+import AnnouncementsPage from '@/pages/Announcements/AnnouncementsPage';
 
 function ProtectedByPermission({ resourceKey, element }: { resourceKey: string; element: ReactElement }) {
   const { isAuthenticated, permissionsLoaded, hasPermission } = useAuth();
@@ -46,6 +47,7 @@ export default function App() {
             <Route path="/sales" element={<ProtectedByPermission resourceKey="/sales" element={<SalesPage />} />} />
             <Route path="/ticket-payments" element={<ProtectedByPermission resourceKey="/ticket-payments" element={<TicketPaymentsPage />} />} />
             <Route path="/cash-movements" element={<ProtectedByPermission resourceKey="/cash-movements" element={<CashMovementsPage />} />} />
+            <Route path="/announcements" element={<ProtectedByPermission resourceKey="/announcements" element={<AnnouncementsPage />} />} />
             <Route path="/reports" element={<ProtectedByPermission resourceKey="/reports" element={<Navigate to="/reports/sales-stats" replace />} />} />
             <Route path="/reports/sales-stats" element={<ProtectedByPermission resourceKey="/reports/sales-stats" element={<ReportsPage />} />} />
             <Route path="/reports/balance-breakdown" element={<ProtectedByPermission resourceKey="/reports/balance-breakdown" element={<BalanceBreakdownPage />} />} />

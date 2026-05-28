@@ -16,6 +16,7 @@ import {
   PrinterCheck,
   Zap,
   Wallet,
+  Bell,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
@@ -72,6 +73,11 @@ const NAV_ITEMS: NavItem[] = [
     to: '/cash-movements',
     label: 'Depositos y retiros',
     icon: <Wallet size={18} />,
+  },
+  {
+    to: '/announcements',
+    label: 'Anuncios',
+    icon: <Bell size={18} />,
   },
   {
     to: '/print-queue',

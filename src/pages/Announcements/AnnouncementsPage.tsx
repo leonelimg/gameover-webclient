@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bell, Plus, Pencil, Trash2, Image, X } from 'lucide-react';
-import { Card, CardBody, CardHeader } from '@/components/ui/Card';
+import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
@@ -418,15 +418,17 @@ export default function AnnouncementsPage() {
         open={modalOpen}
         onClose={closeModal}
         title={editing ? 'Editar anuncio' : 'Nuevo anuncio'}
-        size="md"
+        size="lg"
       >
-        <AnnouncementForm
-          initial={editing}
-          onSave={handleSave}
-          onCancel={closeModal}
-          saving={saving}
-          error={formError}
-        />
+        <div className="px-4 sm:px-6 py-2 sm:py-3">
+          <AnnouncementForm
+            initial={editing}
+            onSave={handleSave}
+            onCancel={closeModal}
+            saving={saving}
+            error={formError}
+          />
+        </div>
       </Modal>
 
       {/* Delete Confirm Modal */}

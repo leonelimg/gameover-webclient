@@ -18,6 +18,7 @@ import specialMultiplierRoutes from './routes/specialMultipliers.js';
 import paymentRoutes from './routes/payments.js';
 import cashMovementRoutes from './routes/cashMovements.js';
 import roleRoutes from './routes/roles.js';
+import announcementRoutes from './routes/announcements.js';
 
 const app = express();
 
@@ -74,6 +75,7 @@ app.use('/api/special-multipliers', apiLimiter, specialMultiplierRoutes);
 app.use('/api/payments', apiLimiter, paymentRoutes);
 app.use('/api/cash-movements', apiLimiter, cashMovementRoutes);
 app.use('/api/roles', apiLimiter, roleRoutes);
+app.use('/api/announcements', apiLimiter, announcementRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((_req, res) => {

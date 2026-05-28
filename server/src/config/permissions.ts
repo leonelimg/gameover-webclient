@@ -44,6 +44,10 @@ export const APP_RESOURCES: AppResource[] = [
   { key: '/reports/sales-by-user', label: 'Reporte: Ventas por usuario' },
   { key: '/reports/draw-lists', label: 'Reporte: Listas de sorteos' },
   { key: '/reports/commissions', label: 'Reporte: Comisiones' },
+  { key: '/announcements', label: 'Anuncios' },
+  { key: '/announcements:create', label: 'Anuncios: crear' },
+  { key: '/announcements:update', label: 'Anuncios: editar' },
+  { key: '/announcements:delete', label: 'Anuncios: eliminar' },
 ];
 
 export const APP_RESOURCE_KEYS = new Set(APP_RESOURCES.map((resource) => resource.key));
@@ -87,6 +91,10 @@ const DEFAULT_RESOURCE_ACCESS: Record<string, AppRole[]> = {
   '/reports/sales-by-user': ['admin', 'asociado'],
   '/reports/draw-lists': ['admin', 'asociado'],
   '/reports/commissions': ['admin', 'asociado'],
+  '/announcements': ['admin'],
+  '/announcements:create': ['admin'],
+  '/announcements:update': ['admin'],
+  '/announcements:delete': ['admin'],
 };
 
 export function isDefaultAllowed(resourceKey: string, role: AppRole): boolean {

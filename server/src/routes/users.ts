@@ -47,7 +47,7 @@ const safeSelect = {
 };
 
 // GET /api/users
-router.get('/', authorizeAnyResource('/users', '/plans', '/reports/balance-breakdown', '/reports/draw-lists', '/reports/sales-by-user'), async (req, res) => {
+router.get('/', authorizeAnyResource('/users', '/plans', '/reports/balance-breakdown', '/reports/draw-lists', '/reports/sales-by-user', '/reports/commissions'), async (req, res) => {
   const { role, status, search } = req.query as Record<string, string>;
   const where: Record<string, unknown> = {};
   if (role) where['role'] = role;
