@@ -35,25 +35,52 @@ type ReportUser = {
   username: string;
   role: 'admin' | 'asociado' | 'vendedor';
   parentId: string | null;
+  status: 'activo' | 'bloqueado' | 'archivado';
 };
 
 const router = Router();
 router.use(authenticate);
 
+function parseDateYmdToUtc(dateValue: string, endOfDay: boolean): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  const parsed = endOfDay
+    ? new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999))
+    : new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+
+  // Validate overflow cases like 2026-02-31.
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
 function parseCreatedAtFilter(fromDate?: string, toDate?: string): { filter: Record<string, Date>; error?: string } {
   const filter: Record<string, Date> = {};
 
   if (fromDate) {
-    const parsed = new Date(`${fromDate}T00:00:00`);
-    if (Number.isNaN(parsed.getTime())) {
+    const parsed = parseDateYmdToUtc(fromDate, false);
+    if (!parsed) {
       return { filter, error: 'fromDate inválida. Use formato YYYY-MM-DD.' };
     }
     filter['gte'] = parsed;
   }
 
   if (toDate) {
-    const parsed = new Date(`${toDate}T23:59:59.999`);
-    if (Number.isNaN(parsed.getTime())) {
+    const parsed = parseDateYmdToUtc(toDate, true);
+    if (!parsed) {
       return { filter, error: 'toDate inválida. Use formato YYYY-MM-DD.' };
     }
     filter['lte'] = parsed;
@@ -89,6 +116,7 @@ async function getScopedUsers() {
       username: true,
       role: true,
       parentId: true,
+      status: true,
     },
   }) as Promise<ReportUser[]>;
 }
@@ -140,6 +168,9 @@ function calculatePrizeForTicket(
 router.get('/summary', authorizeAnyResource('/reports/sales-stats', '/dashboard'), async (req, res) => {
   const { drawId, fromDate, toDate } = req.query as Record<string, string>;
 
+  const scopedUsers = await getScopedUsers();
+  const scopedSellerIds = getScopedSellerIds(scopedUsers, req.user as { sub: string; role: 'admin' | 'asociado' | 'vendedor' });
+
   const { filter: createdAtFilter, error } = parseCreatedAtFilter(fromDate, toDate);
   if (error) {
     res.status(400).json({ message: error });
@@ -149,10 +180,8 @@ router.get('/summary', authorizeAnyResource('/reports/sales-stats', '/dashboard'
   const ticketWhere: Record<string, unknown> = {};
   if (drawId) ticketWhere['drawId'] = drawId;
   if (Object.keys(createdAtFilter).length > 0) ticketWhere['createdAt'] = createdAtFilter;
-  if (req.user!.role === 'asociado') {
-    ticketWhere['associateId'] = req.user!.sub;
-  } else if (req.user!.role === 'vendedor') {
-    ticketWhere['sellerId'] = req.user!.sub;
+  if (scopedSellerIds) {
+    ticketWhere['sellerId'] = { in: Array.from(scopedSellerIds) };
   }
 
   const activeTicketWhere: Record<string, unknown> = {
@@ -160,11 +189,13 @@ router.get('/summary', authorizeAnyResource('/reports/sales-stats', '/dashboard'
     canceledAt: null,
   };
 
-  const [ticketCount, totalResult, userCount, drawCount, defaultPlan, ticketsForFinancials] = await Promise.all([
+  const [ticketCount, totalResult, ticketIdsForCounts, defaultPlan, ticketsForFinancials] = await Promise.all([
     prisma.ticket.count({ where: activeTicketWhere }),
     prisma.ticket.aggregate({ where: activeTicketWhere, _sum: { total: true } }),
-    prisma.user.count({ where: { status: 'activo' } }),
-    prisma.draw.count(),
+    prisma.ticket.findMany({
+      where: activeTicketWhere,
+      select: { drawId: true, sellerId: true, associateId: true },
+    }),
     prisma.plan.findFirst({
       orderBy: { createdAt: 'asc' },
       select: { multiplier: true, commission: true },
@@ -185,6 +216,11 @@ router.get('/summary', authorizeAnyResource('/reports/sales-stats', '/dashboard'
       },
     }) as Promise<SummaryTicket[]>,
   ]);
+
+  const drawCount = new Set(ticketIdsForCounts.map((ticket) => ticket.drawId)).size;
+  const activeUsersById = new Map(scopedUsers.map((user): [string, ReportUser] => [user.id, user]));
+  const involvedUserIds = new Set(ticketIdsForCounts.flatMap((ticket) => [ticket.sellerId, ticket.associateId]));
+  const userCount = Array.from(involvedUserIds).filter((userId) => activeUsersById.get(userId)?.status === 'activo').length;
 
   let totalPrizes = 0;
   let totalCommissions = 0;
@@ -211,6 +247,9 @@ router.get('/summary', authorizeAnyResource('/reports/sales-stats', '/dashboard'
 router.get('/top-numbers', authorizeAnyResource('/reports/sales-stats', '/dashboard', '/sales'), async (req, res) => {
   const { drawId, limit = '10', fromDate, toDate } = req.query as Record<string, string>;
 
+  const users = await getScopedUsers();
+  const scopedSellerIds = getScopedSellerIds(users, req.user as { sub: string; role: 'admin' | 'asociado' | 'vendedor' });
+
   const { filter: createdAtFilter, error } = parseCreatedAtFilter(fromDate, toDate);
   if (error) {
     res.status(400).json({ message: error });
@@ -221,10 +260,8 @@ router.get('/top-numbers', authorizeAnyResource('/reports/sales-stats', '/dashbo
   if (drawId) ticketWhere['drawId'] = drawId;
   if (Object.keys(createdAtFilter).length > 0) ticketWhere['createdAt'] = createdAtFilter;
   ticketWhere['canceledAt'] = null;
-  if (req.user!.role === 'asociado') {
-    ticketWhere['associateId'] = req.user!.sub;
-  } else if (req.user!.role === 'vendedor') {
-    ticketWhere['sellerId'] = req.user!.sub;
+  if (scopedSellerIds) {
+    ticketWhere['sellerId'] = { in: Array.from(scopedSellerIds) };
   }
 
   // Get all ticket IDs matching filter
@@ -253,7 +290,13 @@ router.get('/top-numbers', authorizeAnyResource('/reports/sales-stats', '/dashbo
 // ── GET /api/reports/hierarchy ────────────────────────────────────────────────
 
 router.get('/hierarchy', authorizeResource('/reports/sales-stats'), async (req, res) => {
-  const { drawId } = req.query as Record<string, string>;
+  const { drawId, fromDate, toDate } = req.query as Record<string, string>;
+
+  const { filter: createdAtFilter, error } = parseCreatedAtFilter(fromDate, toDate);
+  if (error) {
+    res.status(400).json({ message: error });
+    return;
+  }
 
   // Fetch all users
   const users = await prisma.user.findMany({
@@ -264,8 +307,9 @@ router.get('/hierarchy', authorizeResource('/reports/sales-stats'), async (req, 
   });
 
   // Aggregate direct sales by seller, then roll up through the user tree.
-  const ticketWhere: Record<string, unknown> = {};
+  const ticketWhere: Record<string, unknown> = { canceledAt: null };
   if (drawId) ticketWhere['drawId'] = drawId;
+  if (Object.keys(createdAtFilter).length > 0) ticketWhere['createdAt'] = createdAtFilter;
 
   const aggregates = await prisma.ticket.groupBy({
     by: ['sellerId'],
@@ -338,6 +382,9 @@ router.get('/hierarchy', authorizeResource('/reports/sales-stats'), async (req, 
 router.get('/recent-tickets', authorizeAnyResource('/reports/sales-stats', '/dashboard'), async (req, res) => {
   const { drawId, limit = '10', fromDate, toDate } = req.query as Record<string, string>;
 
+  const users = await getScopedUsers();
+  const scopedSellerIds = getScopedSellerIds(users, req.user as { sub: string; role: 'admin' | 'asociado' | 'vendedor' });
+
   const { filter: createdAtFilter, error } = parseCreatedAtFilter(fromDate, toDate);
   if (error) {
     res.status(400).json({ message: error });
@@ -348,8 +395,7 @@ router.get('/recent-tickets', authorizeAnyResource('/reports/sales-stats', '/das
   if (drawId) where['drawId'] = drawId;
   if (Object.keys(createdAtFilter).length > 0) where['createdAt'] = createdAtFilter;
   where['canceledAt'] = null;
-  if (req.user!.role === 'asociado') where['associateId'] = req.user!.sub;
-  if (req.user!.role === 'vendedor') where['sellerId'] = req.user!.sub;
+  if (scopedSellerIds) where['sellerId'] = { in: Array.from(scopedSellerIds) };
 
   const tickets = await prisma.ticket.findMany({
     where,

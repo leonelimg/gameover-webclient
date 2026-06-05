@@ -40,6 +40,29 @@ interface PrizeTicket {
   };
 }
 
+type HistoryActor = {
+  id: string;
+  fullName: string;
+  username: string;
+  role: 'admin' | 'asociado' | 'vendedor';
+};
+
+type CashMovementHistoryRow = {
+  id: string;
+  targetUserId: string;
+  createdById: string;
+  type: 'deposito' | 'retiro' | 'venta';
+  amount: number;
+  note: string | null;
+  createdAt: Date;
+  canceledAt: Date | null;
+  canceledById: string | null;
+  createdBy: HistoryActor;
+  targetUser: HistoryActor;
+  source: 'cash-movement' | 'ticket-sale';
+  referenceCode?: string;
+};
+
 const router = Router();
 router.use(authenticate);
 router.use(authorizeResource('/cash-movements'));
@@ -226,7 +249,7 @@ router.get('/', async (req, res) => {
     where['targetUserId'] = { in: Array.from(scoped) };
   }
 
-  const rows = await prisma.cashMovement.findMany({
+  const movementRows = await prisma.cashMovement.findMany({
     where: { ...where, canceledAt: null },
     include: {
       createdBy: { select: { id: true, fullName: true, username: true, role: true } },
@@ -235,6 +258,59 @@ router.get('/', async (req, res) => {
     orderBy: { createdAt: 'desc' },
     take: limit,
   });
+
+  const ticketWhere: Record<string, unknown> = { canceledAt: null };
+  if (Object.keys(createdAt).length > 0) ticketWhere['createdAt'] = createdAt;
+
+  if (finalTargetUserId) {
+    ticketWhere['sellerId'] = finalTargetUserId;
+  } else {
+    ticketWhere['sellerId'] = { in: Array.from(scoped) };
+  }
+
+  const ticketRows = await prisma.ticket.findMany({
+    where: ticketWhere,
+    include: {
+      seller: { select: { id: true, fullName: true, username: true, role: true } },
+      draw: { select: { name: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+  });
+
+  const rows: CashMovementHistoryRow[] = [
+    ...movementRows.map((row) => ({
+      id: row.id,
+      targetUserId: row.targetUserId,
+      createdById: row.createdById,
+      type: row.type,
+      amount: row.amount,
+      note: row.note ?? null,
+      createdAt: row.createdAt,
+      canceledAt: row.canceledAt,
+      canceledById: row.canceledById,
+      createdBy: row.createdBy,
+      targetUser: row.targetUser,
+      source: 'cash-movement' as const,
+    })),
+    ...ticketRows.map((ticket) => ({
+      id: ticket.id,
+      targetUserId: ticket.sellerId,
+      createdById: ticket.sellerId,
+      type: 'venta' as const,
+      amount: ticket.total,
+      note: `Ticket ${ticket.code}${ticket.draw?.name ? ` - ${ticket.draw.name}` : ''}`,
+      createdAt: ticket.createdAt,
+      canceledAt: ticket.canceledAt,
+      canceledById: ticket.canceledById,
+      createdBy: ticket.seller,
+      targetUser: ticket.seller,
+      source: 'ticket-sale' as const,
+      referenceCode: ticket.code,
+    })),
+  ]
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, limit);
 
   res.json(rows);
 });
@@ -268,6 +344,8 @@ router.get('/balance', async (req, res) => {
     res.status(400).json({ message: error });
     return;
   }
+
+  const openingBalanceCutoff = parsed.data.fromDate ? new Date(`${parsed.data.fromDate}T00:00:00`) : null;
 
   const movementWhere: Record<string, unknown> = { targetUserId, canceledAt: null };
   if (Object.keys(createdAt).length > 0) {
@@ -323,6 +401,65 @@ router.get('/balance', async (req, res) => {
     }),
   ]);
 
+  let openingBalance = 0;
+  if (openingBalanceCutoff) {
+    const openingMovementWhere = {
+      targetUserId,
+      canceledAt: null,
+      createdAt: { lt: openingBalanceCutoff },
+    };
+    const openingTicketWhere = {
+      sellerId: targetUserId,
+      canceledAt: null,
+      createdAt: { lt: openingBalanceCutoff },
+    };
+
+    const [openingDepositsAgg, openingWithdrawalsAgg, openingTicketAgg, openingTickets] = await Promise.all([
+      prisma.cashMovement.aggregate({
+        where: { ...openingMovementWhere, type: 'deposito' },
+        _sum: { amount: true },
+      }),
+      prisma.cashMovement.aggregate({
+        where: { ...openingMovementWhere, type: 'retiro' },
+        _sum: { amount: true },
+      }),
+      prisma.ticket.aggregate({ where: openingTicketWhere, _sum: { total: true } }),
+      prisma.ticket.findMany({
+        where: openingTicketWhere,
+        include: {
+          lines: { select: { number: true, amount: true, specialAmount: true } },
+          draw: {
+            select: {
+              winnerNumber: true,
+              specialMultiplier: { select: { value: true } },
+            },
+          },
+          seller: {
+            select: {
+              plan: { select: { multiplier: true, commission: true } },
+            },
+          },
+          associate: {
+            select: {
+              plan: { select: { multiplier: true, commission: true } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const openingPrizes = openingTickets.reduce(
+      (sum, ticket) => sum + calculatePrizeForTicket(ticket as PrizeTicket, defaultPlan),
+      0
+    );
+
+    openingBalance =
+      (openingDepositsAgg._sum.amount ?? 0) -
+      (openingWithdrawalsAgg._sum.amount ?? 0) +
+      (openingTicketAgg._sum.total ?? 0) -
+      openingPrizes;
+  }
+
   const totalPrizes = tickets.reduce(
     (sum, ticket) => sum + calculatePrizeForTicket(ticket as PrizeTicket, defaultPlan),
     0
@@ -331,7 +468,7 @@ router.get('/balance', async (req, res) => {
   const totalDeposits = depositsAgg._sum.amount ?? 0;
   const totalWithdrawals = withdrawalsAgg._sum.amount ?? 0;
   const totalSales = ticketAgg._sum.total ?? 0;
-  const balance = totalDeposits - totalWithdrawals + totalSales - totalPrizes;
+  const balance = openingBalance + totalDeposits - totalWithdrawals + totalSales - totalPrizes;
 
   res.json({
     targetUser: {
@@ -342,6 +479,7 @@ router.get('/balance', async (req, res) => {
       status: target.status,
     },
     totals: {
+      openingBalance,
       totalDeposits,
       totalWithdrawals,
       totalSales,

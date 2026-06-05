@@ -29,6 +29,15 @@ const DASHBOARD_RANGES: Array<{ key: DashboardRange; label: string; hint: string
   { key: 'custom', label: 'Custom', hint: 'Rango manual' },
 ];
 
+const EMPTY_SUMMARY: ReportSummary = {
+  userCount: 0,
+  drawCount: 0,
+  ticketCount: 0,
+  totalSales: 0,
+  totalPrizes: 0,
+  totalCommissions: 0,
+};
+
 function isDashboardRange(value: string): value is DashboardRange {
   return DASHBOARD_RANGES.some((range) => range.key === value);
 }
@@ -66,14 +75,7 @@ function getDateRange(range: DashboardRange): { fromDate: string; toDate: string
 export default function DashboardPage() {
   const { user } = useAuth();
 
-  const [stats, setStats] = useState<ReportSummary>({
-    userCount: 0,
-    drawCount: 0,
-    ticketCount: 0,
-    totalSales: 0,
-    totalPrizes: 0,
-    totalCommissions: 0,
-  });
+  const [stats, setStats] = useState<ReportSummary>(EMPTY_SUMMARY);
 
   const [recentTickets, setRecentTickets] = useState<TicketType[]>([]);
   const [topNumbers, setTopNumbers] = useState<TopNumber[]>([]);
@@ -128,7 +130,12 @@ export default function DashboardPage() {
         setRecentTickets(recentData);
         setTopNumbers(topData);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!isMounted) return;
+        setStats(EMPTY_SUMMARY);
+        setRecentTickets([]);
+        setTopNumbers([]);
+      });
 
     return () => {
       isMounted = false;

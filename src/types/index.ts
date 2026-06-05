@@ -32,6 +32,10 @@ export interface RolePermissionRow {
   vendedor: boolean;
 }
 
+export interface GlobalNumberRestrictionSettings {
+  globalLimit: number | null;
+}
+
 // ─── Special Multipliers ─────────────────────────────────────────────────────
 
 export interface SpecialMultiplier {

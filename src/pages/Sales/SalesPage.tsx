@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/Badge';
 import { generateId, formatCurrency, formatDateTime, formatDrawLabel, isDrawOpen } from '@/utils/helpers';
 import { Draw, PrintJob, PrintJobStatus, Ticket, User } from '@/types';
 import { useAuth } from '@/context/AuthContext';
-import { drawsApi, ticketsApi, reportsApi, CreateTicketPayload, TopNumber } from '@/services/api';
+import { drawsApi, ticketsApi, reportsApi, numberRestrictionsApi, CreateTicketPayload, TopNumber } from '@/services/api';
 import { mapSaleTicketToPrintBridge, printBridgeApi } from '@/services/printBridge';
 
 interface SaleLine {
@@ -103,6 +103,7 @@ export default function SalesPage() {
   const [draws, setDraws] = useState<Draw[]>([]);
   const [topNumbers, setTopNumbers] = useState<TopNumber[]>([]);
   const [drawTickets, setDrawTickets] = useState<Ticket[]>([]);
+  const [globalNumberLimit, setGlobalNumberLimit] = useState<number | null>(null);
 
   const openDraws = useMemo(
     () => draws.filter((d) => d.status !== 'finalizado' && isDrawOpen(d.closeTime, d.minutosPreviosCierre)),
@@ -140,6 +141,10 @@ export default function SalesPage() {
         }
         return firstOpen?.id ?? '';
       });
+    }).catch(() => {});
+
+    numberRestrictionsApi.getGlobal().then((settings) => {
+      setGlobalNumberLimit(settings.globalLimit);
     }).catch(() => {});
   }, []);
 
@@ -252,17 +257,19 @@ export default function SalesPage() {
     [selectedDraw],
   );
 
+  const soldByNumber = useMemo(() => {
+    const soldMap = new Map<string, number>();
+    for (const ticket of drawTickets) {
+      for (const line of ticket.lines) {
+        soldMap.set(line.number, (soldMap.get(line.number) ?? 0) + line.amount);
+      }
+    }
+    return soldMap;
+  }, [drawTickets]);
+
   const restrictedSummary = useMemo(() => {
     const restrictedNumbers = selectedDraw?.restrictedNumbers ?? [];
     if (restrictedNumbers.length === 0) return [];
-
-    // Build a sold-amount map in a single O(N) pass instead of O(N×M)
-    const soldByNumber = new Map<string, number>();
-    for (const ticket of drawTickets) {
-      for (const line of ticket.lines) {
-        soldByNumber.set(line.number, (soldByNumber.get(line.number) ?? 0) + line.amount);
-      }
-    }
 
     return restrictedNumbers
       .map((rn) => {
@@ -271,7 +278,7 @@ export default function SalesPage() {
         return { ...rn, sold, remaining };
       })
       .sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }));
-  }, [selectedDraw, drawTickets]);
+  }, [selectedDraw, soldByNumber]);
 
   const total = useMemo(
     () => lines.reduce((sum, l) => {
@@ -434,7 +441,8 @@ export default function SalesPage() {
       reportsApi.topNumbers(selectedDrawId, 10).then(setTopNumbers).catch(() => {});
       ticketsApi.list({ drawId: selectedDrawId }).then(setDrawTickets).catch(() => {});
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      const responseData = (err as { response?: { data?: { message?: string; error?: string } } })?.response?.data;
+      const msg = responseData?.message ?? responseData?.error;
       setError(msg ?? 'Error al registrar la venta. Intenta de nuevo.');
     } finally {
       setSubmitting(false);
@@ -613,10 +621,14 @@ export default function SalesPage() {
               </div>
 
               {lines.map((line) => {
-                const summaryEntry = restrictedSummary.find(
-                  (rn) => rn.number === line.number.trim()
-                );
-                const remaining = summaryEntry ? summaryEntry.remaining : null;
+                const normalizedNumber = line.number.trim();
+                const summaryEntry = restrictedSummary.find((rn) => rn.number === normalizedNumber);
+                const sold = soldByNumber.get(normalizedNumber) ?? 0;
+                const effectiveLimit = summaryEntry?.limit ?? globalNumberLimit;
+                const remaining = effectiveLimit !== null && /^\d{2}$/.test(normalizedNumber)
+                  ? Math.max(0, effectiveLimit - sold)
+                  : null;
+                const restrictionScope = summaryEntry ? 'individual' : (effectiveLimit !== null ? 'global' : null);
 
                 return (
                   <div key={line.id} className="space-y-1">
@@ -684,9 +696,9 @@ export default function SalesPage() {
                         </button>
                       </div>
                     </div>
-                    {summaryEntry && remaining !== null && (
+                    {restrictionScope && remaining !== null && (
                       <div className={`text-xs px-1 ${remaining <= 0 ? 'text-red-600' : 'text-yellow-600'}`}>
-                        ⚠ Número restringido — Disponible: C$ {Math.max(0, remaining)}
+                        ⚠ Restricción {restrictionScope === 'individual' ? 'individual' : 'global'} — Disponible: C$ {Math.max(0, remaining)}
                       </div>
                     )}
                   </div>
@@ -844,12 +856,37 @@ export default function SalesPage() {
           {selectedDraw && (
             <Card>
               <div className="px-4 py-3 border-b border-slate-200">
-                <h3 className="font-semibold text-slate-800 text-sm">Números restringidos</h3>
+                <h3 className="font-semibold text-slate-800 text-sm">Restricción global</h3>
+              </div>
+              <CardBody>
+                {globalNumberLimit === null ? (
+                  <p className="text-slate-400 text-xs text-center py-2">
+                    No hay restricción global activa para este sorteo.
+                  </p>
+                ) : (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500">Límite base por número</span>
+                      <span className="font-bold text-amber-700">{formatCurrency(globalNumberLimit)}</span>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      Aplica a cualquier número del sorteo salvo que exista una restricción individual, la cual predomina.
+                    </p>
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+          )}
+
+          {selectedDraw && (
+            <Card>
+              <div className="px-4 py-3 border-b border-slate-200">
+                <h3 className="font-semibold text-slate-800 text-sm">Restricciones individuales</h3>
               </div>
               <CardBody className="p-0">
                 {restrictedSummary.length === 0 ? (
                   <p className="text-slate-400 text-xs text-center py-4 px-4">
-                    Este sorteo no tiene números restringidos
+                    Este sorteo no tiene restricciones individuales
                   </p>
                 ) : (
                   <div className="divide-y divide-slate-100">

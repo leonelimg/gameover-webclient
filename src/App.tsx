@@ -20,6 +20,7 @@ import TicketPaymentsPage from '@/pages/TicketPayments/TicketPaymentsPage';
 import CommissionsPage from '@/pages/Reports/CommissionsPage';
 import CashMovementsPage from '@/pages/CashMovements/CashMovementsPage';
 import AnnouncementsPage from '@/pages/Announcements/AnnouncementsPage';
+import NumberRestrictionsPage from '@/pages/NumberRestrictions/NumberRestrictionsPage';
 
 function ProtectedByPermission({ resourceKey, element }: { resourceKey: string; element: ReactElement }) {
   const { isAuthenticated, permissionsLoaded, hasPermission } = useAuth();
@@ -43,6 +44,7 @@ export default function App() {
             <Route path="/roles" element={<ProtectedByPermission resourceKey="/roles" element={<RolesPage />} />} />
             <Route path="/plans" element={<ProtectedByPermission resourceKey="/plans" element={<PlansPage />} />} />
             <Route path="/draws" element={<ProtectedByPermission resourceKey="/draws" element={<DrawsPage />} />} />
+            <Route path="/number-restrictions" element={<ProtectedByPermission resourceKey="/number-restrictions" element={<NumberRestrictionsPage />} />} />
             <Route path="/multiplicadores" element={<ProtectedByPermission resourceKey="/multiplicadores" element={<MultiplicadoresEspecialesPage />} />} />
             <Route path="/sales" element={<ProtectedByPermission resourceKey="/sales" element={<SalesPage />} />} />
             <Route path="/ticket-payments" element={<ProtectedByPermission resourceKey="/ticket-payments" element={<TicketPaymentsPage />} />} />

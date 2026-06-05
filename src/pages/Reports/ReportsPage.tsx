@@ -13,6 +13,15 @@ const REPORTS_RANGE_KEY = 'go_reports_selected_range';
 const REPORTS_CUSTOM_FROM_KEY = 'go_reports_custom_from_date';
 const REPORTS_CUSTOM_TO_KEY = 'go_reports_custom_to_date';
 
+const EMPTY_REPORT_SUMMARY: ReportSummary = {
+  ticketCount: 0,
+  totalSales: 0,
+  totalPrizes: 0,
+  totalCommissions: 0,
+  userCount: 0,
+  drawCount: 0,
+};
+
 function TreeRow({
   node,
   depth = 0,
@@ -81,14 +90,7 @@ export default function ReportsPage() {
     return 'today';
   });
 
-  const [summary, setSummary] = useState<ReportSummary>({
-    ticketCount: 0,
-    totalSales: 0,
-    totalPrizes: 0,
-    totalCommissions: 0,
-    userCount: 0,
-    drawCount: 0,
-  });
+  const [summary, setSummary] = useState<ReportSummary>(EMPTY_REPORT_SUMMARY);
   const [tree, setTree] = useState<HierarchyNode[]>([]);
   const [topNumbers, setTopNumbers] = useState<TopNumber[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -124,10 +126,32 @@ export default function ReportsPage() {
       ? { fromDate: customFromDate, toDate: customToDate }
       : getDateRange(selectedRange);
 
-    reportsApi.summary(drawId, fromDate, toDate).then(setSummary).catch(() => {});
-    reportsApi.hierarchy(drawId, fromDate, toDate).then(setTree).catch(() => {});
-    reportsApi.topNumbers(drawId, 10, fromDate, toDate).then(setTopNumbers).catch(() => {});
-    reportsApi.recentTickets(drawId, 10, fromDate, toDate).then(setTickets).catch(() => {});
+    let isMounted = true;
+
+    Promise.all([
+      reportsApi.summary(drawId, fromDate, toDate),
+      reportsApi.hierarchy(drawId, fromDate, toDate),
+      reportsApi.topNumbers(drawId, 10, fromDate, toDate),
+      reportsApi.recentTickets(drawId, 10, fromDate, toDate),
+    ])
+      .then(([summaryData, hierarchyData, topNumbersData, ticketsData]) => {
+        if (!isMounted) return;
+        setSummary(summaryData);
+        setTree(hierarchyData);
+        setTopNumbers(topNumbersData);
+        setTickets(ticketsData);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setSummary(EMPTY_REPORT_SUMMARY);
+        setTree([]);
+        setTopNumbers([]);
+        setTickets([]);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedDrawId, selectedRange, customFromDate, customToDate]);
 
   const resetFilters = () => {

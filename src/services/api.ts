@@ -6,6 +6,7 @@ import {
   Ticket,
   Announcement,
   AnnouncementPayload,
+  GlobalNumberRestrictionSettings,
   RolePermissionRow,
   PaymentsWinningTicketsResponse,
   SpecialMultiplier,
@@ -140,6 +141,21 @@ export const rolesApi = {
       permissions,
     });
     return res.data.permissions;
+  },
+};
+
+// ─── Global Number Restrictions API ─────────────────────────────────────────
+
+export const numberRestrictionsApi = {
+  getGlobal: async (): Promise<GlobalNumberRestrictionSettings> => {
+    const res = await api.get<GlobalNumberRestrictionSettings>('/api/number-restrictions/global');
+    return res.data;
+  },
+  updateGlobal: async (globalLimit: number | null): Promise<GlobalNumberRestrictionSettings> => {
+    const res = await api.patch<GlobalNumberRestrictionSettings>('/api/number-restrictions/global', {
+      globalLimit,
+    });
+    return res.data;
   },
 };
 
@@ -320,6 +336,7 @@ export const ticketsApi = {
 // ─── Cash Movements API ──────────────────────────────────────────────────────
 
 export type CashMovementType = 'deposito' | 'retiro';
+export type CashMovementHistoryType = CashMovementType | 'venta';
 
 export interface CashMovementActor {
   id: string;
@@ -351,6 +368,22 @@ export interface CashMovement {
   targetUser: CashMovementActor;
 }
 
+export interface CashMovementHistoryItem {
+  id: string;
+  targetUserId: string;
+  createdById: string;
+  type: CashMovementHistoryType;
+  amount: number;
+  note?: string | null;
+  createdAt: string;
+  canceledAt?: string | null;
+  canceledById?: string | null;
+  createdBy: CashMovementActor;
+  targetUser: CashMovementActor;
+  source: 'cash-movement' | 'ticket-sale';
+  referenceCode?: string;
+}
+
 export interface CashMovementBalanceResponse {
   targetUser: {
     id: string;
@@ -360,6 +393,7 @@ export interface CashMovementBalanceResponse {
     status: 'activo' | 'bloqueado' | 'archivado';
   };
   totals: {
+    openingBalance: number;
     totalDeposits: number;
     totalWithdrawals: number;
     totalSales: number;
@@ -391,8 +425,8 @@ export const cashMovementsApi = {
     fromDate?: string;
     toDate?: string;
     limit?: number;
-  }): Promise<CashMovement[]> => {
-    const res = await api.get<CashMovement[]>('/api/cash-movements', { params });
+  }): Promise<CashMovementHistoryItem[]> => {
+    const res = await api.get<CashMovementHistoryItem[]>('/api/cash-movements', { params });
     return res.data;
   },
   balance: async (params?: {

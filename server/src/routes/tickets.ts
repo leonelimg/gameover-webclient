@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/prisma.js';
+import { getGlobalNumberLimit } from '../config/numberRestrictions.js';
 import { authenticate, authorizeAnyResource, authorizeResource } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { param } from '../middleware/params.js';
@@ -18,7 +19,7 @@ const ticketLineSchema = z.object({
 
 const createTicketSchema = z.object({
   drawId: z.string(),
-  customerName: z.string().min(1),
+  customerName: z.string(),
   lines: z.array(ticketLineSchema).min(1),
 });
 
@@ -142,10 +143,13 @@ router.get('/:id', authorizeAnyResource('/sales', '/ticket-payments', '/reports/
 router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema), async (req, res) => {
   const body = req.body as z.infer<typeof createTicketSchema>;
 
-  const draw = await prisma.draw.findUnique({
-    where: { id: body.drawId },
-    include: { restrictedNumbers: true },
-  });
+  const [draw, globalNumberLimit] = await Promise.all([
+    prisma.draw.findUnique({
+      where: { id: body.drawId },
+      include: { restrictedNumbers: true },
+    }),
+    getGlobalNumberLimit(),
+  ]);
   if (!draw) { res.status(404).json({ message: 'Sorteo no encontrado.' }); return; }
 
   if (draw.status === 'finalizado') {
@@ -161,21 +165,39 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
     return;
   }
 
-  // Check restricted numbers
+  const requestedByNumber = new Map<string, number>();
   for (const line of body.lines) {
-    const restricted = draw.restrictedNumbers.find((rn: { number: string; limit: number }) => rn.number === line.number);
-    if (restricted) {
+    requestedByNumber.set(line.number, (requestedByNumber.get(line.number) ?? 0) + line.amount);
+  }
+
+  const soldByNumber = new Map<string, number>();
+  await Promise.all(
+    Array.from(requestedByNumber.keys()).map(async (number) => {
       const agg = await prisma.ticketLine.aggregate({
-        where: { number: line.number, ticket: { drawId: body.drawId } },
+        where: { number, ticket: { drawId: body.drawId } },
         _sum: { amount: true },
       });
-      const sold = agg._sum.amount ?? 0;
-      if (sold + line.amount > restricted.limit) {
-        res.status(400).json({
-          message: `Número ${line.number} alcanzó su límite. Disponible: C$ ${(restricted.limit - sold).toFixed(2)}.`,
-        });
-        return;
-      }
+      soldByNumber.set(number, agg._sum.amount ?? 0);
+    })
+  );
+
+  for (const [number, requestedAmount] of requestedByNumber.entries()) {
+    const individualRestriction = draw.restrictedNumbers.find(
+      (rn: { number: string; limit: number }) => rn.number === number
+    );
+    const effectiveLimit = individualRestriction?.limit ?? globalNumberLimit;
+    const restrictionType = individualRestriction ? 'individual' : 'global';
+    if (effectiveLimit === null) {
+      continue;
+    }
+
+    const sold = soldByNumber.get(number) ?? 0;
+    if (sold + requestedAmount > effectiveLimit) {
+      const available = Math.max(0, effectiveLimit - sold).toFixed(2);
+      res.status(400).json({
+        message: `Límite de restricción de venta (${restrictionType}) alcanzado para el número ${number}. Disponible: C$ ${available}.`,
+      });
+      return;
     }
   }
 

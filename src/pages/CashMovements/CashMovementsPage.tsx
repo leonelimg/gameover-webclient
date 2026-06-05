@@ -2,8 +2,8 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { ArrowDownCircle, ArrowUpCircle, CircleDollarSign, RefreshCcw, Trash2 } from 'lucide-react';
 import {
   cashMovementsApi,
-  CashMovement,
   CashMovementBalanceResponse,
+  CashMovementHistoryItem,
   CashMovementType,
   CashMovementUserSummary,
 } from '@/services/api';
@@ -30,6 +30,7 @@ const EMPTY_BALANCE: CashMovementBalanceResponse = {
     status: 'activo',
   },
   totals: {
+    openingBalance: 0,
     totalDeposits: 0,
     totalWithdrawals: 0,
     totalSales: 0,
@@ -65,7 +66,7 @@ export default function CashMovementsPage() {
   const [movementType, setMovementType] = useState<CashMovementType>('deposito');
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
-  const [rows, setRows] = useState<CashMovement[]>([]);
+  const [rows, setRows] = useState<CashMovementHistoryItem[]>([]);
   const [balance, setBalance] = useState<CashMovementBalanceResponse>(EMPTY_BALANCE);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -86,8 +87,15 @@ export default function CashMovementsPage() {
 
   const canOperateTarget = Boolean(selectedTarget && selectedTarget.canOperate && selectedTarget.id !== user?.id);
 
-  const canCancelMovement = (movement: CashMovement): boolean => {
+  const getMovementBadgeVariant = (type: CashMovementHistoryItem['type']) => {
+    if (type === 'deposito') return 'success';
+    if (type === 'venta') return 'info';
+    return 'danger';
+  };
+
+  const canCancelMovement = (movement: CashMovementHistoryItem): boolean => {
     if (!canCancelPermission) return false;
+    if (movement.source !== 'cash-movement') return false;
     if (movement.canceledAt) return false;
     if (user?.role === 'admin') return true;
     if (user?.id === movement.createdById) return true;
@@ -323,7 +331,13 @@ export default function CashMovementsPage() {
           </div>
         </CardHeader>
         <CardBody>
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="text-xs text-slate-500">Saldo anterior</p>
+              <p className={`text-lg font-semibold ${balance.totals.openingBalance >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                {formatCurrency(balance.totals.openingBalance)}
+              </p>
+            </div>
             <div className="rounded-lg border border-slate-200 p-3">
               <p className="text-xs text-slate-500">Depositos</p>
               <p className="text-lg font-semibold text-emerald-700">{formatCurrency(balance.totals.totalDeposits)}</p>
@@ -348,7 +362,7 @@ export default function CashMovementsPage() {
             </div>
           </div>
           <p className="mt-3 text-xs text-slate-500">
-            Formula: Depositos - Retiros + Ventas - Premios
+            Formula: Saldo + Depositos - Retiros + Ventas - Premios
           </p>
         </CardBody>
       </Card>
@@ -430,7 +444,7 @@ export default function CashMovementsPage() {
                   <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50">
                     <td className="px-4 py-3 text-slate-700">{formatDateTime(row.createdAt)}</td>
                     <td className="px-4 py-3">
-                      <Badge variant={row.type === 'deposito' ? 'success' : 'danger'} className="capitalize">
+                      <Badge variant={getMovementBadgeVariant(row.type)} className="capitalize">
                         {row.type}
                       </Badge>
                     </td>
@@ -452,6 +466,8 @@ export default function CashMovementsPage() {
                           <Trash2 size={14} />
                           Cancelar
                         </Button>
+                      ) : row.source === 'ticket-sale' ? (
+                        <Badge variant="info" className="text-xs">Venta</Badge>
                       ) : row.canceledAt ? (
                         <Badge variant="warning" className="text-xs">Cancelado</Badge>
                       ) : null}

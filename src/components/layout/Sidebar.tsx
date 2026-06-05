@@ -17,6 +17,7 @@ import {
   Zap,
   Wallet,
   Bell,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
@@ -53,6 +54,11 @@ const NAV_ITEMS: NavItem[] = [
     to: '/draws',
     label: 'Sorteos',
     icon: <Ticket size={18} />,
+  },
+  {
+    to: '/number-restrictions',
+    label: 'Restricción global',
+    icon: <SlidersHorizontal size={18} />,
   },
   {
     to: '/multiplicadores',
