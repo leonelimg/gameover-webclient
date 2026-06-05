@@ -14,7 +14,7 @@ import {
   AssociateDrawBreakdownRow,
 } from '@/services/api';
 import { Draw, User } from '@/types';
-import { formatCurrency, formatDateTime } from '@/utils/helpers';
+import { formatCurrency, formatDateTime, formatDrawLabel } from '@/utils/helpers';
 import { DateRange, getDateRange, isDateRange, toISODateLocal } from '@/utils/dateRanges';
 
 const BALANCE_RANGE_KEY = 'go_balance_selected_range';

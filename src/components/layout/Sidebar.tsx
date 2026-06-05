@@ -1,5 +1,6 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
+  CircleDollarSign,
   LayoutDashboard,
   Users,
   ShieldCheck,
@@ -21,6 +22,9 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { cashMovementsApi } from '@/services/api';
+import { formatCurrency } from '@/utils/helpers';
+import { toISODateLocal } from '@/utils/dateRanges';
 
 interface NavItem {
   to?: string;
@@ -125,10 +129,46 @@ export function Sidebar() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(location.pathname.startsWith('/reports'));
+  const [finalBalance, setFinalBalance] = useState<number | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
 
   useEffect(() => {
-    setReportsOpen(location.pathname.startsWith('/reports'));
-  }, [location.pathname]);
+    if (!user?.id) {
+      return;
+    }
+
+    let active = true;
+
+    const loadFinalBalance = async () => {
+      setBalanceLoading(true);
+      try {
+        const today = toISODateLocal(new Date());
+        const response = await cashMovementsApi.balance({
+          targetUserId: user.id,
+          fromDate: today,
+          toDate: today,
+        });
+
+        if (active) {
+          setFinalBalance(response.totals.balance);
+        }
+      } catch {
+        if (active) {
+          setFinalBalance(null);
+        }
+      } finally {
+        if (active) {
+          setBalanceLoading(false);
+        }
+      }
+    };
+
+    loadFinalBalance();
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
 
   const handleLogout = () => {
     logout();
@@ -137,7 +177,7 @@ export function Sidebar() {
 
   const visibleItems = NAV_ITEMS.filter((item) => item.to && hasPermission(item.to));
 
-  const SidebarContent = () => (
+  const renderSidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="flex items-center gap-2 px-6 py-5 border-b border-slate-700">
@@ -147,6 +187,26 @@ export function Sidebar() {
         <div>
           <p className="text-white font-semibold text-sm leading-tight">GameOver</p>
           <p className="text-slate-400 text-xs">Lotería Sistema</p>
+        </div>
+      </div>
+
+      <div className="px-4 py-4 border-b border-slate-700">
+        <div className="rounded-xl border border-emerald-800/60 bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/55 px-3 py-3 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]">
+          <div className="flex items-center gap-2 text-emerald-300 text-xs uppercase tracking-wide">
+            <CircleDollarSign size={14} />
+            Balance final
+          </div>
+          <p
+            className={`mt-2 text-lg font-semibold ${
+              finalBalance === null
+                ? 'text-slate-300'
+                : finalBalance >= 0
+                  ? 'text-emerald-300'
+                  : 'text-rose-300'
+            }`}
+          >
+            {balanceLoading ? 'Cargando...' : finalBalance !== null ? formatCurrency(finalBalance) : 'No disponible'}
+          </p>
         </div>
       </div>
 
@@ -261,7 +321,7 @@ export function Sidebar() {
 
       {/* Sidebar desktop */}
       <aside className="hidden lg:flex flex-col w-60 bg-slate-800 min-h-screen fixed left-0 top-0 bottom-0 z-30">
-        <SidebarContent />
+        {renderSidebarContent()}
       </aside>
 
       {/* Sidebar mobile */}
@@ -270,7 +330,7 @@ export function Sidebar() {
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <SidebarContent />
+        {renderSidebarContent()}
       </aside>
     </>
   );

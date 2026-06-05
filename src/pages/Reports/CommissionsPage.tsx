@@ -20,6 +20,7 @@ const EMPTY_REPORT: CommissionsReportResponse = {
     toDate: null,
   },
   totals: {
+    totalSales: 0,
     totalCommissions: 0,
   },
   bySeller: [],
@@ -166,21 +167,22 @@ export default function CommissionsPage() {
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Vendedor</th>
-                <th className="text-left px-4 py-3 text-slate-600 font-medium">Fecha compra</th>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">Fecha sorteo</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Sorteo</th>
+                <th className="text-right px-4 py-3 text-slate-600 font-medium">Monto de venta</th>
                 <th className="text-right px-4 py-3 text-slate-600 font-medium">Comisión</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
                     Cargando reporte...
                   </td>
                 </tr>
               ) : report.bySeller.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
                     No hay registros para los filtros seleccionados.
                   </td>
                 </tr>
@@ -190,7 +192,7 @@ export default function CommissionsPage() {
                     <Fragment key={seller.sellerId}>
                       {/* Seller header */}
                       <tr key={`${seller.sellerId}-header`} className="bg-blue-50 border-t-2 border-blue-200">
-                        <td colSpan={4} className="px-4 py-2 text-sm font-bold text-blue-900">
+                        <td colSpan={5} className="px-4 py-2 text-sm font-bold text-blue-900">
                           {seller.sellerName} / {seller.sellerUsername}
                         </td>
                       </tr>
@@ -199,8 +201,9 @@ export default function CommissionsPage() {
                       {seller.rows.map((row, idx) => (
                         <tr key={`${seller.sellerId}-${idx}`} className="border-t border-slate-100 hover:bg-slate-50">
                           <td className="px-4 py-3 text-slate-600"></td>
-                          <td className="px-4 py-3 text-slate-700">{formatDateTime(row.lastTicketCreatedAt ?? row.drawCloseTime)}</td>
+                          <td className="px-4 py-3 text-slate-700">{formatDateTime(row.drawCloseTime)}</td>
                           <td className="px-4 py-3 text-slate-700">{row.drawName}</td>
+                          <td className="px-4 py-3 text-right text-slate-700 font-medium">{formatCurrency(row.totalSales)}</td>
                           <td className="px-4 py-3 text-right text-blue-700 font-semibold">{formatCurrency(row.commission)}</td>
                         </tr>
                       ))}
@@ -208,7 +211,10 @@ export default function CommissionsPage() {
                       {/* Seller subtotal */}
                       <tr key={`${seller.sellerId}-subtotal`} className="bg-slate-100 border-t border-slate-200">
                         <td colSpan={3} className="px-4 py-2 text-right font-semibold text-slate-700">
-                          Subtotal:
+                          Total vendedor:
+                        </td>
+                        <td className="px-4 py-2 text-right font-bold text-slate-900">
+                          {formatCurrency(seller.totalSales)}
                         </td>
                         <td className="px-4 py-2 text-right font-bold text-slate-900">
                           {formatCurrency(seller.subtotal)}
@@ -220,9 +226,20 @@ export default function CommissionsPage() {
                   {/* Grand total */}
                   <tr className="bg-slate-800 border-t-2 border-slate-800">
                     <td colSpan={3} className="px-4 py-3 text-right font-bold text-white">
-                      TOTAL EN COMISIONES
+                      TOTALES
                     </td>
                     <td className="px-4 py-3 text-right text-white font-bold text-lg">
+                      {formatCurrency(report.totals.totalSales)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-white font-bold text-lg">
+                      {formatCurrency(report.totals.totalCommissions)}
+                    </td>
+                  </tr>
+                  <tr className="bg-slate-700 border-t border-slate-700">
+                    <td colSpan={4} className="px-4 py-2 text-right font-bold text-white/90">
+                      TOTAL EN COMISIONES
+                    </td>
+                    <td className="px-4 py-2 text-right text-white font-bold">
                       {formatCurrency(report.totals.totalCommissions)}
                     </td>
                   </tr>

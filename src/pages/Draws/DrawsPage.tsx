@@ -53,7 +53,6 @@ const DRAWS_VIEW_MODE_STORAGE_KEY = 'go_draws_view_mode';
 
 const DRAWS_RANGES: Array<{ key: DrawsRange; label: string }> = [
   { key: 'today', label: 'Hoy' },
-  { key: 'last7', label: '7 dias' },
   { key: 'week', label: 'Semana' },
   { key: 'month', label: 'Mes' },
   { key: 'custom', label: 'Custom' },
@@ -379,10 +378,10 @@ export default function DrawsPage() {
         )}
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+      <div className="w-full rounded-2xl border border-slate-300 bg-slate-100/80 p-2 shadow-sm xl:max-w-[760px]">
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
               <CalendarDays size={13} />
               Filtro de fecha
             </div>
@@ -425,8 +424,8 @@ export default function DrawsPage() {
                   onClick={() => setSelectedRange(range.key)}
                   className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition ${
                     isActive
-                      ? 'border-blue-200 bg-blue-600 text-white'
-                      : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-slate-100'
+                      ? 'border-slate-700 bg-gradient-to-br from-slate-700 to-teal-700 text-white shadow-sm'
+                      : 'border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50'
                   }`}
                 >
                   {range.label}
@@ -436,7 +435,7 @@ export default function DrawsPage() {
           </div>
 
           {selectedRange === 'custom' && (
-            <div className="mt-1 grid grid-cols-1 gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 sm:grid-cols-2">
+            <div className="mt-1 grid grid-cols-1 gap-2 rounded-lg border border-slate-300 bg-white/80 p-2 sm:grid-cols-2">
               <label className="text-[11px] font-medium text-slate-600">
                 Desde
                 <input

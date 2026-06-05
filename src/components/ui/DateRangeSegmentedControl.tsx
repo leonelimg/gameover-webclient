@@ -21,8 +21,8 @@ export function DateRangeSegmentedControl({
   const isCustomRangeInvalid = customFromDate > customToDate;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur">
-      <div className="mb-2 flex items-center gap-2 px-2 text-xs font-medium uppercase tracking-wider text-slate-500">
+    <div className="w-full rounded-2xl border border-slate-300 bg-slate-100/80 p-2 shadow-sm backdrop-blur xl:max-w-[760px]">
+      <div className="mb-2 flex items-center gap-2 px-2 text-xs font-medium uppercase tracking-wider text-slate-600">
         <CalendarDays size={13} />
         Filtro de fecha
       </div>
@@ -38,8 +38,8 @@ export function DateRangeSegmentedControl({
               onClick={() => onRangeChange(range.key)}
               className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition-all ${
                 isActive
-                  ? 'border-blue-200 bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-sm'
-                  : 'border-slate-200 bg-slate-50/70 text-slate-700 hover:border-slate-300 hover:bg-slate-100'
+                  ? 'border-slate-700 bg-gradient-to-br from-slate-700 to-teal-700 text-white shadow-sm'
+                  : 'border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50'
               }`}
             >
               {range.label}
@@ -50,7 +50,7 @@ export function DateRangeSegmentedControl({
 
       {/* Custom date inputs - shown when custom range is selected */}
       {selectedRange === 'custom' && (
-        <div className="mt-2 grid grid-cols-1 gap-1.5 rounded-lg border border-slate-200 bg-slate-50/70 p-2 md:grid-cols-2">
+        <div className="mt-2 grid grid-cols-1 gap-1.5 rounded-lg border border-slate-300 bg-white/80 p-2 md:grid-cols-2">
           <label className="text-[11px] font-medium text-slate-600">
             Desde
             <input

@@ -283,15 +283,20 @@ export default function SalesPage() {
     [selectedDraw],
   );
 
+  const activeDrawTickets = useMemo(
+    () => drawTickets.filter((ticket) => !ticket.canceledAt),
+    [drawTickets],
+  );
+
   const soldByNumber = useMemo(() => {
     const soldMap = new Map<string, number>();
-    for (const ticket of drawTickets) {
+    for (const ticket of activeDrawTickets) {
       for (const line of ticket.lines) {
         soldMap.set(line.number, (soldMap.get(line.number) ?? 0) + line.amount);
       }
     }
     return soldMap;
-  }, [drawTickets]);
+  }, [activeDrawTickets]);
 
   const numbersSoldSummary = useMemo(() => {
     const individualByNumber = new Map(
@@ -926,12 +931,12 @@ export default function SalesPage() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-slate-500">Tickets vendidos</span>
-                    <span className="font-medium">{drawTickets.length}</span>
+                    <span className="font-medium">{activeDrawTickets.length}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Total recaudado</span>
                     <span className="font-bold text-green-700">
-                      {formatCurrency(drawTickets.reduce((s, t) => s + t.total, 0))}
+                      {formatCurrency(activeDrawTickets.reduce((s, t) => s + t.total, 0))}
                     </span>
                   </div>
                 </div>

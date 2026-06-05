@@ -2,7 +2,6 @@ export type DateRange = 'today' | 'last7' | 'week' | 'month' | 'custom';
 
 export const COMMON_DATE_RANGES: Array<{ key: DateRange; label: string }> = [
   { key: 'today', label: 'Hoy' },
-  { key: 'last7', label: 'Últimos 7 días' },
   { key: 'week', label: 'Esta semana' },
   { key: 'month', label: 'Este mes' },
   { key: 'custom', label: 'Custom' },

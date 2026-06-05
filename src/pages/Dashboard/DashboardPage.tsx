@@ -23,7 +23,6 @@ const DASHBOARD_CUSTOM_TO_STORAGE_KEY = 'go_dashboard_custom_to_date';
 
 const DASHBOARD_RANGES: Array<{ key: DashboardRange; label: string; hint: string }> = [
   { key: 'today', label: 'Hoy', hint: 'Cierre diario' },
-  { key: 'last7', label: 'Ultimos 7 dias', hint: 'Ventana movil' },
   { key: 'week', label: 'Esta semana', hint: 'Lun a hoy' },
   { key: 'month', label: 'Este mes', hint: 'Mes en curso' },
   { key: 'custom', label: 'Custom', hint: 'Rango manual' },
@@ -152,8 +151,8 @@ export default function DashboardPage() {
           <p className="text-slate-500 text-sm mt-1">Resumen del sistema</p>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur">
-          <div className="mb-2 flex items-center gap-2 px-2 text-xs font-medium uppercase tracking-wider text-slate-500">
+        <div className="rounded-2xl border border-slate-300 bg-slate-100/80 p-2 shadow-sm backdrop-blur">
+          <div className="mb-2 flex items-center gap-2 px-2 text-xs font-medium uppercase tracking-wider text-slate-600">
             <CalendarDays size={14} />
             Periodo del dashboard
           </div>
@@ -167,12 +166,12 @@ export default function DashboardPage() {
                   onClick={() => setSelectedRange(range.key)}
                   className={`rounded-xl border px-3 py-2 text-left transition-all ${
                     isActive
-                      ? 'border-blue-200 bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-sm'
-                      : 'border-slate-200 bg-slate-50/70 text-slate-700 hover:border-slate-300 hover:bg-slate-100'
+                      ? 'border-slate-700 bg-gradient-to-br from-slate-700 to-teal-700 text-white shadow-sm'
+                      : 'border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50'
                   }`}
                 >
                   <p className="text-sm font-semibold leading-tight">{range.label}</p>
-                  <p className={`text-[11px] ${isActive ? 'text-blue-100' : 'text-slate-500'}`}>
+                    <p className={`text-[11px] ${isActive ? 'text-slate-100' : 'text-slate-500'}`}>
                     {range.hint}
                   </p>
                 </button>
@@ -181,7 +180,7 @@ export default function DashboardPage() {
           </div>
 
           {selectedRange === 'custom' && (
-            <div className="mt-3 grid grid-cols-1 gap-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3 md:grid-cols-2">
+            <div className="mt-3 grid grid-cols-1 gap-2 rounded-xl border border-slate-300 bg-white/80 p-3 md:grid-cols-2">
               <label className="text-xs font-medium text-slate-600">
                 Desde
                 <input

@@ -720,7 +720,7 @@ export interface CommissionsReportRow {
   drawId?: string;
   drawName: string;
   drawCloseTime: string;
-  lastTicketCreatedAt?: string;
+  totalSales: number;
   commission: number;
 }
 
@@ -728,6 +728,7 @@ export interface CommissionsSellerGroup {
   sellerId: string;
   sellerName: string;
   sellerUsername: string;
+  totalSales: number;
   subtotal: number;
   rows: CommissionsReportRow[];
 }
@@ -740,6 +741,7 @@ export interface CommissionsReportResponse {
     toDate: string | null;
   };
   totals: {
+    totalSales: number;
     totalCommissions: number;
   };
   bySeller: CommissionsSellerGroup[];

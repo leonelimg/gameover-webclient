@@ -476,7 +476,6 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
   const tickets = (await prisma.ticket.findMany({
     where,
     include: {
-      createdAt: true,
       lines: { select: { number: true, amount: true } },
       draw: { select: { id: true, name: true, closeTime: true, winnerNumber: true } },
       associate: {
@@ -1112,8 +1111,9 @@ router.get('/commissions', authorizeResource('/reports/commissions'), async (req
     sellerId: string;
     sellerName: string;
     sellerUsername: string;
+    totalSales: number;
     subtotal: number;
-    rows: Map<string, { drawId: string; drawName: string; drawCloseTime: string; lastTicketCreatedAt: string; commission: number }>;
+    rows: Map<string, { drawId: string; drawName: string; drawCloseTime: string; totalSales: number; commission: number }>;
   }>();
 
   for (const ticket of tickets) {
@@ -1124,23 +1124,23 @@ router.get('/commissions', authorizeResource('/reports/commissions'), async (req
       sellerId: ticket.seller.id,
       sellerName: ticket.seller.fullName,
       sellerUsername: ticket.seller.username,
+      totalSales: 0,
       subtotal: 0,
-      rows: new Map<string, { drawId: string; drawName: string; drawCloseTime: string; lastTicketCreatedAt: string; commission: number }>(),
+      rows: new Map<string, { drawId: string; drawName: string; drawCloseTime: string; totalSales: number; commission: number }>(),
     };
 
+    current.totalSales += ticket.total;
     current.subtotal += commission;
 
     const row = current.rows.get(ticket.draw.id) ?? {
       drawId: ticket.draw.id,
       drawName: ticket.draw.name,
       drawCloseTime: ticket.draw.closeTime.toISOString(),
-      lastTicketCreatedAt: ticket.createdAt.toISOString(),
+      totalSales: 0,
       commission: 0,
     };
+    row.totalSales += ticket.total;
     row.commission += commission;
-    if (ticket.createdAt.toISOString() > row.lastTicketCreatedAt) {
-      row.lastTicketCreatedAt = ticket.createdAt.toISOString();
-    }
 
     current.rows.set(ticket.draw.id, row);
     bySeller.set(ticket.seller.id, current);
@@ -1151,8 +1151,9 @@ router.get('/commissions', authorizeResource('/reports/commissions'), async (req
       sellerId: seller.sellerId,
       sellerName: seller.sellerName,
       sellerUsername: seller.sellerUsername,
+      totalSales: seller.totalSales,
       subtotal: seller.subtotal,
-      rows: Array.from(seller.rows.values()).sort((a, b) => b.lastTicketCreatedAt.localeCompare(a.lastTicketCreatedAt)),
+      rows: Array.from(seller.rows.values()).sort((a, b) => b.drawCloseTime.localeCompare(a.drawCloseTime)),
     }))
     .sort((a, b) => a.sellerName.localeCompare(b.sellerName));
 
@@ -1164,6 +1165,10 @@ router.get('/commissions', authorizeResource('/reports/commissions'), async (req
       toDate: toDate || null,
     },
     totals: {
+      totalSales: sellerRows.reduce(
+        (sum, seller) => sum + seller.rows.reduce((sellerSum, row) => sellerSum + row.totalSales, 0),
+        0
+      ),
       totalCommissions: sellerRows.reduce((sum, seller) => sum + seller.subtotal, 0),
     },
     bySeller: sellerRows,
