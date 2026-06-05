@@ -14,7 +14,7 @@ import {
   AssociateDrawBreakdownRow,
 } from '@/services/api';
 import { Draw, User } from '@/types';
-import { formatCurrency, formatDrawLabel } from '@/utils/helpers';
+import { formatCurrency, formatDateTime } from '@/utils/helpers';
 import { DateRange, getDateRange, isDateRange, toISODateLocal } from '@/utils/dateRanges';
 
 const BALANCE_RANGE_KEY = 'go_balance_selected_range';
@@ -327,7 +327,11 @@ export default function BalanceBreakdownPage() {
                         associate.draws.map((draw) => (
                           <EventRow
                             key={`${associate.associateId}-${draw.drawId}`}
-                            event={formatDrawLabel({ name: draw.drawName, closeTime: draw.drawCloseTime })}
+                            event={
+                              draw.lastTicketCreatedAt
+                                ? `${draw.drawName} · ${formatDateTime(draw.lastTicketCreatedAt)}`
+                                : draw.drawName
+                            }
                             totals={mapDrawToTotals(draw)}
                             indented
                             variant="draw"

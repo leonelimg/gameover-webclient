@@ -1,14 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, Printer, ShoppingCart, Award, CheckCircle, Clock, Loader, RotateCcw, XCircle } from 'lucide-react';
+import { Plus, Trash2, Printer, ShoppingCart, Award, CheckCircle, Clock, Loader, RotateCcw, XCircle, List } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
+import { FilteredTicketsCard } from '@/components/tickets/FilteredTicketsCard';
 import { generateId, formatCurrency, formatDateTime, formatDrawLabel, isDrawOpen } from '@/utils/helpers';
 import { Draw, PrintJob, PrintJobStatus, Ticket, User } from '@/types';
 import { useAuth } from '@/context/AuthContext';
-import { drawsApi, ticketsApi, reportsApi, numberRestrictionsApi, CreateTicketPayload, TopNumber } from '@/services/api';
+import { drawsApi, ticketsApi, reportsApi, numberRestrictionsApi, CreateTicketPayload, TopNumber, usersApi } from '@/services/api';
 import { mapSaleTicketToPrintBridge, printBridgeApi } from '@/services/printBridge';
+import { useTicketActions } from '@/hooks/useTicketActions';
+import { printSaleTicket } from '@/utils/ticketPrint';
 
 interface SaleLine {
   id: string;
@@ -53,6 +57,7 @@ function NativePrintStatusIcon({ status }: { status: PrintJobStatus }) {
 export default function SalesPage() {
   const { user, hasPermission } = useAuth();
   const canCreateSale = hasPermission('/sales:create');
+  const canCancelTickets = hasPermission('/sales:cancel');
 
   const readSessionString = (key: string, fallback = '') => {
     const value = sessionStorage.getItem(key);
@@ -101,6 +106,7 @@ export default function SalesPage() {
   };
 
   const [draws, setDraws] = useState<Draw[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [topNumbers, setTopNumbers] = useState<TopNumber[]>([]);
   const [drawTickets, setDrawTickets] = useState<Ticket[]>([]);
   const [globalNumberLimit, setGlobalNumberLimit] = useState<number | null>(null);
@@ -130,6 +136,18 @@ export default function SalesPage() {
   const [nativePrintStatusError, setNativePrintStatusError] = useState('');
   const [retryingPrintJob, setRetryingPrintJob] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showNumbersSoldModal, setShowNumbersSoldModal] = useState(false);
+
+  const refreshDrawData = useCallback((drawId: string) => {
+    if (!drawId) {
+      setTopNumbers([]);
+      setDrawTickets([]);
+      return;
+    }
+
+    reportsApi.topNumbers(drawId, 10).then(setTopNumbers).catch(() => {});
+    ticketsApi.list({ drawId }).then(setDrawTickets).catch(() => {});
+  }, []);
 
   useEffect(() => {
     drawsApi.list().then((list) => {
@@ -142,6 +160,7 @@ export default function SalesPage() {
         return firstOpen?.id ?? '';
       });
     }).catch(() => {});
+    usersApi.list().then(setUsers).catch(() => {});
 
     numberRestrictionsApi.getGlobal().then((settings) => {
       setGlobalNumberLimit(settings.globalLimit);
@@ -149,14 +168,8 @@ export default function SalesPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedDrawId) {
-      setTopNumbers([]);
-      setDrawTickets([]);
-      return;
-    }
-    reportsApi.topNumbers(selectedDrawId, 10).then(setTopNumbers).catch(() => {});
-    ticketsApi.list({ drawId: selectedDrawId }).then(setDrawTickets).catch(() => {});
-  }, [selectedDrawId]);
+    refreshDrawData(selectedDrawId);
+  }, [selectedDrawId, refreshDrawData]);
 
   useEffect(() => {
     sessionStorage.setItem('go_sales_selected_draw', selectedDrawId);
@@ -252,6 +265,19 @@ export default function SalesPage() {
     [draws, selectedDrawId],
   );
 
+  const usersById = useMemo(
+    () => new Map(users.map((u) => [u.id, u])),
+    [users],
+  );
+
+  const getSellerDisplayName = useCallback((ticket: Ticket) => {
+    const seller = ticket.seller ?? usersById.get(ticket.sellerId);
+    if (!seller) {
+      return 'Usuario no disponible';
+    }
+    return seller.fullName ? `${seller.fullName} (${seller.username})` : seller.username;
+  }, [usersById]);
+
   const activeSpecialMultiplier = useMemo(
     () => selectedDraw?.specialMultiplier ?? null,
     [selectedDraw],
@@ -266,6 +292,32 @@ export default function SalesPage() {
     }
     return soldMap;
   }, [drawTickets]);
+
+  const numbersSoldSummary = useMemo(() => {
+    const individualByNumber = new Map(
+      (selectedDraw?.restrictedNumbers ?? []).map((rn) => [rn.number, rn.limit])
+    );
+    const entries: {
+      number: string;
+      sold: number;
+      limit: number | null;
+      limitType: 'individual' | 'global' | null;
+      remaining: number | null;
+    }[] = [];
+    for (const [number, sold] of soldByNumber.entries()) {
+      const individualLimit = individualByNumber.get(number) ?? null;
+      const effectiveLimit = individualLimit ?? globalNumberLimit;
+      const limitType = individualLimit !== null ? 'individual' : globalNumberLimit !== null ? 'global' : null;
+      entries.push({
+        number,
+        sold,
+        limit: effectiveLimit,
+        limitType,
+        remaining: effectiveLimit !== null ? Math.max(0, effectiveLimit - sold) : null,
+      });
+    }
+    return entries.sort((a, b) => b.sold - a.sold);
+  }, [soldByNumber, selectedDraw, globalNumberLimit]);
 
   const restrictedSummary = useMemo(() => {
     const restrictedNumbers = selectedDraw?.restrictedNumbers ?? [];
@@ -288,6 +340,25 @@ export default function SalesPage() {
     }, 0),
     [lines, activeSpecialMultiplier],
   );
+
+  const refreshCurrentDraw = useCallback(() => {
+    refreshDrawData(selectedDrawId);
+  }, [refreshDrawData, selectedDrawId]);
+
+  const {
+    actionError,
+    selectedTicket,
+    setSelectedTicket,
+    handleViewTicket,
+    handlePrintTicket,
+    handlePrintTicketBridge,
+    handleCancelTicket,
+  } = useTicketActions({
+    draws,
+    users,
+    onRefresh: refreshCurrentDraw,
+    printTicket: printSaleTicket,
+  });
 
   const addLine = () => {
     const lastAmount = [...lines]
@@ -438,8 +509,7 @@ export default function SalesPage() {
       setNativePrintStatusError('');
       setCustomerName('');
       setLines([{ id: generateId(), number: '', amount: '', specialAmount: '' }]);
-      reportsApi.topNumbers(selectedDrawId, 10).then(setTopNumbers).catch(() => {});
-      ticketsApi.list({ drawId: selectedDrawId }).then(setDrawTickets).catch(() => {});
+      refreshDrawData(selectedDrawId);
     } catch (err: unknown) {
       const responseData = (err as { response?: { data?: { message?: string; error?: string } } })?.response?.data;
       const msg = responseData?.message ?? responseData?.error;
@@ -825,6 +895,23 @@ export default function SalesPage() {
               </CardBody>
             </Card>
           )}
+
+          <FilteredTicketsCard
+            title="Tickets filtrados"
+            subtitle="Historial del sorteo seleccionado para reimpresion y anulacion"
+            loading={false}
+            tickets={selectedDrawId ? drawTickets : []}
+            emptyMessage={selectedDrawId ? 'No hay tickets' : 'Selecciona un sorteo para ver su historial'}
+            canCancelTickets={canCancelTickets}
+            actionError={actionError}
+            selectedTicket={selectedTicket}
+            onCloseTicket={() => setSelectedTicket(null)}
+            onViewTicket={handleViewTicket}
+            onPrintTicket={handlePrintTicket}
+            onPrintTicketBridge={handlePrintTicketBridge}
+            onCancelTicket={handleCancelTicket}
+            getSellerDisplayName={getSellerDisplayName}
+          />
         </div>
 
         {/* Right panel */}
@@ -855,8 +942,19 @@ export default function SalesPage() {
           {/* Restricted numbers */}
           {selectedDraw && (
             <Card>
-              <div className="px-4 py-3 border-b border-slate-200">
+              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <h3 className="font-semibold text-slate-800 text-sm">Restricción global</h3>
+                {soldByNumber.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowNumbersSoldModal(true)}
+                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                    title="Ver números jugados en este sorteo"
+                  >
+                    <List size={13} />
+                    Ver números
+                  </button>
+                )}
               </div>
               <CardBody>
                 {globalNumberLimit === null ? (
@@ -946,6 +1044,77 @@ export default function SalesPage() {
           </Card>
         </div>
       </div>
+
+      {/* Numbers sold modal */}
+      <Modal
+        open={showNumbersSoldModal}
+        onClose={() => setShowNumbersSoldModal(false)}
+        title={`Números jugados — ${selectedDraw?.name ?? ''}`}
+        size="md"
+      >
+        <div className="p-4">
+          {numbersSoldSummary.length === 0 ? (
+            <p className="text-slate-400 text-sm text-center py-6">No hay números jugados en este sorteo.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+                    <th className="pb-2 pr-4 font-medium">Número</th>
+                    <th className="pb-2 pr-4 font-medium text-right">Vendido</th>
+                    <th className="pb-2 pr-4 font-medium text-right">Límite</th>
+                    <th className="pb-2 font-medium text-right">Disponible</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {numbersSoldSummary.map((row) => {
+                    const isAtLimit = row.remaining !== null && row.remaining <= 0;
+                    const isNearLimit = row.remaining !== null && row.remaining > 0 && row.limit !== null && row.sold / row.limit >= 0.8;
+                    return (
+                      <tr key={row.number} className="hover:bg-slate-50">
+                        <td className="py-2 pr-4">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-slate-800">{row.number}</span>
+                            {row.limitType && (
+                              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                                row.limitType === 'individual'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : 'bg-blue-50 text-blue-600'
+                              }`}>
+                                {row.limitType === 'individual' ? 'ind.' : 'global'}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2 pr-4 text-right font-medium text-slate-700">
+                          {formatCurrency(row.sold)}
+                        </td>
+                        <td className="py-2 pr-4 text-right text-slate-500">
+                          {row.limit !== null ? formatCurrency(row.limit) : <span className="text-slate-300">—</span>}
+                        </td>
+                        <td className="py-2 text-right font-semibold">
+                          {row.remaining !== null ? (
+                            <span className={isAtLimit ? 'text-red-600' : isNearLimit ? 'text-yellow-600' : 'text-green-700'}>
+                              {formatCurrency(row.remaining)}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <p className="mt-3 text-xs text-slate-400">
+                {numbersSoldSummary.length} número{numbersSoldSummary.length !== 1 ? 's' : ''} jugado{numbersSoldSummary.length !== 1 ? 's' : ''}.
+                {' '}ind. = restricción individual por sorteo · global = restricción global.
+              </p>
+            </div>
+          )}
+        </div>
+      </Modal>
+
     </div>
   );
 }

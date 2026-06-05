@@ -619,6 +619,7 @@ export interface AssociateDrawBreakdownRow {
   drawId: string;
   drawName: string;
   drawCloseTime?: string;
+  lastTicketCreatedAt?: string;
   ticketCount: number;
   totalSales: number;
   totalPrizes: number;
@@ -719,6 +720,7 @@ export interface CommissionsReportRow {
   drawId?: string;
   drawName: string;
   drawCloseTime: string;
+  lastTicketCreatedAt?: string;
   commission: number;
 }
 

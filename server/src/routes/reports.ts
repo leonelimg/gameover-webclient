@@ -41,6 +41,8 @@ type ReportUser = {
 const router = Router();
 router.use(authenticate);
 
+const REPORTS_TIMEZONE_OFFSET = '-06:00';
+
 function parseDateYmdToUtc(dateValue: string, endOfDay: boolean): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
   if (!match) {
@@ -51,16 +53,18 @@ function parseDateYmdToUtc(dateValue: string, endOfDay: boolean): Date | null {
   const month = Number(match[2]);
   const day = Number(match[3]);
 
-  const parsed = endOfDay
-    ? new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999))
-    : new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-
-  // Validate overflow cases like 2026-02-31.
+  const overflowCheck = new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
   if (
-    parsed.getUTCFullYear() !== year ||
-    parsed.getUTCMonth() !== month - 1 ||
-    parsed.getUTCDate() !== day
+    overflowCheck.getUTCFullYear() !== year ||
+    overflowCheck.getUTCMonth() !== month - 1 ||
+    overflowCheck.getUTCDate() !== day
   ) {
+    return null;
+  }
+
+  const boundaryTime = endOfDay ? '23:59:59.999' : '00:00:00.000';
+  const parsed = new Date(`${dateValue}T${boundaryTime}${REPORTS_TIMEZONE_OFFSET}`);
+  if (Number.isNaN(parsed.getTime())) {
     return null;
   }
 
@@ -125,11 +129,7 @@ function getScopedSellerIds(users: ReportUser[], user: { sub: string; role: 'adm
   if (user.role === 'admin') {
     return null;
   }
-
-  if (user.role === 'vendedor') {
-    return new Set([user.sub]);
-  }
-
+  // Any non-admin role is scoped to its own subtree (self + descendants).
   return getDescendantUserIds(users, user.sub);
 }
 
@@ -357,9 +357,9 @@ router.get('/hierarchy', authorizeResource('/reports/sales-stats'), async (req, 
       });
   }
 
-  // For asociados show only their subtree; for admins show the full tree
+  // Non-admin roles only see their own subtree; admins see full hierarchy.
   let tree: TreeNode[];
-  if (req.user!.role === 'asociado') {
+  if (req.user!.role !== 'admin') {
     const root = users.find((u: NodeUser) => u.id === req.user!.sub);
     if (!root) { res.json([]); return; }
     const children = buildTree(root.id);
@@ -439,6 +439,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
   }
 
   interface BreakdownTicket {
+    createdAt: Date;
     associateId: string;
     associate: {
       id: string;
@@ -475,6 +476,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
   const tickets = (await prisma.ticket.findMany({
     where,
     include: {
+      createdAt: true,
       lines: { select: { number: true, amount: true } },
       draw: { select: { id: true, name: true, closeTime: true, winnerNumber: true } },
       associate: {
@@ -725,6 +727,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       drawId: string;
       drawName: string;
       drawCloseTime: string;
+      lastTicketCreatedAt: string;
       ticketCount: number;
       totalSales: number;
       totalPrizes: number;
@@ -756,6 +759,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       drawId: ticket.draw.id,
       drawName: ticket.draw.name,
       drawCloseTime: ticket.draw.closeTime.toISOString(),
+      lastTicketCreatedAt: ticket.createdAt.toISOString(),
       ticketCount: 0,
       totalSales: 0,
       totalPrizes: 0,
@@ -768,6 +772,9 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     drawCurrent.totalPrizes += prizeForTicket;
     drawCurrent.totalCommissions += commissionForTicket;
     drawCurrent.balance = drawCurrent.totalSales - drawCurrent.totalPrizes - drawCurrent.totalCommissions;
+    if (ticket.createdAt.toISOString() > drawCurrent.lastTicketCreatedAt) {
+      drawCurrent.lastTicketCreatedAt = ticket.createdAt.toISOString();
+    }
 
     associateCurrent.draws.set(ticket.draw.id, drawCurrent);
     byAssociate.set(ticket.associateId, associateCurrent);
@@ -782,7 +789,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       totalPrizes: associate.totalPrizes,
       totalCommissions: associate.totalCommissions,
       balance: associate.balance,
-      draws: Array.from(associate.draws.values()).sort((a, b) => b.totalSales - a.totalSales),
+      draws: Array.from(associate.draws.values()).sort((a, b) => b.lastTicketCreatedAt.localeCompare(a.lastTicketCreatedAt)),
     }))
     .sort((a, b) => b.totalSales - a.totalSales);
 
@@ -1072,6 +1079,7 @@ router.get('/commissions', authorizeResource('/reports/commissions'), async (req
   const tickets = await prisma.ticket.findMany({
     where,
     select: {
+      createdAt: true,
       total: true,
       draw: {
         select: {
@@ -1096,7 +1104,7 @@ router.get('/commissions', authorizeResource('/reports/commissions'), async (req
     },
     orderBy: [
       { seller: { fullName: 'asc' } },
-      { draw: { closeTime: 'desc' } },
+      { createdAt: 'desc' },
     ],
   });
 
@@ -1105,7 +1113,7 @@ router.get('/commissions', authorizeResource('/reports/commissions'), async (req
     sellerName: string;
     sellerUsername: string;
     subtotal: number;
-    rows: Map<string, { drawId: string; drawName: string; drawCloseTime: string; commission: number }>;
+    rows: Map<string, { drawId: string; drawName: string; drawCloseTime: string; lastTicketCreatedAt: string; commission: number }>;
   }>();
 
   for (const ticket of tickets) {
@@ -1117,7 +1125,7 @@ router.get('/commissions', authorizeResource('/reports/commissions'), async (req
       sellerName: ticket.seller.fullName,
       sellerUsername: ticket.seller.username,
       subtotal: 0,
-      rows: new Map<string, { drawId: string; drawName: string; drawCloseTime: string; commission: number }>(),
+      rows: new Map<string, { drawId: string; drawName: string; drawCloseTime: string; lastTicketCreatedAt: string; commission: number }>(),
     };
 
     current.subtotal += commission;
@@ -1126,9 +1134,13 @@ router.get('/commissions', authorizeResource('/reports/commissions'), async (req
       drawId: ticket.draw.id,
       drawName: ticket.draw.name,
       drawCloseTime: ticket.draw.closeTime.toISOString(),
+      lastTicketCreatedAt: ticket.createdAt.toISOString(),
       commission: 0,
     };
     row.commission += commission;
+    if (ticket.createdAt.toISOString() > row.lastTicketCreatedAt) {
+      row.lastTicketCreatedAt = ticket.createdAt.toISOString();
+    }
 
     current.rows.set(ticket.draw.id, row);
     bySeller.set(ticket.seller.id, current);
@@ -1140,7 +1152,7 @@ router.get('/commissions', authorizeResource('/reports/commissions'), async (req
       sellerName: seller.sellerName,
       sellerUsername: seller.sellerUsername,
       subtotal: seller.subtotal,
-      rows: Array.from(seller.rows.values()).sort((a, b) => b.drawCloseTime.localeCompare(a.drawCloseTime)),
+      rows: Array.from(seller.rows.values()).sort((a, b) => b.lastTicketCreatedAt.localeCompare(a.lastTicketCreatedAt)),
     }))
     .sort((a, b) => a.sellerName.localeCompare(b.sellerName));
 

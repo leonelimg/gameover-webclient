@@ -11,6 +11,16 @@ router.use(authenticate);
 
 type AuthUser = { sub: string; role: 'admin' | 'asociado' | 'vendedor' };
 
+function drawCancellationLocked(draw: { closeTime: Date; minutosPreviosCierre: number; winnerNumber: string | null }): boolean {
+  if (draw.winnerNumber?.trim()) {
+    return true;
+  }
+
+  const closeTime = new Date(draw.closeTime).getTime();
+  const cutoff = closeTime - draw.minutosPreviosCierre * 60 * 1000;
+  return Date.now() >= cutoff;
+}
+
 const ticketLineSchema = z.object({
   number: z.string().regex(/^\d{2}$/, 'El número debe tener exactamente 2 dígitos.'),
   amount: z.number().positive(),
@@ -251,7 +261,17 @@ router.patch('/:id/cancel', authorizeResource('/sales:cancel'), validate(cancelT
 
   const existing = await prisma.ticket.findUnique({
     where: { id },
-    select: { id: true, canceledAt: true },
+    select: {
+      id: true,
+      canceledAt: true,
+      draw: {
+        select: {
+          closeTime: true,
+          minutosPreviosCierre: true,
+          winnerNumber: true,
+        },
+      },
+    },
   });
 
   if (!existing) {
@@ -267,6 +287,13 @@ router.patch('/:id/cancel', authorizeResource('/sales:cancel'), validate(cancelT
 
   if (existing.canceledAt) {
     res.status(400).json({ message: 'El ticket ya fue anulado.' });
+    return;
+  }
+
+  if (drawCancellationLocked(existing.draw)) {
+    res.status(400).json({
+      message: 'No se pueden anular tickets de sorteos cerrados o con número ganador ya establecido.',
+    });
     return;
   }
 

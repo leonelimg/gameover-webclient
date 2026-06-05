@@ -166,7 +166,7 @@ export default function CommissionsPage() {
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Vendedor</th>
-                <th className="text-left px-4 py-3 text-slate-600 font-medium">Fecha</th>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">Fecha compra</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Sorteo</th>
                 <th className="text-right px-4 py-3 text-slate-600 font-medium">Comisión</th>
               </tr>
@@ -199,7 +199,7 @@ export default function CommissionsPage() {
                       {seller.rows.map((row, idx) => (
                         <tr key={`${seller.sellerId}-${idx}`} className="border-t border-slate-100 hover:bg-slate-50">
                           <td className="px-4 py-3 text-slate-600"></td>
-                          <td className="px-4 py-3 text-slate-700">{formatDateTime(row.drawCloseTime)}</td>
+                          <td className="px-4 py-3 text-slate-700">{formatDateTime(row.lastTicketCreatedAt ?? row.drawCloseTime)}</td>
                           <td className="px-4 py-3 text-slate-700">{row.drawName}</td>
                           <td className="px-4 py-3 text-right text-blue-700 font-semibold">{formatCurrency(row.commission)}</td>
                         </tr>
