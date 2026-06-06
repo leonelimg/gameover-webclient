@@ -355,25 +355,13 @@ GoButton(
 ## 🔄 PULL-TO-REFRESH
 
 ```kotlin
-val pullRefreshState = rememberPullToRefreshState()
-
-if (pullRefreshState.isRefreshing) {
-    LaunchedEffect(Unit) {
-        viewModel.refresh()
-        pullRefreshState.endRefresh()
-    }
-}
-
-Box(
-    modifier = Modifier
-        .fillMaxSize()
-        .nestedScroll(pullRefreshState.nestedScrollConnection)
+@OptIn(ExperimentalMaterial3Api::class)
+PullToRefreshBox(
+    isRefreshing = uiState.isLoading,
+    onRefresh = viewModel::refresh,
+    modifier = Modifier.fillMaxSize()
 ) {
     LazyColumn { /* contenido */ }
-    PullToRefreshContainer(
-        state = pullRefreshState,
-        modifier = Modifier.align(Alignment.TopCenter)
-    )
 }
 ```
 

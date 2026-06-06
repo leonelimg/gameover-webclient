@@ -10,8 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,14 +32,6 @@ fun TicketsScreen(
     viewModel: TicketsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val pullRefreshState = rememberPullToRefreshState()
-
-    if (pullRefreshState.isRefreshing) {
-        LaunchedEffect(Unit) {
-            viewModel.loadData()
-            pullRefreshState.endRefresh()
-        }
-    }
 
     Scaffold(
         topBar = {
@@ -65,11 +56,12 @@ fun TicketsScreen(
             )
         },
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = uiState.isLoading,
+            onRefresh = viewModel::loadData,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .nestedScroll(pullRefreshState.nestedScrollConnection),
+                .padding(padding),
         ) {
             LazyColumn(
                 contentPadding = PaddingValues(16.dp),
@@ -174,11 +166,6 @@ fun TicketsScreen(
                     }
                 }
             }
-
-            PullToRefreshContainer(
-                state = pullRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
         }
     }
 }
@@ -186,7 +173,7 @@ fun TicketsScreen(
 @Composable
 private fun TicketListItem(ticket: Ticket, onClick: () -> Unit) {
     GoCard(
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = Modifier,
         elevation = 2f,
         onClick = onClick
     ) {

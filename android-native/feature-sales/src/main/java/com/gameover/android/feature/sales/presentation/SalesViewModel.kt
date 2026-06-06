@@ -176,8 +176,8 @@ class SalesViewModel @Inject constructor(
     }
 
     fun sell() {
-        val state = _uiState.value
-        val draw = state.selectedDraw
+        val currentState = _uiState.value
+        val draw = currentState.selectedDraw
 
         if (draw == null) {
             _uiState.update { it.copy(saleResult = SaleResult.Error("Selecciona un sorteo abierto.")) }
@@ -187,8 +187,22 @@ class SalesViewModel @Inject constructor(
             _uiState.update { it.copy(saleResult = SaleResult.Error("El sorteo no está en horario de venta.")) }
             return
         }
+
+        // Clean up: remove lines that don't have a number defined
+        val filteredLines = currentState.lines.filter { it.number.isNotBlank() }
+        
+        if (filteredLines.isEmpty()) {
+            _uiState.update { it.copy(saleResult = SaleResult.Error("Debes ingresar al menos un número.")) }
+            return
+        }
+
+        // Update state with filtered lines if any were removed
+        if (filteredLines.size != currentState.lines.size) {
+            _uiState.update { it.copy(lines = filteredLines) }
+        }
+
         val numberRegex = Regex("^\\d{2}$")
-        for (line in state.lines) {
+        for (line in filteredLines) {
             if (!numberRegex.matches(line.number.trim())) {
                 _uiState.update { it.copy(saleResult = SaleResult.Error("Todos los números deben tener exactamente 2 dígitos.")) }
                 return
@@ -211,7 +225,7 @@ class SalesViewModel @Inject constructor(
             }
         }
 
-        val ticketLines = state.lines.map { line ->
+        val ticketLines = filteredLines.map { line ->
             CreateTicketLine(
                 number = line.number.trim(),
                 amount = line.amount.toDouble(),
@@ -224,11 +238,11 @@ class SalesViewModel @Inject constructor(
 
         viewModelScope.launch {
             if (!_uiState.value.isOnline) {
-                enqueueOfflineSale(draw.id, state.customerName, ticketLines)
+                enqueueOfflineSale(draw.id, currentState.customerName, ticketLines)
                 return@launch
             }
 
-            val result = createTicketUseCase(draw.id, state.customerName, ticketLines)
+            val result = createTicketUseCase(draw.id, currentState.customerName, ticketLines)
             result.fold(
                 onSuccess = { ticket ->
                     _uiState.update {
@@ -242,7 +256,7 @@ class SalesViewModel @Inject constructor(
                 },
                 onFailure = { error ->
                     if (isNetworkError(error)) {
-                        enqueueOfflineSale(draw.id, state.customerName, ticketLines)
+                        enqueueOfflineSale(draw.id, currentState.customerName, ticketLines)
                     } else {
                         // API error — preserve form, show error, allow retry
                         _uiState.update { it.copy(saleResult = SaleResult.Error(error.message ?: "Error al registrar la venta.")) }

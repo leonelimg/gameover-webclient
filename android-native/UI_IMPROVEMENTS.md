@@ -401,7 +401,7 @@ fun MyScreen() {
 - ✅ Material Design 3
 - ✅ Android API 26+
 - ✅ Dark Mode automático
-- ✅ Compose BOM 2024.05.00
+- ✅ Compose BOM 2024.12.01
 - ✅ Material Icons Extended
 
 ---

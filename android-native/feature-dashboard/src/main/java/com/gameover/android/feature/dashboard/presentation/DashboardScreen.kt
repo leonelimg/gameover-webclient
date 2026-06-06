@@ -17,8 +17,7 @@ import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material3.*
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,14 +39,6 @@ fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val pullRefreshState = rememberPullToRefreshState()
-
-    if (pullRefreshState.isRefreshing) {
-        LaunchedEffect(Unit) {
-            viewModel.refresh()
-            pullRefreshState.endRefresh()
-        }
-    }
 
     Scaffold(
         topBar = {
@@ -72,11 +63,12 @@ fun DashboardScreen(
             )
         },
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = uiState.isLoading,
+            onRefresh = viewModel::refresh,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .nestedScroll(pullRefreshState.nestedScrollConnection),
+                .padding(padding),
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -126,20 +118,6 @@ fun DashboardScreen(
                 // Error banner
                 if (!uiState.error.isNullOrBlank()) {
                     item { ErrorBanner(message = uiState.error) }
-                }
-
-                // Loading state
-                if (uiState.isLoading) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CircularProgressIndicator(strokeWidth = 4.dp)
-                        }
-                    }
                 }
 
                 // KPI Summary
@@ -212,11 +190,6 @@ fun DashboardScreen(
                     }
                 }
             }
-
-            PullToRefreshContainer(
-                state = pullRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter),
-            )
         }
     }
 }

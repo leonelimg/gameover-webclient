@@ -8,7 +8,9 @@ import com.gameover.android.core.domain.repository.ReportsRepository
 import com.gameover.android.core.domain.repository.TicketsRepository
 import com.gameover.android.core.ui.util.NetworkMonitor
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -65,20 +67,23 @@ class DashboardViewModel @Inject constructor(
         _uiState.update { it.copy(isLoading = true, error = null) }
         viewModelScope.launch {
             try {
-                val summaryDeferred = async { reportsRepository.getSummary(fromDate = from, toDate = to) }
-                val recentDeferred = async { ticketsRepository.getTickets() }
-                val summary = summaryDeferred.await()
-                val recent = recentDeferred.await().take(5)
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        summary = summary,
-                        recentTickets = recent,
-                        error = null,
-                    )
+                coroutineScope {
+                    val summaryDeferred = async { reportsRepository.getSummary(fromDate = from, toDate = to) }
+                    val recentDeferred = async { ticketsRepository.getTickets() }
+                    val summary = summaryDeferred.await()
+                    val recent = recentDeferred.await().take(5)
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            summary = summary,
+                            recentTickets = recent,
+                            error = null,
+                        )
+                    }
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = e.message) }
+                if (e is CancellationException) throw e
+                _uiState.update { it.copy(isLoading = false, error = e.message ?: "Error al cargar datos") }
             }
         }
     }

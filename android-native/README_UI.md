@@ -251,7 +251,7 @@ ErrorBanner(message)
 ```
 ✓ Material Design 3
 ✓ Android API 26+
-✓ Jetpack Compose 2024.05.00
+✓ Jetpack Compose 2024.12.01
 ✓ Dark Mode automático
 ✓ Light Mode
 ✓ RTL support (automático)

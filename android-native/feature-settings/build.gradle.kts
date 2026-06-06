@@ -37,7 +37,7 @@ dependencies {
     implementation(project(":feature-bluetooth"))
 
     // Compose BOM
-    val composeBom = platform("androidx.compose:compose-bom:2024.05.00")
+    val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")

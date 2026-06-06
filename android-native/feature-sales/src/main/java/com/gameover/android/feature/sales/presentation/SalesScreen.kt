@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -14,14 +15,22 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -42,14 +51,7 @@ fun SalesScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    val pullRefreshState = rememberPullToRefreshState()
-
-    if (pullRefreshState.isRefreshing) {
-        LaunchedEffect(Unit) {
-            viewModel.loadDraws()
-            pullRefreshState.endRefresh()
-        }
-    }
+    val focusManager = LocalFocusManager.current
 
     LaunchedEffect(uiState.saleResult) {
         when (val result = uiState.saleResult) {
@@ -103,11 +105,12 @@ fun SalesScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = uiState.isLoadingDraws,
+            onRefresh = viewModel::loadDraws,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .nestedScroll(pullRefreshState.nestedScrollConnection),
+                .padding(padding),
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -203,15 +206,34 @@ fun SalesScreen(
                 }
 
                 // Bet lines
-                itemsIndexed(uiState.lines, key = { _, line -> line.id }) { _, line ->
+                itemsIndexed(uiState.lines, key = { _, line -> line.id }) { index, line ->
+                    val numberFocusRequester = remember { FocusRequester() }
+
+                    // Auto-focus the new line when added
+                    LaunchedEffect(Unit) {
+                        if (line.number.isEmpty() && index > 0) {
+                            numberFocusRequester.requestFocus()
+                        }
+                    }
+
                     BetLineRow(
                         line = line,
                         showSpecial = uiState.hasSpecialMultiplier,
                         canDelete = uiState.lines.size > 1,
-                        onNumberChange = { viewModel.onLineNumberChanged(line.id, it) },
+                        onNumberChange = {
+                            if (it.length <= 2) {
+                                viewModel.onLineNumberChanged(line.id, it)
+                                if (it.length == 2) {
+                                    focusManager.moveFocus(FocusDirection.Next)
+                                }
+                            }
+                        },
                         onAmountChange = { viewModel.onLineAmountChanged(line.id, it) },
                         onSpecialAmountChange = { viewModel.onLineSpecialAmountChanged(line.id, it) },
                         onDelete = { viewModel.removeLine(line.id) },
+                        numberFocusRequester = numberFocusRequester,
+                        isLastLine = index == uiState.lines.lastIndex,
+                        onNextLine = { viewModel.addLine() }
                     )
                 }
 
@@ -251,11 +273,6 @@ fun SalesScreen(
                     )
                 }
             }
-
-            PullToRefreshContainer(
-                state = pullRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter),
-            )
         }
     }
 }
@@ -311,7 +328,23 @@ private fun BetLineRow(
     onAmountChange: (String) -> Unit,
     onSpecialAmountChange: (String) -> Unit,
     onDelete: () -> Unit,
+    numberFocusRequester: FocusRequester,
+    isLastLine: Boolean,
+    onNextLine: () -> Unit,
 ) {
+    val focusManager = LocalFocusManager.current
+
+    var amountValue by remember { mutableStateOf(TextFieldValue(line.amount)) }
+    var specialAmountValue by remember { mutableStateOf(TextFieldValue(line.specialAmount)) }
+
+    // Sync local TextFieldValue with external state from ViewModel
+    if (amountValue.text != line.amount) {
+        amountValue = amountValue.copy(text = line.amount)
+    }
+    if (specialAmountValue.text != line.specialAmount) {
+        specialAmountValue = specialAmountValue.copy(text = line.specialAmount)
+    }
+
     GoCard(elevation = 2f) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -320,30 +353,109 @@ private fun BetLineRow(
         ) {
             OutlinedTextField(
                 value = line.number,
-                onValueChange = { if (it.length <= 2) onNumberChange(it) },
+                onValueChange = onNumberChange,
                 label = { Text("Núm.") },
                 modifier = Modifier
-                    .width(96.dp),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    .width(96.dp)
+                    .focusRequester(numberFocusRequester)
+                    .onKeyEvent { event ->
+                        if ((event.key == Key.Tab || event.key == Key.Enter || event.key == Key.NumPadEnter) && event.type == KeyEventType.KeyDown) {
+                            focusManager.moveFocus(FocusDirection.Next)
+                            true
+                        } else false
+                    },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Next) }
+                ),
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodySmall,
             )
             OutlinedTextField(
-                value = line.amount,
-                onValueChange = onAmountChange,
+                value = amountValue,
+                onValueChange = {
+                    amountValue = it
+                    onAmountChange(it.text)
+                },
                 label = { Text("Monto") },
-                modifier = Modifier.weight(1f),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier
+                    .weight(1f)
+                    .onFocusChanged {
+                        if (it.isFocused) {
+                            amountValue = amountValue.copy(
+                                selection = TextRange(0, amountValue.text.length)
+                            )
+                        }
+                    }
+                    .onKeyEvent { event ->
+                        if ((event.key == Key.Tab || event.key == Key.Enter || event.key == Key.NumPadEnter) && event.type == KeyEventType.KeyDown) {
+                            if (isLastLine && !showSpecial) {
+                                onNextLine()
+                                true
+                            } else {
+                                focusManager.moveFocus(FocusDirection.Next)
+                                true
+                            }
+                        } else false
+                    },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Decimal,
+                    imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = {
+                        if (showSpecial) {
+                            focusManager.moveFocus(FocusDirection.Next)
+                        } else {
+                            if (isLastLine) onNextLine()
+                            else focusManager.moveFocus(FocusDirection.Next)
+                        }
+                    }
+                ),
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodySmall,
             )
             if (showSpecial) {
                 OutlinedTextField(
-                    value = line.specialAmount,
-                    onValueChange = onSpecialAmountChange,
+                    value = specialAmountValue,
+                    onValueChange = {
+                        specialAmountValue = it
+                        onSpecialAmountChange(it.text)
+                    },
                     label = { Text("Espec.") },
-                    modifier = Modifier.weight(1f),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier
+                        .weight(1f)
+                        .onFocusChanged {
+                            if (it.isFocused) {
+                                specialAmountValue = specialAmountValue.copy(
+                                    selection = TextRange(0, specialAmountValue.text.length)
+                                )
+                            }
+                        }
+                        .onKeyEvent { event ->
+                            if ((event.key == Key.Tab || event.key == Key.Enter || event.key == Key.NumPadEnter) && event.type == KeyEventType.KeyDown) {
+                                if (isLastLine) {
+                                    onNextLine()
+                                    true
+                                } else {
+                                    focusManager.moveFocus(FocusDirection.Next)
+                                    true
+                                }
+                            } else false
+                        },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal,
+                        imeAction = ImeAction.Next
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onNext = {
+                            if (isLastLine) onNextLine()
+                            else focusManager.moveFocus(FocusDirection.Next)
+                        }
+                    ),
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodySmall,
                 )
