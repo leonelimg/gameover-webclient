@@ -9,6 +9,7 @@ export function AnnouncementModal() {
   const [items, setItems] = useState<Announcement[]>([]);
   const [index, setIndex] = useState(0);
   const [visible, setVisible] = useState(false);
+  const [imageRatio, setImageRatio] = useState<number | null>(null);
 
   useEffect(() => {
     announcementsApi.active().then((data) => {
@@ -19,6 +20,10 @@ export function AnnouncementModal() {
       }
     }).catch(() => { /* silent fail — don't block the UI */ });
   }, []);
+
+  useEffect(() => {
+    setImageRatio(null);
+  }, [index]);
 
   const current = items[index] ?? null;
 
@@ -46,6 +51,7 @@ export function AnnouncementModal() {
 
   const hasImage = !!current.imageUrl;
   const hasMessage = !!current.message?.trim();
+  const imageMaxHeight = hasMessage ? '50vh' : '72vh';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -53,7 +59,10 @@ export function AnnouncementModal() {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={close} />
 
       {/* Dialog */}
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+      <div
+        className="relative bg-white rounded-2xl shadow-2xl w-fit min-w-[320px] max-w-[96vw] max-h-[92vh] flex flex-col overflow-hidden"
+        style={{ width: hasImage ? 'fit-content' : undefined }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <div className="flex items-center gap-2">
@@ -74,11 +83,24 @@ export function AnnouncementModal() {
         {/* Body */}
         <div className="flex-1 overflow-y-auto">
           {hasImage && (
-            <div className="w-full bg-slate-50">
+            <div
+              className="w-full bg-slate-50 flex items-center justify-center"
+              style={imageRatio ? { aspectRatio: `${imageRatio}` } : undefined}
+            >
               <img
                 src={`${BASE_URL}${current.imageUrl}`}
                 alt={current.name}
-                className="w-full max-h-72 object-contain"
+                onLoad={(event) => {
+                  const { naturalWidth, naturalHeight } = event.currentTarget;
+                  if (naturalWidth > 0 && naturalHeight > 0) {
+                    setImageRatio(naturalWidth / naturalHeight);
+                  }
+                }}
+                className="block w-auto h-auto object-contain"
+                style={{
+                  maxWidth: 'min(92vw, 1100px)',
+                  maxHeight: imageMaxHeight,
+                }}
               />
             </div>
           )}

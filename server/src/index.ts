@@ -37,7 +37,15 @@ app.use(express.json());
 app.use(morgan(config.nodeEnv === 'production' ? 'combined' : 'dev'));
 
 // ── Static files ──────────────────────────────────────────────────────────────
-app.use('/public', express.static('public'));
+app.use(
+  '/public',
+  express.static('public', {
+    setHeaders: (res) => {
+      // Allow frontend on a different origin (e.g. localhost:5173) to render images.
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    },
+  })
+);
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
 
