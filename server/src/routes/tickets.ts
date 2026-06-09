@@ -162,8 +162,8 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
   ]);
   if (!draw) { res.status(404).json({ message: 'Sorteo no encontrado.' }); return; }
 
-  if (draw.status === 'finalizado') {
-    res.status(400).json({ message: 'No se puede vender en un sorteo finalizado.' });
+  if (draw.winnerNumber?.trim()) {
+    res.status(400).json({ message: 'No se puede vender en un sorteo con ganador establecido.' });
     return;
   }
 

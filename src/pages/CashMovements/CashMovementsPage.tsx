@@ -3,6 +3,7 @@ import { ArrowDownCircle, ArrowUpCircle, CircleDollarSign, RefreshCcw, Trash2 } 
 import {
   cashMovementsApi,
   CashMovementBalanceResponse,
+  CashMovementEventSummaryResponse,
   CashMovementHistoryItem,
   CashMovementType,
   CashMovementUserSummary,
@@ -20,6 +21,8 @@ import { DateRange, getDateRange, isDateRange, toISODateLocal } from '@/utils/da
 const CASH_MOVEMENTS_RANGE_KEY = 'go_cashmovements_selected_range';
 const CASH_MOVEMENTS_CUSTOM_FROM_KEY = 'go_cashmovements_custom_from_date';
 const CASH_MOVEMENTS_CUSTOM_TO_KEY = 'go_cashmovements_custom_to_date';
+
+type CashMovementsTab = 'history' | 'by-event';
 
 const EMPTY_BALANCE: CashMovementBalanceResponse = {
   targetUser: {
@@ -44,9 +47,33 @@ const EMPTY_BALANCE: CashMovementBalanceResponse = {
   },
 };
 
+const EMPTY_EVENT_SUMMARY: CashMovementEventSummaryResponse = {
+  targetUser: {
+    id: '',
+    fullName: '',
+    username: '',
+    role: 'vendedor',
+    status: 'activo',
+  },
+  totals: {
+    openingBalance: 0,
+    ticketCount: 0,
+    totalSales: 0,
+    totalPrizes: 0,
+    totalCommissions: 0,
+    balance: 0,
+  },
+  filters: {
+    fromDate: null,
+    toDate: null,
+  },
+  rows: [],
+};
+
 export default function CashMovementsPage() {
   const { user, hasPermission } = useAuth();
   const [targets, setTargets] = useState<CashMovementUserSummary[]>([]);
+  const [activeTab, setActiveTab] = useState<CashMovementsTab>('history');
   const [selectedTargetId, setSelectedTargetId] = useState('');
   const [customFromDate, setCustomFromDate] = useState<string>(() => {
     const saved = localStorage.getItem(CASH_MOVEMENTS_CUSTOM_FROM_KEY);
@@ -68,6 +95,7 @@ export default function CashMovementsPage() {
   const [note, setNote] = useState('');
   const [rows, setRows] = useState<CashMovementHistoryItem[]>([]);
   const [balance, setBalance] = useState<CashMovementBalanceResponse>(EMPTY_BALANCE);
+  const [eventSummary, setEventSummary] = useState<CashMovementEventSummaryResponse>(EMPTY_EVENT_SUMMARY);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +107,9 @@ export default function CashMovementsPage() {
 
   const canCreate = hasPermission('/cash-movements:create');
   const canCancelPermission = hasPermission('/cash-movements:cancel');
+
+  const getApiErrorMessage = (err: unknown, fallback: string) =>
+    (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? fallback;
 
   const selectedTarget = useMemo(
     () => targets.find((t) => t.id === selectedTargetId) ?? null,
@@ -116,17 +147,30 @@ export default function CashMovementsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [history, balanceData] = await Promise.all([
+      const [historyResult, balanceResult, eventSummaryResult] = await Promise.allSettled([
         cashMovementsApi.list({ targetUserId, fromDate, toDate, limit: 200 }),
         cashMovementsApi.balance({ targetUserId, fromDate, toDate }),
+        cashMovementsApi.summaryByEvent({ targetUserId, fromDate, toDate }),
       ]);
-      setRows(history);
-      setBalance(balanceData);
+
+      const historyError =
+        historyResult.status === 'rejected' ? getApiErrorMessage(historyResult.reason, 'No se pudo cargar el historial.') : null;
+      const balanceError =
+        balanceResult.status === 'rejected' ? getApiErrorMessage(balanceResult.reason, 'No se pudo cargar el balance.') : null;
+      const eventSummaryError =
+        eventSummaryResult.status === 'rejected'
+          ? getApiErrorMessage(eventSummaryResult.reason, 'No se pudo cargar el resumen por evento.')
+          : null;
+
+      setRows(historyResult.status === 'fulfilled' ? historyResult.value : []);
+      setBalance(balanceResult.status === 'fulfilled' ? balanceResult.value : EMPTY_BALANCE);
+      setEventSummary(eventSummaryResult.status === 'fulfilled' ? eventSummaryResult.value : EMPTY_EVENT_SUMMARY);
+      setError(historyError ?? balanceError ?? eventSummaryError);
     } catch (err) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(msg ?? 'No se pudo cargar el modulo de depositos y retiros.');
+      setError(getApiErrorMessage(err, 'No se pudo cargar el modulo de depositos y retiros.'));
       setRows([]);
       setBalance(EMPTY_BALANCE);
+      setEventSummary(EMPTY_EVENT_SUMMARY);
     } finally {
       setLoading(false);
     }
@@ -205,8 +249,7 @@ export default function CashMovementsPage() {
         : getDateRange(selectedRange);
       await loadData(selectedTargetId, fromDate, toDate);
     } catch (err) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(msg ?? 'No se pudo registrar el movimiento.');
+      setError(getApiErrorMessage(err, 'No se pudo registrar el movimiento.'));
     } finally {
       setSubmitting(false);
     }
@@ -235,8 +278,7 @@ export default function CashMovementsPage() {
         await loadData(selectedTargetId, fromDate, toDate);
       }
     } catch (err) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(msg ?? 'No se pudo cancelar el movimiento.');
+      setError(getApiErrorMessage(err, 'No se pudo cancelar el movimiento.'));
     } finally {
       setCanceling(false);
     }
@@ -415,69 +457,170 @@ export default function CashMovementsPage() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <CircleDollarSign size={18} className="text-slate-700" />
-            <h2 className="font-semibold text-slate-900">Historial de movimientos</h2>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-2">
+              <CircleDollarSign size={18} className="text-slate-700" />
+              <div>
+                <h2 className="font-semibold text-slate-900">
+                  {activeTab === 'history' ? 'Historial de movimientos' : 'Resumen por evento'}
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  {activeTab === 'history'
+                    ? 'Movimientos manuales y ventas registradas para el usuario seleccionado.'
+                    : 'Ventas, premios, comisiones y saldo acumulado por evento.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1" role="tablist" aria-label="Vistas de movimientos">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'history'}
+                onClick={() => setActiveTab('history')}
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === 'history'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Historial de movimientos
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'by-event'}
+                onClick={() => setActiveTab('by-event')}
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === 'by-event'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Por evento
+              </button>
+            </div>
           </div>
         </CardHeader>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="text-left px-4 py-3 text-slate-600 font-medium">Fecha</th>
-                <th className="text-left px-4 py-3 text-slate-600 font-medium">Tipo</th>
-                <th className="text-right px-4 py-3 text-slate-600 font-medium">Monto</th>
-                <th className="text-left px-4 py-3 text-slate-600 font-medium">Registrado por</th>
-                <th className="text-left px-4 py-3 text-slate-600 font-medium">Nota</th>
-                <th className="text-left px-4 py-3 text-slate-600 font-medium">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
+
+        {activeTab === 'history' ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
-                    {loading ? 'Cargando movimientos...' : 'No hay movimientos para este usuario.'}
-                  </td>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">Fecha</th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">Tipo</th>
+                  <th className="text-right px-4 py-3 text-slate-600 font-medium">Monto</th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">Registrado por</th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">Nota</th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">Acciones</th>
                 </tr>
-              ) : (
-                rows.map((row) => (
-                  <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-4 py-3 text-slate-700">{formatDateTime(row.createdAt)}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant={getMovementBadgeVariant(row.type)} className="capitalize">
-                        {row.type}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(row.amount)}</td>
-                    <td className="px-4 py-3 text-slate-700">{row.createdBy.fullName}</td>
-                    <td className="px-4 py-3 text-slate-600">{row.note || '-'}</td>
-                    <td className="px-4 py-3">
-                      {canCancelMovement(row) ? (
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          onClick={() => {
-                            setCancellingMovementId(row.id);
-                            setCancelReason('');
-                            setShowCancelModal(true);
-                          }}
-                          disabled={canceling}
-                        >
-                          <Trash2 size={14} />
-                          Cancelar
-                        </Button>
-                      ) : row.source === 'ticket-sale' ? (
-                        <Badge variant="info" className="text-xs">Venta</Badge>
-                      ) : row.canceledAt ? (
-                        <Badge variant="warning" className="text-xs">Cancelado</Badge>
-                      ) : null}
+              </thead>
+              <tbody>
+                {rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                      {loading ? 'Cargando movimientos...' : 'No hay movimientos para este usuario.'}
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                ) : (
+                  rows.map((row) => (
+                    <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50">
+                      <td className="px-4 py-3 text-slate-700">{formatDateTime(row.createdAt)}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant={getMovementBadgeVariant(row.type)} className="capitalize">
+                          {row.type}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(row.amount)}</td>
+                      <td className="px-4 py-3 text-slate-700">{row.createdBy.fullName}</td>
+                      <td className="px-4 py-3 text-slate-600">{row.note || '-'}</td>
+                      <td className="px-4 py-3">
+                        {canCancelMovement(row) ? (
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            onClick={() => {
+                              setCancellingMovementId(row.id);
+                              setCancelReason('');
+                              setShowCancelModal(true);
+                            }}
+                            disabled={canceling}
+                          >
+                            <Trash2 size={14} />
+                            Cancelar
+                          </Button>
+                        ) : row.source === 'ticket-sale' ? (
+                          <Badge variant="info" className="text-xs">Venta</Badge>
+                        ) : row.canceledAt ? (
+                          <Badge variant="warning" className="text-xs">Cancelado</Badge>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="px-6 py-5 space-y-5">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Ventas</p>
+                <p className="mt-2 text-lg font-bold text-slate-900">{formatCurrency(eventSummary.totals.totalSales)}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Premios</p>
+                <p className="mt-2 text-lg font-bold text-slate-900">{formatCurrency(eventSummary.totals.totalPrizes)}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Comision</p>
+                <p className="mt-2 text-lg font-bold text-slate-900">{formatCurrency(eventSummary.totals.totalCommissions)}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-900 p-4 text-white">
+                <p className="text-xs uppercase tracking-wide text-slate-300">Balance</p>
+                <p className="mt-2 text-lg font-bold">{formatCurrency(eventSummary.totals.balance)}</p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-slate-600 font-medium">Evento</th>
+                    <th className="text-left px-4 py-3 text-slate-600 font-medium">Fecha</th>
+                    <th className="text-right px-4 py-3 text-slate-600 font-medium">Vendido</th>
+                    <th className="text-right px-4 py-3 text-slate-600 font-medium">Premios</th>
+                    <th className="text-right px-4 py-3 text-slate-600 font-medium">Comision</th>
+                    <th className="text-right px-4 py-3 text-slate-600 font-medium">Balance</th>
+                    <th className="text-right px-4 py-3 text-slate-600 font-medium">Saldo post transaccion</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {eventSummary.rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                        {loading ? 'Cargando resumen...' : 'No hay eventos para este usuario.'}
+                      </td>
+                    </tr>
+                  ) : (
+                    eventSummary.rows.map((row) => (
+                      <tr key={row.eventId} className="border-t border-slate-100 hover:bg-slate-50">
+                        <td className="px-4 py-3 font-semibold text-slate-900">{row.eventName}</td>
+                        <td className="px-4 py-3 text-slate-700">{formatDateTime(row.eventDate)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(row.totalSales)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(row.totalPrizes)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(row.totalCommissions)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(row.balance)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(row.balanceAfterTransaction)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </Card>
 
       <Modal

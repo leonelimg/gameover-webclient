@@ -30,13 +30,20 @@ const drawSearchQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(12),
 });
 
-function resolveStatus(closeTime: string, minutosPreviosCierre: number, winner?: string | null): DrawStatusValue {
+function resolveStatus(closeTime: string | Date, minutosPreviosCierre: number, winner?: string | null): DrawStatusValue {
   if (winner) return 'finalizado';
   const now = Date.now();
   const c = new Date(closeTime).getTime();
   const cutoff = c - minutosPreviosCierre * 60 * 1000;
   if (now < cutoff) return 'abierto';
   return 'cerrado';
+}
+
+function withResolvedStatus<T extends { closeTime: Date; minutosPreviosCierre: number; winnerNumber: string | null }>(draw: T): T {
+  return {
+    ...draw,
+    status: resolveStatus(draw.closeTime, draw.minutosPreviosCierre, draw.winnerNumber),
+  };
 }
 
 const rnInclude = {
@@ -47,7 +54,7 @@ const rnInclude = {
 // GET /api/draws
 router.get('/', authorizeAnyResource('/draws/list', '/draws', '/sales', '/ticket-payments', '/reports/sales-stats', '/reports/balance-breakdown', '/reports/sales-by-user', '/reports/draw-lists', '/reports/commissions'), async (_req, res) => {
   const draws = await prisma.draw.findMany({ include: rnInclude, orderBy: { closeTime: 'desc' } });
-  res.json(draws);
+  res.json(draws.map((draw) => withResolvedStatus(draw)));
 });
 
 // GET /api/draws/search
@@ -98,7 +105,7 @@ router.get('/search', authorizeAnyResource('/draws/list', '/draws', '/sales', '/
   });
 
   res.json({
-    items,
+    items: items.map((draw) => withResolvedStatus(draw)),
     total,
     page: currentPage,
     pageSize,
@@ -111,7 +118,7 @@ router.get('/:id', authorizeAnyResource('/draws/list', '/draws', '/sales', '/tic
   const id = param(req, 'id');
   const draw = await prisma.draw.findUnique({ where: { id }, include: rnInclude });
   if (!draw) { res.status(404).json({ message: 'Sorteo no encontrado.' }); return; }
-  res.json(draw);
+  res.json(withResolvedStatus(draw));
 });
 
 // POST /api/draws

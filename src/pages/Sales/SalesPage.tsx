@@ -23,6 +23,13 @@ interface SaleLine {
 
 type SaleLineField = 'number' | 'amount' | 'specialAmount';
 
+function isDrawSellable(draw: Draw): boolean {
+  if (draw.winnerNumber?.trim()) {
+    return false;
+  }
+  return isDrawOpen(draw.closeTime, draw.minutosPreviosCierre);
+}
+
 const NATIVE_PRINT_STATUS_LABEL: Record<PrintJobStatus, string> = {
   pending: 'Pendiente',
   processing: 'Procesando',
@@ -112,7 +119,7 @@ export default function SalesPage() {
   const [globalNumberLimit, setGlobalNumberLimit] = useState<number | null>(null);
 
   const openDraws = useMemo(
-    () => draws.filter((d) => d.status !== 'finalizado' && isDrawOpen(d.closeTime, d.minutosPreviosCierre)),
+    () => draws.filter((d) => isDrawSellable(d)),
     [draws],
   );
   const drawOptions = useMemo(
@@ -152,7 +159,7 @@ export default function SalesPage() {
   useEffect(() => {
     drawsApi.list().then((list) => {
       setDraws(list);
-      const firstOpen = list.find((d) => d.status !== 'finalizado' && isDrawOpen(d.closeTime, d.minutosPreviosCierre));
+      const firstOpen = list.find((d) => isDrawSellable(d));
       setSelectedDrawId((current) => {
         if (current && list.some((d) => d.id === current)) {
           return current;
@@ -449,8 +456,8 @@ export default function SalesPage() {
       setError('Selecciona un sorteo abierto.');
       return;
     }
-    if (selectedDraw.status === 'finalizado') {
-      setError('El sorteo seleccionado está finalizado y no permite ventas.');
+    if (selectedDraw.winnerNumber?.trim()) {
+      setError('El sorteo seleccionado ya tiene ganador y no permite ventas.');
       return;
     }
     if (!isDrawOpen(selectedDraw.closeTime, selectedDraw.minutosPreviosCierre)) {

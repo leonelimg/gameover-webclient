@@ -407,6 +407,41 @@ export interface CashMovementBalanceResponse {
   };
 }
 
+export interface CashMovementEventSummaryItem {
+  eventId: string;
+  eventName: string;
+  eventDate: string;
+  ticketCount: number;
+  totalSales: number;
+  totalPrizes: number;
+  totalCommissions: number;
+  balance: number;
+  balanceAfterTransaction: number;
+}
+
+export interface CashMovementEventSummaryResponse {
+  targetUser: {
+    id: string;
+    fullName: string;
+    username: string;
+    role: 'admin' | 'asociado' | 'vendedor';
+    status: 'activo' | 'bloqueado' | 'archivado';
+  };
+  totals: {
+    openingBalance: number;
+    ticketCount: number;
+    totalSales: number;
+    totalPrizes: number;
+    totalCommissions: number;
+    balance: number;
+  };
+  filters: {
+    fromDate: string | null;
+    toDate: string | null;
+  };
+  rows: CashMovementEventSummaryItem[];
+}
+
 export interface CreateCashMovementPayload {
   targetUserId: string;
   type: CashMovementType;
@@ -435,6 +470,16 @@ export const cashMovementsApi = {
     toDate?: string;
   }): Promise<CashMovementBalanceResponse> => {
     const res = await api.get<CashMovementBalanceResponse>('/api/cash-movements/balance', { params });
+    return res.data;
+  },
+  summaryByEvent: async (params?: {
+    targetUserId?: string;
+    fromDate?: string;
+    toDate?: string;
+  }): Promise<CashMovementEventSummaryResponse> => {
+    const res = await api.get<CashMovementEventSummaryResponse>('/api/cash-movements/summary-by-event', {
+      params,
+    });
     return res.data;
   },
   create: async (payload: CreateCashMovementPayload): Promise<CashMovement> => {

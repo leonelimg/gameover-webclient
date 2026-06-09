@@ -63,9 +63,23 @@ type CashMovementHistoryRow = {
   referenceCode?: string;
 };
 
+type CashMovementEventSummaryRow = {
+  eventId: string;
+  eventName: string;
+  eventDate: Date;
+  ticketCount: number;
+  totalSales: number;
+  totalPrizes: number;
+  totalCommissions: number;
+  balance: number;
+  balanceAfterTransaction: number;
+};
+
 const router = Router();
 router.use(authenticate);
 router.use(authorizeResource('/cash-movements'));
+
+const CASH_MOVEMENTS_TIMEZONE_OFFSET = '-06:00';
 
 const movementTypeSchema = z.enum(['deposito', 'retiro']);
 
@@ -93,6 +107,34 @@ const balanceQuerySchema = z.object({
 const cancelMovementSchema = z.object({
   reason: z.string().trim().max(300).optional(),
 });
+
+function parseDateYmdToUtc(dateValue: string, endOfDay: boolean): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  const overflowCheck = new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
+  if (
+    overflowCheck.getUTCFullYear() !== year ||
+    overflowCheck.getUTCMonth() !== month - 1 ||
+    overflowCheck.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  const boundaryTime = endOfDay ? '23:59:59.999' : '00:00:00.000';
+  const parsed = new Date(`${dateValue}T${boundaryTime}${CASH_MOVEMENTS_TIMEZONE_OFFSET}`);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+}
 
 async function getHierarchyUsers(): Promise<HierarchyUser[]> {
   return prisma.user.findMany({
@@ -139,16 +181,16 @@ function parseCreatedAtFilter(
   const filter: Record<string, Date> = {};
 
   if (fromDate) {
-    const parsed = new Date(`${fromDate}T00:00:00`);
-    if (Number.isNaN(parsed.getTime())) {
+    const parsed = parseDateYmdToUtc(fromDate, false);
+    if (!parsed) {
       return { filter: {}, error: 'fromDate invalida. Use formato YYYY-MM-DD.' };
     }
     filter['gte'] = parsed;
   }
 
   if (toDate) {
-    const parsed = new Date(`${toDate}T23:59:59.999`);
-    if (Number.isNaN(parsed.getTime())) {
+    const parsed = parseDateYmdToUtc(toDate, true);
+    if (!parsed) {
       return { filter: {}, error: 'toDate invalida. Use formato YYYY-MM-DD.' };
     }
     filter['lte'] = parsed;
@@ -189,6 +231,19 @@ function calculatePrizeForTicket(
 
     return sum + line.amount * regularMultiplier;
   }, 0);
+}
+
+function calculateTicketFinancials(
+  ticket: PrizeTicket,
+  defaultPlan: { multiplier: number; commission: number } | null
+): { prizeForTicket: number; commissionForTicket: number } {
+  const effectivePlan = ticket.seller.plan ?? ticket.associate.plan ?? defaultPlan;
+  const commissionRate = (effectivePlan?.commission ?? 0) / 100;
+
+  return {
+    prizeForTicket: calculatePrizeForTicket(ticket, defaultPlan),
+    commissionForTicket: ticket.total * commissionRate,
+  };
 }
 
 // GET /api/cash-movements/targets
@@ -345,7 +400,7 @@ router.get('/balance', async (req, res) => {
     return;
   }
 
-  const openingBalanceCutoff = parsed.data.fromDate ? new Date(`${parsed.data.fromDate}T00:00:00`) : null;
+  const openingBalanceCutoff = parsed.data.fromDate ? parseDateYmdToUtc(parsed.data.fromDate, false) : null;
 
   const movementWhere: Record<string, unknown> = { targetUserId, canceledAt: null };
   if (Object.keys(createdAt).length > 0) {
@@ -448,16 +503,25 @@ router.get('/balance', async (req, res) => {
       }),
     ]);
 
-    const openingPrizes = openingTickets.reduce(
-      (sum, ticket) => sum + calculatePrizeForTicket(ticket as PrizeTicket, defaultPlan),
-      0
+    const openingFinancials = openingTickets.reduce(
+      (sum, ticket) => {
+        const financials = calculateTicketFinancials(ticket as PrizeTicket, defaultPlan);
+        return {
+          prizes: sum.prizes + financials.prizeForTicket,
+          commissions: sum.commissions + financials.commissionForTicket,
+        };
+      },
+      {
+        prizes: 0,
+        commissions: 0,
+      }
     );
 
     openingBalance =
       (openingDepositsAgg._sum.amount ?? 0) -
       (openingWithdrawalsAgg._sum.amount ?? 0) +
       (openingTicketAgg._sum.total ?? 0) -
-      openingPrizes;
+      openingFinancials.prizes;
   }
 
   const totalPrizes = tickets.reduce(
@@ -491,6 +555,219 @@ router.get('/balance', async (req, res) => {
       fromDate: parsed.data.fromDate ?? null,
       toDate: parsed.data.toDate ?? null,
     },
+  });
+});
+
+// GET /api/cash-movements/summary-by-event
+router.get('/summary-by-event', async (req, res) => {
+  const parsed = balanceQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ message: parsed.error.issues[0]?.message ?? 'Parametros invalidos.' });
+    return;
+  }
+
+  const authUser = req.user as AuthUser;
+  const users = await getHierarchyUsers();
+  const scoped = getScopedUserIds(authUser, users);
+  const targetUserId = parsed.data.targetUserId ?? authUser.sub;
+
+  if (!scoped.has(targetUserId)) {
+    res.status(403).json({ message: 'No tienes permisos para consultar este balance.' });
+    return;
+  }
+
+  const target = users.find((u) => u.id === targetUserId);
+  if (!target) {
+    res.status(404).json({ message: 'Usuario objetivo no encontrado.' });
+    return;
+  }
+
+  const { filter: createdAt, error } = parseCreatedAtFilter(parsed.data.fromDate, parsed.data.toDate);
+  if (error) {
+    res.status(400).json({ message: error });
+    return;
+  }
+
+  const openingBalanceCutoff = parsed.data.fromDate ? parseDateYmdToUtc(parsed.data.fromDate, false) : null;
+
+  const ticketWhere: Record<string, unknown> = {
+    sellerId: targetUserId,
+    canceledAt: null,
+  };
+  if (Object.keys(createdAt).length > 0) {
+    ticketWhere['createdAt'] = createdAt;
+  }
+
+  const [tickets, defaultPlan] = await Promise.all([
+    prisma.ticket.findMany({
+      where: ticketWhere,
+      include: {
+        lines: { select: { number: true, amount: true, specialAmount: true } },
+        draw: {
+          select: {
+            id: true,
+            name: true,
+            closeTime: true,
+            winnerNumber: true,
+            specialMultiplier: { select: { value: true } },
+          },
+        },
+        seller: {
+          select: {
+            plan: { select: { multiplier: true, commission: true } },
+          },
+        },
+        associate: {
+          select: {
+            plan: { select: { multiplier: true, commission: true } },
+          },
+        },
+      },
+    }),
+    prisma.plan.findFirst({
+      orderBy: { createdAt: 'asc' },
+      select: { multiplier: true, commission: true },
+    }),
+  ]);
+
+  let openingBalance = 0;
+  if (openingBalanceCutoff) {
+    const openingMovementWhere = {
+      targetUserId,
+      canceledAt: null,
+      createdAt: { lt: openingBalanceCutoff },
+    };
+    const openingTicketWhere = {
+      sellerId: targetUserId,
+      canceledAt: null,
+      createdAt: { lt: openingBalanceCutoff },
+    };
+
+    const [openingDepositsAgg, openingWithdrawalsAgg, openingTicketAgg, openingTickets] = await Promise.all([
+      prisma.cashMovement.aggregate({
+        where: { ...openingMovementWhere, type: 'deposito' },
+        _sum: { amount: true },
+      }),
+      prisma.cashMovement.aggregate({
+        where: { ...openingMovementWhere, type: 'retiro' },
+        _sum: { amount: true },
+      }),
+      prisma.ticket.aggregate({ where: openingTicketWhere, _sum: { total: true } }),
+      prisma.ticket.findMany({
+        where: openingTicketWhere,
+        include: {
+          lines: { select: { number: true, amount: true, specialAmount: true } },
+          draw: {
+            select: {
+              winnerNumber: true,
+              specialMultiplier: { select: { value: true } },
+            },
+          },
+          seller: {
+            select: {
+              plan: { select: { multiplier: true, commission: true } },
+            },
+          },
+          associate: {
+            select: {
+              plan: { select: { multiplier: true, commission: true } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const openingPrizes = openingTickets.reduce(
+      (sum, ticket) => sum + calculatePrizeForTicket(ticket as PrizeTicket, defaultPlan),
+      0
+    );
+
+    openingBalance =
+      (openingDepositsAgg._sum.amount ?? 0) -
+      (openingWithdrawalsAgg._sum.amount ?? 0) +
+      (openingTicketAgg._sum.total ?? 0) -
+      openingPrizes;
+  }
+
+  const byEvent = new Map<string, CashMovementEventSummaryRow>();
+  for (const ticket of tickets) {
+    const { prizeForTicket, commissionForTicket } = calculateTicketFinancials(ticket as PrizeTicket, defaultPlan);
+    const current = byEvent.get(ticket.draw.id) ?? {
+      eventId: ticket.draw.id,
+      eventName: ticket.draw.name,
+      eventDate: ticket.draw.closeTime,
+      ticketCount: 0,
+      totalSales: 0,
+      totalPrizes: 0,
+      totalCommissions: 0,
+      balance: 0,
+      balanceAfterTransaction: 0,
+    };
+
+    current.ticketCount += 1;
+    current.totalSales += ticket.total;
+    current.totalPrizes += prizeForTicket;
+    current.totalCommissions += commissionForTicket;
+    current.balance = current.totalSales - current.totalPrizes;
+    byEvent.set(ticket.draw.id, current);
+  }
+
+  let runningBalance = openingBalance;
+  const rows = Array.from(byEvent.values())
+    .sort((a, b) => {
+      const dateDiff = a.eventDate.getTime() - b.eventDate.getTime();
+      if (dateDiff !== 0) return dateDiff;
+      return a.eventName.localeCompare(b.eventName);
+    })
+    .map((row) => {
+      runningBalance += row.balance;
+      return {
+        eventId: row.eventId,
+        eventName: row.eventName,
+        eventDate: row.eventDate.toISOString(),
+        ticketCount: row.ticketCount,
+        totalSales: row.totalSales,
+        totalPrizes: row.totalPrizes,
+        totalCommissions: row.totalCommissions,
+        balance: row.balance,
+        balanceAfterTransaction: runningBalance,
+      };
+    });
+
+  const totals = rows.reduce(
+    (acc, row) => ({
+      ticketCount: acc.ticketCount + row.ticketCount,
+      totalSales: acc.totalSales + row.totalSales,
+      totalPrizes: acc.totalPrizes + row.totalPrizes,
+      totalCommissions: acc.totalCommissions + row.totalCommissions,
+      balance: acc.balance + row.balance,
+    }),
+    {
+      ticketCount: 0,
+      totalSales: 0,
+      totalPrizes: 0,
+      totalCommissions: 0,
+      balance: 0,
+    }
+  );
+
+  res.json({
+    targetUser: {
+      id: target.id,
+      fullName: target.fullName,
+      username: target.username,
+      role: target.role,
+      status: target.status,
+    },
+    totals: {
+      openingBalance,
+      ...totals,
+    },
+    filters: {
+      fromDate: parsed.data.fromDate ?? null,
+      toDate: parsed.data.toDate ?? null,
+    },
+    rows,
   });
 });
 
