@@ -797,8 +797,16 @@ export const reportsApi = {
     const res = await api.get<ReportSummary>('/api/reports/summary', { params: { drawId, fromDate, toDate } });
     return res.data;
   },
-  topNumbers: async (drawId?: string, limit = 10, fromDate?: string, toDate?: string): Promise<TopNumber[]> => {
-    const res = await api.get<TopNumber[]>('/api/reports/top-numbers', { params: { drawId, limit, fromDate, toDate } });
+  topNumbers: async (
+    drawId?: string,
+    limit = 10,
+    fromDate?: string,
+    toDate?: string,
+    includeAllDraws?: boolean
+  ): Promise<TopNumber[]> => {
+    const res = await api.get<TopNumber[]>('/api/reports/top-numbers', {
+      params: { drawId, limit, fromDate, toDate, includeAllDraws },
+    });
     return res.data;
   },
   hierarchy: async (drawId?: string, fromDate?: string, toDate?: string): Promise<HierarchyNode[]> => {

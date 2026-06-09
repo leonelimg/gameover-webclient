@@ -81,6 +81,15 @@ router.use(authorizeResource('/cash-movements'));
 
 const CASH_MOVEMENTS_TIMEZONE_OFFSET = '-06:00';
 
+const ELIGIBLE_DRAW_FILTER = {
+  status: 'finalizado' as const,
+  winnerNumber: { not: null as string | null },
+};
+
+function applyEligibleDrawFilter(where: Record<string, unknown>): void {
+  where['draw'] = ELIGIBLE_DRAW_FILTER;
+}
+
 const movementTypeSchema = z.enum(['deposito', 'retiro']);
 
 const createMovementSchema = z.object({
@@ -425,6 +434,7 @@ router.get('/balance', async (req, res) => {
   if (Object.keys(createdAt).length > 0) {
     ticketWhere['createdAt'] = createdAt;
   }
+  applyEligibleDrawFilter(ticketWhere);
 
   const [ticketAgg, defaultPlan, tickets] = await Promise.all([
     prisma.ticket.aggregate({ where: ticketWhere, _sum: { total: true }, _count: { id: true } }),
@@ -468,6 +478,7 @@ router.get('/balance', async (req, res) => {
       canceledAt: null,
       createdAt: { lt: openingBalanceCutoff },
     };
+    applyEligibleDrawFilter(openingTicketWhere);
 
     const [openingDepositsAgg, openingWithdrawalsAgg, openingTicketAgg, openingTickets] = await Promise.all([
       prisma.cashMovement.aggregate({
@@ -597,6 +608,7 @@ router.get('/summary-by-event', async (req, res) => {
   if (Object.keys(createdAt).length > 0) {
     ticketWhere['createdAt'] = createdAt;
   }
+  applyEligibleDrawFilter(ticketWhere);
 
   const [tickets, defaultPlan] = await Promise.all([
     prisma.ticket.findMany({
@@ -642,6 +654,7 @@ router.get('/summary-by-event', async (req, res) => {
       canceledAt: null,
       createdAt: { lt: openingBalanceCutoff },
     };
+    applyEligibleDrawFilter(openingTicketWhere);
 
     const [openingDepositsAgg, openingWithdrawalsAgg, openingTicketAgg, openingTickets] = await Promise.all([
       prisma.cashMovement.aggregate({

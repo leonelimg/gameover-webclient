@@ -152,7 +152,7 @@ export default function SalesPage() {
       return;
     }
 
-    reportsApi.topNumbers(drawId, 10).then(setTopNumbers).catch(() => {});
+    reportsApi.topNumbers(drawId, 10, undefined, undefined, true).then(setTopNumbers).catch(() => {});
     ticketsApi.list({ drawId }).then(setDrawTickets).catch(() => {});
   }, []);
 

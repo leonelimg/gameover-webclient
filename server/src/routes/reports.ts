@@ -43,6 +43,15 @@ router.use(authenticate);
 
 const REPORTS_TIMEZONE_OFFSET = '-06:00';
 
+const ELIGIBLE_DRAW_FILTER = {
+  status: 'finalizado' as const,
+  winnerNumber: { not: null as string | null },
+};
+
+function applyEligibleDrawFilter(where: Record<string, unknown>): void {
+  where['draw'] = ELIGIBLE_DRAW_FILTER;
+}
+
 function parseDateYmdToUtc(dateValue: string, endOfDay: boolean): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
   if (!match) {
@@ -183,6 +192,7 @@ router.get('/summary', authorizeAnyResource('/reports/sales-stats', '/dashboard'
   if (scopedSellerIds) {
     ticketWhere['sellerId'] = { in: Array.from(scopedSellerIds) };
   }
+  applyEligibleDrawFilter(ticketWhere);
 
   const activeTicketWhere: Record<string, unknown> = {
     ...ticketWhere,
@@ -245,7 +255,7 @@ router.get('/summary', authorizeAnyResource('/reports/sales-stats', '/dashboard'
 // ── GET /api/reports/top-numbers ──────────────────────────────────────────────
 
 router.get('/top-numbers', authorizeAnyResource('/reports/sales-stats', '/dashboard', '/sales'), async (req, res) => {
-  const { drawId, limit = '10', fromDate, toDate } = req.query as Record<string, string>;
+  const { drawId, limit = '10', fromDate, toDate, includeAllDraws } = req.query as Record<string, string>;
 
   const users = await getScopedUsers();
   const scopedSellerIds = getScopedSellerIds(users, req.user as { sub: string; role: 'admin' | 'asociado' | 'vendedor' });
@@ -262,6 +272,9 @@ router.get('/top-numbers', authorizeAnyResource('/reports/sales-stats', '/dashbo
   ticketWhere['canceledAt'] = null;
   if (scopedSellerIds) {
     ticketWhere['sellerId'] = { in: Array.from(scopedSellerIds) };
+  }
+  if (includeAllDraws !== 'true') {
+    applyEligibleDrawFilter(ticketWhere);
   }
 
   // Get all ticket IDs matching filter
@@ -310,6 +323,7 @@ router.get('/hierarchy', authorizeResource('/reports/sales-stats'), async (req, 
   const ticketWhere: Record<string, unknown> = { canceledAt: null };
   if (drawId) ticketWhere['drawId'] = drawId;
   if (Object.keys(createdAtFilter).length > 0) ticketWhere['createdAt'] = createdAtFilter;
+  applyEligibleDrawFilter(ticketWhere);
 
   const aggregates = await prisma.ticket.groupBy({
     by: ['sellerId'],
@@ -396,6 +410,7 @@ router.get('/recent-tickets', authorizeAnyResource('/reports/sales-stats', '/das
   if (Object.keys(createdAtFilter).length > 0) where['createdAt'] = createdAtFilter;
   where['canceledAt'] = null;
   if (scopedSellerIds) where['sellerId'] = { in: Array.from(scopedSellerIds) };
+  applyEligibleDrawFilter(where);
 
   const tickets = await prisma.ticket.findMany({
     where,
@@ -437,6 +452,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
   } else if (scopedSellerIds) {
     where['sellerId'] = { in: Array.from(scopedSellerIds) };
   }
+  applyEligibleDrawFilter(where);
 
   interface BreakdownTicket {
     createdAt: Date;
@@ -860,6 +876,7 @@ router.get('/sales-by-user', authorizeResource('/reports/sales-by-user'), async 
   } else if (scopedSellerIds) {
     where['sellerId'] = { in: Array.from(scopedSellerIds) };
   }
+  applyEligibleDrawFilter(where);
 
   const tickets = await prisma.ticket.findMany({
     where,
@@ -1069,6 +1086,7 @@ router.get('/commissions', authorizeResource('/reports/commissions'), async (req
   } else if (scopedSellerIds) {
     where['sellerId'] = { in: Array.from(scopedSellerIds) };
   }
+  applyEligibleDrawFilter(where);
 
   const defaultPlan = await prisma.plan.findFirst({
     orderBy: { createdAt: 'asc' },

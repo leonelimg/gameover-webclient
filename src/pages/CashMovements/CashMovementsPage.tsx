@@ -532,7 +532,9 @@ export default function CashMovementsPage() {
                           {row.type}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(row.amount)}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                        {(row.type === 'retiro' || row.amount < 0 ? '-' : '') + formatCurrency(Math.abs(row.amount))}
+                      </td>
                       <td className="px-4 py-3 text-slate-700">{row.createdBy.fullName}</td>
                       <td className="px-4 py-3 text-slate-600">{row.note || '-'}</td>
                       <td className="px-4 py-3">
