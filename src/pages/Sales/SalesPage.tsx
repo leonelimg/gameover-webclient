@@ -627,7 +627,7 @@ export default function SalesPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Ventas</h1>
-        <p className="text-sm text-slate-500">Registro de apuestas de lotería</p>
+        <p className="text-sm text-slate-500">Registro de ventas</p>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -681,7 +681,7 @@ export default function SalesPage() {
           {/* Bet lines */}
           <Card>
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-              <h2 className="font-semibold text-slate-800">Apuestas</h2>
+              <h2 className="font-semibold text-slate-800">Ventas</h2>
               <Button variant="secondary" size="sm" onClick={addLine}>
                 <Plus size={14} />
                 Agregar línea
@@ -1226,8 +1226,8 @@ function TicketPrintView({
       style={{ minWidth: 280 }}
     >
       <div className="text-center mb-4">
-        <div className="font-bold text-xl">GameOver Lotería</div>
-        <div className="text-xs text-slate-500">Sistema de Tickets</div>
+        <div className="font-bold text-xl">PM Comercial</div>
+        <div className="text-xs text-slate-500">Venta de Tickets</div>
         <div className="border-t-2 border-dashed border-slate-300 mt-3 pt-3 font-bold text-lg tracking-widest">
           {ticket.code}
         </div>

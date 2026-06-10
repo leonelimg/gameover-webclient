@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { AxiosError } from 'axios';
+import logoPM from '@/assets/LogoPM.svg';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -42,11 +43,9 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-lg">
-            <span className="text-white font-bold text-2xl">GO</span>
-          </div>
-          <h1 className="text-3xl font-bold text-white">GameOver</h1>
-          <p className="text-blue-300 mt-1 text-sm">Sistema de Lotería</p>
+          <img src={logoPM} alt="P&M Comercial" className="w-20 h-20 object-contain mx-auto mb-4" />
+          <h1 className="text-3xl font-bold text-white">P&M Comercial</h1>
+          <p className="text-blue-300 mt-1 text-sm">Venta de Tickets</p>
         </div>
 
         {/* Card */}
@@ -83,10 +82,6 @@ export default function LoginPage() {
               Ingresar
             </Button>
           </form>
-
-          <p className="text-center text-xs text-slate-400 mt-6">
-            Credenciales demo: <strong>admin</strong> / <strong>admin123</strong>
-          </p>
         </div>
       </div>
     </div>

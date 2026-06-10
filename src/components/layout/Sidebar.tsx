@@ -25,6 +25,7 @@ import { useAuth } from '@/context/AuthContext';
 import { cashMovementsApi } from '@/services/api';
 import { formatCurrency } from '@/utils/helpers';
 import { toISODateLocal } from '@/utils/dateRanges';
+import logoPM from '@/assets/logoPM.svg';
 
 interface NavItem {
   to?: string;
@@ -181,12 +182,10 @@ export function Sidebar() {
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="flex items-center gap-2 px-6 py-5 border-b border-slate-700">
-        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
-          GO
-        </div>
+        <img src={logoPM} alt="PM Comercial" className="w-8 h-8 object-contain" />
         <div>
-          <p className="text-white font-semibold text-sm leading-tight">GameOver</p>
-          <p className="text-slate-400 text-xs">Lotería Sistema</p>
+          <p className="text-white font-semibold text-sm leading-tight">PM Comercial</p>
+          <p className="text-slate-400 text-xs">Venta de Tickets</p>
         </div>
       </div>
 
