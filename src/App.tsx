@@ -21,6 +21,8 @@ import CommissionsPage from '@/pages/Reports/CommissionsPage';
 import CashMovementsPage from '@/pages/CashMovements/CashMovementsPage';
 import AnnouncementsPage from '@/pages/Announcements/AnnouncementsPage';
 import NumberRestrictionsPage from '@/pages/NumberRestrictions/NumberRestrictionsPage';
+import UserGlobalRestrictionsPage from '@/pages/Restrictions/UserGlobalRestrictionsPage';
+import UserSalesRestrictionsPage from '@/pages/Restrictions/UserSalesRestrictionsPage';
 
 function ProtectedByPermission({ resourceKey, element }: { resourceKey: string; element: ReactElement }) {
   const { isAuthenticated, permissionsLoaded, hasPermission } = useAuth();
@@ -44,7 +46,10 @@ export default function App() {
             <Route path="/roles" element={<ProtectedByPermission resourceKey="/roles" element={<RolesPage />} />} />
             <Route path="/plans" element={<ProtectedByPermission resourceKey="/plans" element={<PlansPage />} />} />
             <Route path="/draws" element={<ProtectedByPermission resourceKey="/draws" element={<DrawsPage />} />} />
-            <Route path="/number-restrictions" element={<ProtectedByPermission resourceKey="/number-restrictions" element={<NumberRestrictionsPage />} />} />
+            <Route path="/restrictions/global" element={<ProtectedByPermission resourceKey="/restrictions/global" element={<NumberRestrictionsPage />} />} />
+            <Route path="/restrictions/user-global" element={<ProtectedByPermission resourceKey="/restrictions/user-global" element={<UserGlobalRestrictionsPage />} />} />
+            <Route path="/restrictions/user-sales-limit" element={<ProtectedByPermission resourceKey="/restrictions/user-sales-limit" element={<UserSalesRestrictionsPage />} />} />
+            <Route path="/number-restrictions" element={<ProtectedByPermission resourceKey="/restrictions/global" element={<Navigate to="/restrictions/global" replace />} />} />
             <Route path="/multiplicadores" element={<ProtectedByPermission resourceKey="/multiplicadores" element={<MultiplicadoresEspecialesPage />} />} />
             <Route path="/sales" element={<ProtectedByPermission resourceKey="/sales" element={<SalesPage />} />} />
             <Route path="/ticket-payments" element={<ProtectedByPermission resourceKey="/ticket-payments" element={<TicketPaymentsPage />} />} />

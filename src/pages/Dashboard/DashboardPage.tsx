@@ -23,7 +23,7 @@ const DASHBOARD_CUSTOM_TO_STORAGE_KEY = 'go_dashboard_custom_to_date';
 
 const DASHBOARD_RANGES: Array<{ key: DashboardRange; label: string; hint: string }> = [
   { key: 'today', label: 'Hoy', hint: 'Cierre diario' },
-  { key: 'week', label: 'Esta semana', hint: 'Lun a hoy' },
+  { key: 'week', label: 'Esta semana', hint: 'Lun a Dom' },
   { key: 'month', label: 'Este mes', hint: 'Mes en curso' },
   { key: 'custom', label: 'Custom', hint: 'Rango manual' },
 ];
@@ -51,6 +51,7 @@ function toISODateLocal(date: Date): string {
 function getDateRange(range: DashboardRange): { fromDate: string; toDate: string } {
   const now = new Date();
   const start = new Date(now);
+  const end = new Date(now);
 
   if (range === 'today') {
     return { fromDate: toISODateLocal(now), toDate: toISODateLocal(now) };
@@ -64,11 +65,13 @@ function getDateRange(range: DashboardRange): { fromDate: string; toDate: string
   if (range === 'week') {
     const mondayOffset = (now.getDay() + 6) % 7;
     start.setDate(now.getDate() - mondayOffset);
-    return { fromDate: toISODateLocal(start), toDate: toISODateLocal(now) };
+    end.setDate(start.getDate() + 6);
+    return { fromDate: toISODateLocal(start), toDate: toISODateLocal(end) };
   }
 
   start.setDate(1);
-  return { fromDate: toISODateLocal(start), toDate: toISODateLocal(now) };
+  end.setMonth(now.getMonth() + 1, 0);
+  return { fromDate: toISODateLocal(start), toDate: toISODateLocal(end) };
 }
 
 export default function DashboardPage() {

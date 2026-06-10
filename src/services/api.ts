@@ -7,9 +7,12 @@ import {
   Announcement,
   AnnouncementPayload,
   GlobalNumberRestrictionSettings,
+  CurrentUserRestrictionSettings,
   RolePermissionRow,
   PaymentsWinningTicketsResponse,
   SpecialMultiplier,
+  UserRestrictionLimitItem,
+  UserRestrictionLimitUpdateResult,
 } from '@/types';
 
 // ─── Base URL ─────────────────────────────────────────────────────────────────
@@ -154,6 +157,28 @@ export const numberRestrictionsApi = {
   updateGlobal: async (globalLimit: number | null): Promise<GlobalNumberRestrictionSettings> => {
     const res = await api.patch<GlobalNumberRestrictionSettings>('/api/number-restrictions/global', {
       globalLimit,
+    });
+    return res.data;
+  },
+  getMyLimits: async (): Promise<CurrentUserRestrictionSettings> => {
+    const res = await api.get<CurrentUserRestrictionSettings>('/api/number-restrictions/me-limits');
+    return res.data;
+  },
+  listUserLimits: async (search?: string): Promise<UserRestrictionLimitItem[]> => {
+    const res = await api.get<{ items: UserRestrictionLimitItem[] }>('/api/number-restrictions/users-limits', {
+      params: search ? { search } : undefined,
+    });
+    return res.data.items;
+  },
+  updateUserGlobalLimit: async (userId: string, limit: number | null): Promise<UserRestrictionLimitUpdateResult> => {
+    const res = await api.patch<UserRestrictionLimitUpdateResult>(`/api/number-restrictions/users/${userId}/global-limit`, {
+      limit,
+    });
+    return res.data;
+  },
+  updateUserDrawSaleLimit: async (userId: string, limit: number | null): Promise<UserRestrictionLimitUpdateResult> => {
+    const res = await api.patch<UserRestrictionLimitUpdateResult>(`/api/number-restrictions/users/${userId}/draw-sale-limit`, {
+      limit,
     });
     return res.data;
   },

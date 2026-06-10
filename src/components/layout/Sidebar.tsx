@@ -9,7 +9,6 @@ import {
   ShoppingCart,
   HandCoins,
   BarChart3,
-  ChevronDown,
   ChevronRight,
   LogOut,
   Menu,
@@ -19,8 +18,9 @@ import {
   Wallet,
   Bell,
   SlidersHorizontal,
+  RefreshCcw,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { cashMovementsApi } from '@/services/api';
 import { formatCurrency } from '@/utils/helpers';
@@ -61,9 +61,23 @@ const NAV_ITEMS: NavItem[] = [
     icon: <Ticket size={18} />,
   },
   {
-    to: '/number-restrictions',
-    label: 'Restricción global',
+    to: '/restrictions',
+    label: 'Restricciones',
     icon: <SlidersHorizontal size={18} />,
+    children: [
+      {
+        to: '/restrictions/global',
+        label: 'Global',
+      },
+      {
+        to: '/restrictions/user-global',
+        label: 'Global por usuario',
+      },
+      {
+        to: '/restrictions/user-sales-limit',
+        label: 'Venta por usuario',
+      },
+    ],
   },
   {
     to: '/multiplicadores',
@@ -129,68 +143,78 @@ export function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [reportsOpen, setReportsOpen] = useState(location.pathname.startsWith('/reports'));
+  const [groupOpen, setGroupOpen] = useState<Record<string, boolean>>({
+    Reportes: location.pathname.startsWith('/reports'),
+    Restricciones: location.pathname.startsWith('/restrictions'),
+  });
   const [finalBalance, setFinalBalance] = useState<number | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
 
-  useEffect(() => {
+  const loadFinalBalance = useCallback(async () => {
     if (!user?.id) {
+      setFinalBalance(null);
       return;
     }
 
-    let active = true;
+    setBalanceLoading(true);
+    try {
+      const today = toISODateLocal(new Date());
+      const response = await cashMovementsApi.balance({
+        targetUserId: user.id,
+        fromDate: today,
+        toDate: today,
+      });
 
-    const loadFinalBalance = async () => {
-      setBalanceLoading(true);
-      try {
-        const today = toISODateLocal(new Date());
-        const response = await cashMovementsApi.balance({
-          targetUserId: user.id,
-          fromDate: today,
-          toDate: today,
-        });
-
-        if (active) {
-          setFinalBalance(response.totals.balance);
-        }
-      } catch {
-        if (active) {
-          setFinalBalance(null);
-        }
-      } finally {
-        if (active) {
-          setBalanceLoading(false);
-        }
-      }
-    };
-
-    loadFinalBalance();
-
-    return () => {
-      active = false;
-    };
+      setFinalBalance(response.totals.balance);
+    } catch {
+      setFinalBalance(null);
+    } finally {
+      setBalanceLoading(false);
+    }
   }, [user?.id]);
+
+  useEffect(() => {
+    loadFinalBalance();
+  }, [loadFinalBalance]);
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
-  const visibleItems = NAV_ITEMS.filter((item) => item.to && hasPermission(item.to));
+  const visibleItems = NAV_ITEMS.filter((item) => {
+    if (item.children && item.children.length > 0) {
+      return item.children.some((child) => hasPermission(child.to));
+    }
+    if (!item.to) {
+      return false;
+    }
+    return hasPermission(item.to);
+  });
 
   const renderSidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="flex items-center gap-2 px-6 py-5 border-b border-slate-700">
-        <img src={logoPM} alt="PM Comercial" className="w-8 h-8 object-contain" />
-        <div>
-          <p className="text-white font-semibold text-sm leading-tight">PM Comercial</p>
+      <div className="px-6 py-6 border-b border-slate-700 text-center">
+        <img src={logoPM} alt="PM Comercial" className="w-16 h-16 mx-auto object-contain" />
+        <div className="mt-3">
+          <p className="text-white font-semibold text-base leading-tight">PM Comercial</p>
           <p className="text-slate-400 text-xs">Venta de Tickets</p>
         </div>
       </div>
 
       <div className="px-4 py-4 border-b border-slate-700">
-        <div className="rounded-xl border border-emerald-800/60 bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/55 px-3 py-3 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]">
+        <div className="relative rounded-xl border border-emerald-800/60 bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/55 px-3 py-3 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]">
+          <button
+            type="button"
+            onClick={loadFinalBalance}
+            disabled={balanceLoading || !user?.id}
+            className="absolute right-2 top-2 rounded-md p-1 text-emerald-300/90 hover:bg-emerald-900/40 hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Refrescar balance final"
+            title="Refrescar balance final"
+          >
+            <RefreshCcw size={13} className={balanceLoading ? 'animate-spin' : ''} />
+          </button>
           <div className="flex items-center gap-2 text-emerald-300 text-xs uppercase tracking-wide">
             <CircleDollarSign size={14} />
             Balance final
@@ -210,19 +234,20 @@ export function Sidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <nav className="sidebar-scrollbar flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {visibleItems.map((item) => {
           if (item.children && item.children.length > 0) {
             const childItems = item.children.filter((child) => hasPermission(child.to));
             if (childItems.length === 0) return null;
 
             const isParentActive = childItems.some((child) => location.pathname.startsWith(child.to));
+            const isOpen = groupOpen[item.label] ?? isParentActive;
 
             return (
               <div key={item.label} className="space-y-1">
                 <button
                   type="button"
-                  onClick={() => setReportsOpen((v) => !v)}
+                  onClick={() => setGroupOpen((prev) => ({ ...prev, [item.label]: !isOpen }))}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                     isParentActive
                       ? 'bg-blue-600 text-white'
@@ -231,11 +256,14 @@ export function Sidebar() {
                 >
                   {item.icon}
                   <span className="flex-1 text-left">{item.label}</span>
-                  {reportsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  <ChevronRight
+                    size={16}
+                    className={`transition-transform duration-200 ${isOpen ? 'rotate-90' : 'rotate-0'}`}
+                  />
                 </button>
 
-                {reportsOpen && (
-                  <div className="pl-8 space-y-1">
+                <div className={`sidebar-submenu ${isOpen ? 'is-open' : ''}`}>
+                  <div className="sidebar-submenu-content pl-8 space-y-1">
                     {childItems.map((child) => (
                       <NavLink
                         key={child.to}
@@ -253,7 +281,7 @@ export function Sidebar() {
                       </NavLink>
                     ))}
                   </div>
-                )}
+                </div>
               </div>
             );
           }

@@ -36,6 +36,27 @@ export interface GlobalNumberRestrictionSettings {
   globalLimit: number | null;
 }
 
+export interface CurrentUserRestrictionSettings {
+  userGlobalLimit: number | null;
+  userDrawSaleLimit: number | null;
+}
+
+export interface UserRestrictionLimitItem {
+  id: string;
+  fullName: string;
+  username: string;
+  role: UserRole;
+  status: UserStatus;
+  userGlobalLimit: number | null;
+  userDrawSaleLimit: number | null;
+}
+
+export interface UserRestrictionLimitUpdateResult {
+  userId: string;
+  userGlobalLimit: number | null;
+  userDrawSaleLimit: number | null;
+}
+
 // ─── Special Multipliers ─────────────────────────────────────────────────────
 
 export interface SpecialMultiplier {

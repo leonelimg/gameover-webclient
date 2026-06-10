@@ -117,6 +117,8 @@ export default function SalesPage() {
   const [topNumbers, setTopNumbers] = useState<TopNumber[]>([]);
   const [drawTickets, setDrawTickets] = useState<Ticket[]>([]);
   const [globalNumberLimit, setGlobalNumberLimit] = useState<number | null>(null);
+  const [userGlobalNumberLimit, setUserGlobalNumberLimit] = useState<number | null>(null);
+  const [userDrawSaleLimit, setUserDrawSaleLimit] = useState<number | null>(null);
 
   const openDraws = useMemo(
     () => draws.filter((d) => isDrawSellable(d)),
@@ -169,9 +171,16 @@ export default function SalesPage() {
     }).catch(() => {});
     usersApi.list().then(setUsers).catch(() => {});
 
-    numberRestrictionsApi.getGlobal().then((settings) => {
-      setGlobalNumberLimit(settings.globalLimit);
-    }).catch(() => {});
+    Promise.all([
+      numberRestrictionsApi.getGlobal(),
+      numberRestrictionsApi.getMyLimits(),
+    ])
+      .then(([globalSettings, myLimits]) => {
+        setGlobalNumberLimit(globalSettings.globalLimit);
+        setUserGlobalNumberLimit(myLimits.userGlobalLimit);
+        setUserDrawSaleLimit(myLimits.userDrawSaleLimit);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -295,6 +304,16 @@ export default function SalesPage() {
     [drawTickets],
   );
 
+  const mySoldTotalInDraw = useMemo(() => {
+    if (!user?.id) {
+      return 0;
+    }
+
+    return activeDrawTickets
+      .filter((ticket) => ticket.sellerId === user.id)
+      .reduce((sum, ticket) => sum + ticket.total, 0);
+  }, [activeDrawTickets, user?.id]);
+
   const soldByNumber = useMemo(() => {
     const soldMap = new Map<string, number>();
     for (const ticket of activeDrawTickets) {
@@ -305,6 +324,25 @@ export default function SalesPage() {
     return soldMap;
   }, [activeDrawTickets]);
 
+  const mySoldByNumber = useMemo(() => {
+    const soldMap = new Map<string, number>();
+    if (!user?.id) {
+      return soldMap;
+    }
+
+    for (const ticket of activeDrawTickets) {
+      if (ticket.sellerId !== user.id) {
+        continue;
+      }
+
+      for (const line of ticket.lines) {
+        soldMap.set(line.number, (soldMap.get(line.number) ?? 0) + line.amount);
+      }
+    }
+
+    return soldMap;
+  }, [activeDrawTickets, user?.id]);
+
   const numbersSoldSummary = useMemo(() => {
     const individualByNumber = new Map(
       (selectedDraw?.restrictedNumbers ?? []).map((rn) => [rn.number, rn.limit])
@@ -313,23 +351,31 @@ export default function SalesPage() {
       number: string;
       sold: number;
       limit: number | null;
-      limitType: 'individual' | 'global' | null;
+      limitType: 'individual' | 'global-usuario' | 'global' | null;
       remaining: number | null;
     }[] = [];
     for (const [number, sold] of soldByNumber.entries()) {
       const individualLimit = individualByNumber.get(number) ?? null;
-      const effectiveLimit = individualLimit ?? globalNumberLimit;
-      const limitType = individualLimit !== null ? 'individual' : globalNumberLimit !== null ? 'global' : null;
+      const userSold = mySoldByNumber.get(number) ?? 0;
+      const effectiveLimit = individualLimit ?? userGlobalNumberLimit ?? globalNumberLimit;
+      const limitType = individualLimit !== null
+        ? 'individual'
+        : userGlobalNumberLimit !== null
+          ? 'global-usuario'
+          : globalNumberLimit !== null
+            ? 'global'
+            : null;
+      const soldForRule = limitType === 'global-usuario' ? userSold : sold;
       entries.push({
         number,
-        sold,
+        sold: soldForRule,
         limit: effectiveLimit,
         limitType,
-        remaining: effectiveLimit !== null ? Math.max(0, effectiveLimit - sold) : null,
+        remaining: effectiveLimit !== null ? Math.max(0, effectiveLimit - soldForRule) : null,
       });
     }
     return entries.sort((a, b) => b.sold - a.sold);
-  }, [soldByNumber, selectedDraw, globalNumberLimit]);
+  }, [soldByNumber, selectedDraw, userGlobalNumberLimit, globalNumberLimit, mySoldByNumber]);
 
   const restrictedSummary = useMemo(() => {
     const restrictedNumbers = selectedDraw?.restrictedNumbers ?? [];
@@ -705,12 +751,29 @@ export default function SalesPage() {
               {lines.map((line) => {
                 const normalizedNumber = line.number.trim();
                 const summaryEntry = restrictedSummary.find((rn) => rn.number === normalizedNumber);
-                const sold = soldByNumber.get(normalizedNumber) ?? 0;
-                const effectiveLimit = summaryEntry?.limit ?? globalNumberLimit;
+                const individualLimit = summaryEntry?.limit ?? null;
+
+                let effectiveLimit: number | null = null;
+                let soldForRule = 0;
+                let restrictionScope: 'individual' | 'global-usuario' | 'global' | null = null;
+
+                if (individualLimit !== null) {
+                  effectiveLimit = individualLimit;
+                  soldForRule = soldByNumber.get(normalizedNumber) ?? 0;
+                  restrictionScope = 'individual';
+                } else if (userGlobalNumberLimit !== null) {
+                  effectiveLimit = userGlobalNumberLimit;
+                  soldForRule = mySoldByNumber.get(normalizedNumber) ?? 0;
+                  restrictionScope = 'global-usuario';
+                } else if (globalNumberLimit !== null) {
+                  effectiveLimit = globalNumberLimit;
+                  soldForRule = soldByNumber.get(normalizedNumber) ?? 0;
+                  restrictionScope = 'global';
+                }
+
                 const remaining = effectiveLimit !== null && /^\d{2}$/.test(normalizedNumber)
-                  ? Math.max(0, effectiveLimit - sold)
+                  ? Math.max(0, effectiveLimit - soldForRule)
                   : null;
-                const restrictionScope = summaryEntry ? 'individual' : (effectiveLimit !== null ? 'global' : null);
 
                 return (
                   <div key={line.id} className="space-y-1">
@@ -780,7 +843,13 @@ export default function SalesPage() {
                     </div>
                     {restrictionScope && remaining !== null && (
                       <div className={`text-xs px-1 ${remaining <= 0 ? 'text-red-600' : 'text-yellow-600'}`}>
-                        ⚠ Restricción {restrictionScope === 'individual' ? 'individual' : 'global'} — Disponible: C$ {Math.max(0, remaining)}
+                        ⚠ Restricción {
+                          restrictionScope === 'individual'
+                            ? 'individual'
+                            : restrictionScope === 'global-usuario'
+                              ? 'global por usuario'
+                              : 'global'
+                        } — Disponible: C$ {Math.max(0, remaining)}
                       </div>
                     )}
                   </div>
@@ -909,7 +978,7 @@ export default function SalesPage() {
           )}
 
           <FilteredTicketsCard
-            title="Tickets filtrados"
+            title="Historial de tickets"
             subtitle="Historial del sorteo seleccionado para reimpresion y anulacion"
             loading={false}
             tickets={selectedDrawId ? drawTickets : []}
@@ -955,7 +1024,7 @@ export default function SalesPage() {
           {selectedDraw && (
             <Card>
               <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-                <h3 className="font-semibold text-slate-800 text-sm">Restricción global</h3>
+                <h3 className="font-semibold text-slate-800 text-sm">Restricciones vigentes</h3>
                 {soldByNumber.size > 0 && (
                   <button
                     type="button"
@@ -969,18 +1038,50 @@ export default function SalesPage() {
                 )}
               </div>
               <CardBody>
-                {globalNumberLimit === null ? (
+                {globalNumberLimit === null && userGlobalNumberLimit === null && userDrawSaleLimit === null ? (
                   <p className="text-slate-400 text-xs text-center py-2">
-                    No hay restricción global activa para este sorteo.
+                    No hay restricciones globales activas para este usuario en este momento.
                   </p>
                 ) : (
-                  <div className="space-y-2 text-sm">
+                  <div className="space-y-3 text-sm">
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-500">Límite base por número</span>
-                      <span className="font-bold text-amber-700">{formatCurrency(globalNumberLimit)}</span>
+                      <span className="text-slate-500">1. Individual por número por sorteo</span>
+                      <span className="font-semibold text-amber-700">Mayor prioridad</span>
                     </div>
+
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-600">2. Global por usuario (por número)</span>
+                        <span className="font-semibold text-slate-800">
+                          {userGlobalNumberLimit === null ? 'Sin límite' : formatCurrency(userGlobalNumberLimit)}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-600">Límite de venta por usuario por sorteo</span>
+                        <span className="font-semibold text-slate-800">
+                          {userDrawSaleLimit === null ? 'Sin límite' : formatCurrency(userDrawSaleLimit)}
+                        </span>
+                      </div>
+
+                      {userDrawSaleLimit !== null && (
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-slate-500">Acumulado tuyo en este sorteo</span>
+                          <span className="font-medium text-slate-700">{formatCurrency(mySoldTotalInDraw)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500">3. Global (base por número)</span>
+                      <span className="font-semibold text-slate-800">
+                        {globalNumberLimit === null ? 'Sin límite' : formatCurrency(globalNumberLimit)}
+                      </span>
+                    </div>
+
                     <p className="text-xs text-slate-500">
-                      Aplica a cualquier número del sorteo salvo que exista una restricción individual, la cual predomina.
+                      Orden de aplicación vigente por número: individual por sorteo, global por usuario y luego global base.
+                      El límite de venta por usuario por sorteo se valida aparte por total vendido.
                     </p>
                   </div>
                 )}
@@ -1091,9 +1192,11 @@ export default function SalesPage() {
                               <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
                                 row.limitType === 'individual'
                                   ? 'bg-amber-100 text-amber-700'
+                                  : row.limitType === 'global-usuario'
+                                    ? 'bg-emerald-100 text-emerald-700'
                                   : 'bg-blue-50 text-blue-600'
                               }`}>
-                                {row.limitType === 'individual' ? 'ind.' : 'global'}
+                                {row.limitType === 'individual' ? 'ind.' : row.limitType === 'global-usuario' ? 'g.usuario' : 'global'}
                               </span>
                             )}
                           </div>
@@ -1120,7 +1223,7 @@ export default function SalesPage() {
               </table>
               <p className="mt-3 text-xs text-slate-400">
                 {numbersSoldSummary.length} número{numbersSoldSummary.length !== 1 ? 's' : ''} jugado{numbersSoldSummary.length !== 1 ? 's' : ''}.
-                {' '}ind. = restricción individual por sorteo · global = restricción global.
+                {' '}ind. = restricción individual por sorteo · g.usuario = restricción global por usuario · global = restricción global (base).
               </p>
             </div>
           )}

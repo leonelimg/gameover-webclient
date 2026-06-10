@@ -30,7 +30,7 @@ export function FilteredTicketsCard({
   canCancelTickets,
   actionError,
   emptyMessage = 'No hay tickets',
-  title = 'Tickets filtrados',
+  title = 'Historial de tickets',
   subtitle,
   selectedTicket,
   onCloseTicket,

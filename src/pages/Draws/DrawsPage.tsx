@@ -76,6 +76,7 @@ function toISODateLocal(date: Date): string {
 function getDateRange(range: DrawsRange): { fromDate: string; toDate: string } {
   const now = new Date();
   const start = new Date(now);
+  const end = new Date(now);
 
   if (range === 'today') {
     return { fromDate: toISODateLocal(now), toDate: toISODateLocal(now) };
@@ -89,11 +90,13 @@ function getDateRange(range: DrawsRange): { fromDate: string; toDate: string } {
   if (range === 'week') {
     const mondayOffset = (now.getDay() + 6) % 7;
     start.setDate(now.getDate() - mondayOffset);
-    return { fromDate: toISODateLocal(start), toDate: toISODateLocal(now) };
+    end.setDate(start.getDate() + 6);
+    return { fromDate: toISODateLocal(start), toDate: toISODateLocal(end) };
   }
 
   start.setDate(1);
-  return { fromDate: toISODateLocal(start), toDate: toISODateLocal(now) };
+  end.setMonth(now.getMonth() + 1, 0);
+  return { fromDate: toISODateLocal(start), toDate: toISODateLocal(end) };
 }
 
 const toDatetimeLocal = (iso: string) => {

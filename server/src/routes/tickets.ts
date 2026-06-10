@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/prisma.js';
-import { getGlobalNumberLimit } from '../config/numberRestrictions.js';
+import { getGlobalNumberLimit, getUserDrawSaleLimit, getUserGlobalNumberLimit } from '../config/numberRestrictions.js';
 import { authenticate, authorizeAnyResource, authorizeResource } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { param } from '../middleware/params.js';
@@ -153,12 +153,14 @@ router.get('/:id', authorizeAnyResource('/sales', '/ticket-payments', '/reports/
 router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema), async (req, res) => {
   const body = req.body as z.infer<typeof createTicketSchema>;
 
-  const [draw, globalNumberLimit] = await Promise.all([
+  const [draw, globalNumberLimit, userGlobalNumberLimit, userDrawSaleLimit] = await Promise.all([
     prisma.draw.findUnique({
       where: { id: body.drawId },
       include: { restrictedNumbers: true },
     }),
     getGlobalNumberLimit(),
+    getUserGlobalNumberLimit(req.user!.sub),
+    getUserDrawSaleLimit(req.user!.sub),
   ]);
   if (!draw) { res.status(404).json({ message: 'Sorteo no encontrado.' }); return; }
 
@@ -180,14 +182,52 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
     requestedByNumber.set(line.number, (requestedByNumber.get(line.number) ?? 0) + line.amount);
   }
 
-  const soldByNumber = new Map<string, number>();
+  const total = body.lines.reduce((s, l) => s + l.amount, 0);
+
+  if (userDrawSaleLimit !== null) {
+    const aggUserDrawSales = await prisma.ticket.aggregate({
+      where: {
+        drawId: body.drawId,
+        sellerId: req.user!.sub,
+        canceledAt: null,
+      },
+      _sum: { total: true },
+    });
+
+    const soldByUserInDraw = aggUserDrawSales._sum.total ?? 0;
+    if (soldByUserInDraw + total > userDrawSaleLimit) {
+      const available = Math.max(0, userDrawSaleLimit - soldByUserInDraw).toFixed(2);
+      res.status(400).json({
+        message: `Límite de venta por usuario por sorteo alcanzado. Disponible: C$ ${available}.`,
+      });
+      return;
+    }
+  }
+
+  const soldGlobalByNumber = new Map<string, number>();
+  const soldByUserNumber = new Map<string, number>();
   await Promise.all(
     Array.from(requestedByNumber.keys()).map(async (number) => {
-      const agg = await prisma.ticketLine.aggregate({
-        where: { number, ticket: { drawId: body.drawId } },
-        _sum: { amount: true },
-      });
-      soldByNumber.set(number, agg._sum.amount ?? 0);
+      const [globalAgg, userAgg] = await Promise.all([
+        prisma.ticketLine.aggregate({
+          where: { number, ticket: { drawId: body.drawId, canceledAt: null } },
+          _sum: { amount: true },
+        }),
+        prisma.ticketLine.aggregate({
+          where: {
+            number,
+            ticket: {
+              drawId: body.drawId,
+              sellerId: req.user!.sub,
+              canceledAt: null,
+            },
+          },
+          _sum: { amount: true },
+        }),
+      ]);
+
+      soldGlobalByNumber.set(number, globalAgg._sum.amount ?? 0);
+      soldByUserNumber.set(number, userAgg._sum.amount ?? 0);
     })
   );
 
@@ -195,13 +235,22 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
     const individualRestriction = draw.restrictedNumbers.find(
       (rn: { number: string; limit: number }) => rn.number === number
     );
-    const effectiveLimit = individualRestriction?.limit ?? globalNumberLimit;
-    const restrictionType = individualRestriction ? 'individual' : 'global';
+    const effectiveLimit = individualRestriction?.limit ?? userGlobalNumberLimit ?? globalNumberLimit;
+    const restrictionType = individualRestriction
+      ? 'individual'
+      : userGlobalNumberLimit !== null
+        ? 'global-usuario'
+        : 'global';
     if (effectiveLimit === null) {
       continue;
     }
 
-    const sold = soldByNumber.get(number) ?? 0;
+    const sold = individualRestriction
+      ? soldGlobalByNumber.get(number) ?? 0
+      : userGlobalNumberLimit !== null
+        ? soldByUserNumber.get(number) ?? 0
+        : soldGlobalByNumber.get(number) ?? 0;
+
     if (sold + requestedAmount > effectiveLimit) {
       const available = Math.max(0, effectiveLimit - sold).toFixed(2);
       res.status(400).json({
@@ -213,7 +262,6 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
 
   const seller = await prisma.user.findUnique({ where: { id: req.user!.sub } });
   const associateId = seller?.parentId ?? req.user!.sub;
-  const total = body.lines.reduce((s, l) => s + l.amount, 0);
 
   let code = generateCode();
   for (let i = 0; i < 5; i++) {

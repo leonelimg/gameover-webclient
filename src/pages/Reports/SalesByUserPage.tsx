@@ -279,7 +279,7 @@ export default function SalesByUserPage() {
 
         <div className="xl:col-span-2">
           <FilteredTicketsCard
-            title="Tickets filtrados"
+            title="Historial de tickets"
             loading={loading}
             tickets={report.tickets}
             canCancelTickets={canCancelTickets}
