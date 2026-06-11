@@ -32,6 +32,10 @@ export interface TicketPayload {
   title?: string;
   businessName?: string;
   businessTaxId?: string;
+  drawLabel?: string;
+  customerName?: string;
+  sellerName?: string;
+  showSpecialColumn?: boolean;
   terminal?: string;
   cashier?: string;
   ticketNumber?: string;

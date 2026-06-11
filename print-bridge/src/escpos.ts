@@ -5,16 +5,6 @@ const GS = 0x1d;
 
 const hr = (len: number) => "-".repeat(len);
 
-const padBoth = (text: string, width: number) => {
-  if (text.length >= width) {
-    return text.slice(0, width);
-  }
-  const totalPadding = width - text.length;
-  const left = Math.floor(totalPadding / 2);
-  const right = totalPadding - left;
-  return `${" ".repeat(left)}${text}${" ".repeat(right)}`;
-};
-
 const padRight = (text: string, width: number) => {
   if (text.length >= width) {
     return text.slice(0, width);
@@ -64,6 +54,25 @@ const formatMoney = (value?: number) => {
     return "";
   }
   return value.toFixed(2);
+};
+
+const formatTicketDate = (value?: string) => {
+  if (!value) {
+    return "";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("es-NI", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(parsed);
 };
 
 export class EscPosBuilder {
@@ -139,56 +148,64 @@ export const buildSimpleTextPrint = (text: string) => {
 
 export const buildTicketPrint = (ticket: TicketPayload, columns: number) => {
   const b = new EscPosBuilder();
+  const detailLines = ticket.detailLines ?? [];
+  const hasSpecialAmounts = detailLines.some((line) => line.special > 0);
+  const drawHasSpecial = typeof ticket.multipliers?.special === "number" && ticket.multipliers.special > 0;
+  const showSpecialColumn = ticket.showSpecialColumn ?? (drawHasSpecial && hasSpecialAmounts);
 
   b.init();
   b.align("center");
-  b.bold(true).text(ticket.title ?? "TICKET");
+  b.bold(true).text(ticket.businessName ?? "GameOver Loteria");
+  if (ticket.ticketNumber) {
+    b.text(ticket.ticketNumber);
+  }
   b.bold(false);
-
-  if (ticket.businessName) {
-    b.text(ticket.businessName);
-  }
-  if (ticket.businessTaxId) {
-    b.text(`RNC: ${ticket.businessTaxId}`);
-  }
-
-  b.text(hr(columns));
 
   b.align("left");
-  if (ticket.ticketNumber) {
-    b.text(`Ticket: ${ticket.ticketNumber}`);
+  if (ticket.drawLabel || ticket.title) {
+    b.text(`Sorteo: ${ticket.drawLabel ?? ticket.title}`);
+  }
+  if (typeof ticket.customerName === "string") {
+    b.text(`Cliente: ${ticket.customerName}`);
+  }
+  if (ticket.sellerName || ticket.cashier) {
+    b.text(`Vendedor: ${ticket.sellerName ?? ticket.cashier}`);
   }
   if (ticket.dateIso) {
-    b.text(`Fecha: ${ticket.dateIso}`);
-  }
-  if (ticket.cashier) {
-    b.text(`Cajero: ${ticket.cashier}`);
-  }
-  if (ticket.terminal) {
-    b.text(`Terminal: ${ticket.terminal}`);
-  }
-  if (ticket.multipliers?.regular) {
-    b.text(`Multiplicador regular: x${ticket.multipliers.regular}`);
-  }
-  if (ticket.multipliers?.special) {
-    b.text(`Multiplicador especial: x${ticket.multipliers.special}`);
+    b.text(`Fecha: ${formatTicketDate(ticket.dateIso)}`);
   }
 
   b.text(hr(columns));
-  b.bold(true).text("DETALLE");
-  b.bold(false);
 
-  if (ticket.detailLines?.length) {
-    const { numberWidth, regularWidth, specialWidth, totalWidth } = getDetailColumnWidths(columns);
+  if (detailLines.length) {
+    if (showSpecialColumn) {
+      const { numberWidth, regularWidth, specialWidth, totalWidth } = getDetailColumnWidths(columns);
 
-    b.text(
-      `${padRight("Numero", numberWidth)} ${padRight("Regular", regularWidth)} ${padRight("Especial", specialWidth)} ${padRight("Total", totalWidth)}`
-    );
-
-    for (const line of ticket.detailLines) {
-      b.text(
-        `${padRight(line.number, numberWidth)} ${padLeft(`C$${line.regular.toFixed(2)}`, regularWidth)} ${padLeft(`C$${line.special.toFixed(2)}`, specialWidth)} ${padLeft(`C$${line.total.toFixed(2)}`, totalWidth)}`
+      b.bold(true).text(
+        `${padRight("Numero", numberWidth)} ${padRight("Regular", regularWidth)} ${padRight("Especial", specialWidth)} ${padRight("Total", totalWidth)}`
       );
+      b.bold(false);
+
+      for (const line of detailLines) {
+        b.text(
+          `${padRight(line.number, numberWidth)} ${padLeft(`C$ ${line.regular.toFixed(2)}`, regularWidth)} ${padLeft(`C$ ${line.special.toFixed(2)}`, specialWidth)} ${padLeft(`C$ ${line.total.toFixed(2)}`, totalWidth)}`
+        );
+      }
+    } else {
+      const numberWidth = columns <= 32 ? 7 : 10;
+      const regularWidth = columns <= 32 ? 11 : 15;
+      const totalWidth = Math.max(10, columns - numberWidth - regularWidth - 2);
+
+      b.bold(true).text(
+        `${padRight("Numero", numberWidth)} ${padRight("Regular", regularWidth)} ${padRight("Total", totalWidth)}`
+      );
+      b.bold(false);
+
+      for (const line of detailLines) {
+        b.text(
+          `${padRight(line.number, numberWidth)} ${padLeft(`C$ ${line.regular.toFixed(2)}`, regularWidth)} ${padLeft(`C$ ${line.total.toFixed(2)}`, totalWidth)}`
+        );
+      }
     }
   } else {
     for (const item of ticket.items) {
@@ -206,36 +223,14 @@ export const buildTicketPrint = (ticket: TicketPayload, columns: number) => {
 
   b.text(hr(columns));
 
-  b.align("right");
-  if (typeof ticket.totals.subtotal === "number") {
-    b.text(`Subtotal: ${formatMoney(ticket.totals.subtotal)}`);
-  }
-  if (typeof ticket.totals.discount === "number") {
-    b.text(`Descuento: ${formatMoney(ticket.totals.discount)}`);
-  }
-
-  b.bold(true).text(`TOTAL: ${formatMoney(ticket.totals.total)}`);
+  b.align("right").bold(true).text(`TOTAL: C$ ${formatMoney(ticket.totals.total)}`);
   b.bold(false);
 
-  if (typeof ticket.totals.paid === "number") {
-    b.text(`Pago: ${formatMoney(ticket.totals.paid)}`);
-  }
-  if (typeof ticket.totals.change === "number") {
-    b.text(`Cambio: ${formatMoney(ticket.totals.change)}`);
-  }
-
   b.align("left");
-  if (ticket.notes?.length) {
-    b.text(hr(columns));
-    for (const note of ticket.notes) {
-      b.text(note);
-    }
-  }
 
   if (ticket.qrText) {
     b.text(hr(columns));
     b.align("center");
-    b.text(padBoth("Verificar ticket", columns));
     b.qr(ticket.qrText);
   }
 

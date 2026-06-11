@@ -20,6 +20,7 @@ import TicketPaymentsPage from '@/pages/TicketPayments/TicketPaymentsPage';
 import CommissionsPage from '@/pages/Reports/CommissionsPage';
 import CashMovementsPage from '@/pages/CashMovements/CashMovementsPage';
 import AnnouncementsPage from '@/pages/Announcements/AnnouncementsPage';
+import FrontendSettingsPage from '@/pages/FrontendSettings/FrontendSettingsPage';
 import NumberRestrictionsPage from '@/pages/NumberRestrictions/NumberRestrictionsPage';
 import UserGlobalRestrictionsPage from '@/pages/Restrictions/UserGlobalRestrictionsPage';
 import UserSalesRestrictionsPage from '@/pages/Restrictions/UserSalesRestrictionsPage';
@@ -55,6 +56,7 @@ export default function App() {
             <Route path="/ticket-payments" element={<ProtectedByPermission resourceKey="/ticket-payments" element={<TicketPaymentsPage />} />} />
             <Route path="/cash-movements" element={<ProtectedByPermission resourceKey="/cash-movements" element={<CashMovementsPage />} />} />
             <Route path="/announcements" element={<ProtectedByPermission resourceKey="/announcements" element={<AnnouncementsPage />} />} />
+            <Route path="/frontend-settings" element={<ProtectedByPermission resourceKey="/roles:update" element={<FrontendSettingsPage />} />} />
             <Route path="/reports" element={<ProtectedByPermission resourceKey="/reports" element={<Navigate to="/reports/sales-stats" replace />} />} />
             <Route path="/reports/sales-stats" element={<ProtectedByPermission resourceKey="/reports/sales-stats" element={<ReportsPage />} />} />
             <Route path="/reports/balance-breakdown" element={<ProtectedByPermission resourceKey="/reports/balance-breakdown" element={<BalanceBreakdownPage />} />} />

@@ -1,8 +1,14 @@
 import { Draw, PrintJob, PrintQueueStats, Ticket, User } from '@/types';
+import { formatDrawLabel } from '@/utils/helpers';
+import { getFrontendTicketFooterLines, loadFrontendTicketSettings } from '@/utils/ticketAppearance';
 
 export interface PrintBridgeTicket {
   title?: string;
   businessName?: string;
+  drawLabel?: string;
+  customerName?: string;
+  sellerName?: string;
+  showSpecialColumn?: boolean;
   terminal?: string;
   cashier?: string;
   ticketNumber?: string;
@@ -118,62 +124,80 @@ export const mapSaleTicketToPrintBridge = ({
   ticket: Ticket;
   draw?: Draw;
   user?: User | null;
-}): PrintBridgeTicket => {
+}): Promise<PrintBridgeTicket> => {
+  return loadFrontendTicketSettings().then((ticketSettings) => {
   const regularTotal = ticket.lines.reduce((sum, line) => sum + line.amount, 0);
   const specialTotal = ticket.lines.reduce((sum, line) => sum + (line.specialAmount ?? 0), 0);
-  const hasSpecialAmounts = specialTotal > 0;
+  const hasSpecialAmounts = ticket.lines.some((line) => (line.specialAmount ?? 0) > 0);
   const regularMultiplier = ticket.seller?.plan?.multiplier;
-  const specialMultiplier = draw?.specialMultiplier?.value ?? ticket.draw?.specialMultiplier?.value;
+  const effectiveDraw = draw ?? ticket.draw;
+  const specialMultiplier = effectiveDraw?.specialMultiplier?.value;
+  const drawUsesSpecial = typeof specialMultiplier === 'number' ? specialMultiplier > 0 : hasSpecialAmounts;
+  const showSpecialColumn = drawUsesSpecial && hasSpecialAmounts;
+  const effectiveMultiplier = showSpecialColumn && typeof specialMultiplier === 'number'
+    ? specialMultiplier
+    : regularMultiplier;
+  const footerLines = getFrontendTicketFooterLines(effectiveMultiplier);
+  const resolvedDrawLabel = effectiveDraw
+    ? formatDrawLabel({
+        name: effectiveDraw.name,
+        closeTime: 'closeTime' in effectiveDraw ? effectiveDraw.closeTime : undefined,
+      })
+    : ticket.drawId;
 
   const notes = ticket.lines.map((line) => {
     const tag = line.isNicaEspecial ? 'NE' : 'STD';
     const special = line.specialAmount ?? 0;
-    if (hasSpecialAmounts) {
+    if (showSpecialColumn) {
       return `${line.number} ${tag} R:${line.amount.toFixed(2)} E:${special.toFixed(2)} T:${(line.amount + special).toFixed(2)}`;
     }
     return `${line.number} ${tag} ${line.amount.toFixed(2)}`;
   });
 
-  return {
-    title: 'Ticket de Venta',
-    businessName: 'GameOver Loteria',
-    terminal: 'WEB',
-    cashier: user?.fullName,
-    ticketNumber: ticket.code,
-    dateIso: ticket.createdAt,
-    items: [
-      {
-        label: draw?.name ?? ticket.draw?.name ?? ticket.drawId,
-        qty: ticket.lines.length,
-        unitPrice: ticket.total,
+    return {
+      title: resolvedDrawLabel,
+      businessName: ticketSettings.ticketTitle,
+      drawLabel: resolvedDrawLabel,
+      customerName: ticket.customerName,
+      sellerName: user?.fullName ?? ticket.seller?.fullName ?? ticket.sellerId,
+      showSpecialColumn,
+      terminal: 'WEB',
+      cashier: user?.fullName,
+      ticketNumber: ticket.code,
+      dateIso: ticket.createdAt,
+      items: [
+        {
+          label: draw?.name ?? ticket.draw?.name ?? ticket.drawId,
+          qty: ticket.lines.length,
+          unitPrice: ticket.total,
+          total: ticket.total,
+        },
+      ],
+      detailLines: ticket.lines.map((line) => {
+        const special = line.specialAmount ?? 0;
+        return {
+          number: line.number,
+          regular: line.amount,
+          special,
+          total: line.amount + special,
+        };
+      }),
+      multipliers: {
+        regular: regularMultiplier,
+        special: drawUsesSpecial ? specialMultiplier : undefined,
+      },
+      totals: {
+        subtotal: regularTotal,
         total: ticket.total,
       },
-    ],
-    detailLines: ticket.lines.map((line) => {
-      const special = line.specialAmount ?? 0;
-      return {
-        number: line.number,
-        regular: line.amount,
-        special,
-        total: line.amount + special,
-      };
-    }),
-    multipliers: {
-      regular: regularMultiplier,
-      special: specialMultiplier,
-    },
-    totals: {
-      subtotal: regularTotal,
-      total: ticket.total,
-    },
-    notes: [
-      `Sorteo: ${draw?.name ?? ticket.drawId}`,
-      ...(typeof regularMultiplier === 'number' ? [`Multiplicador regular: x${regularMultiplier}`] : []),
-      ...(typeof specialMultiplier === 'number' ? [`Multiplicador especial: x${specialMultiplier}`] : []),
-      ...(hasSpecialAmounts ? [`Subtotal especial: ${specialTotal.toFixed(2)}`] : []),
-      ...notes,
-    ],
-    qrText: ticket.code,
-    footer: ['Gracias por su compra'],
-  };
+      notes: [
+        `Sorteo: ${resolvedDrawLabel}`,
+        ...(typeof regularMultiplier === 'number' ? [`Multiplicador regular: x${regularMultiplier}`] : []),
+        ...(showSpecialColumn ? [`Multiplicador especial: x${specialMultiplier}`] : []),
+        ...(showSpecialColumn ? [`Subtotal especial: ${specialTotal.toFixed(2)}`] : []),
+        ...notes,
+      ],
+      footer: footerLines,
+    };
+  });
 };

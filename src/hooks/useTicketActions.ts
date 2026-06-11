@@ -7,7 +7,7 @@ interface UseTicketActionsOptions {
   draws: Draw[];
   users: User[];
   onRefresh: () => void;
-  printTicket: (ticket: Ticket) => void;
+  printTicket: (ticket: Ticket) => Promise<void>;
 }
 
 function drawCancellationLocked(draw?: Draw): boolean {
@@ -49,7 +49,7 @@ export function useTicketActions({ draws, users, onRefresh, printTicket }: UseTi
       }
 
       await ticketsApi.markPrinted(ticketId);
-      printTicket(ticket);
+      await printTicket(ticket);
       onRefresh();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -68,7 +68,7 @@ export function useTicketActions({ draws, users, onRefresh, printTicket }: UseTi
 
       const draw = draws.find((item) => item.id === ticket.drawId);
       const seller = users.find((item) => item.id === ticket.sellerId);
-      const payload = mapSaleTicketToPrintBridge({
+      const payload = await mapSaleTicketToPrintBridge({
         ticket,
         draw,
         user: seller,

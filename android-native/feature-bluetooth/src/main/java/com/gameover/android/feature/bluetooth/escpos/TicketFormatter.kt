@@ -5,76 +5,130 @@ import com.gameover.android.core.domain.model.Draw
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 object TicketFormatter {
 
     private const val TICKET_WIDTH = 32 // chars for 58mm thermal printer
-    private val dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm").withZone(ZoneId.systemDefault())
+    private val localeNi = Locale("es", "NI")
+    private val dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy, hh:mm a", localeNi).withZone(ZoneId.systemDefault())
 
-    fun format(ticket: Ticket, draw: Draw?, sellerName: String, businessName: String = "GameOver Lotería"): ByteArray {
+    private fun formatDate(value: String): String {
+        return try {
+            dateFormatter.format(Instant.parse(value)).lowercase(localeNi)
+        } catch (e: Exception) {
+            value.take(16).replace("T", " ")
+        }
+    }
+
+    private fun formatDrawLabel(draw: Draw?): String {
+        if (draw == null) return ""
+        val closeLabel = try {
+            dateFormatter.format(Instant.parse(draw.closeTime)).lowercase(localeNi)
+        } catch (_: Exception) {
+            ""
+        }
+        return if (closeLabel.isBlank()) draw.name else "${draw.name} - $closeLabel"
+    }
+
+    private fun padRight(value: String, width: Int): String =
+        if (value.length >= width) value.take(width) else value + " ".repeat(width - value.length)
+
+    private fun padLeft(value: String, width: Int): String =
+        if (value.length >= width) value.takeLast(width) else " ".repeat(width - value.length) + value
+
+    private fun applyTicketCodeSize(builder: EscPosBuilder, ticketCodeFontSize: Int): EscPosBuilder {
+        return if (ticketCodeFontSize >= 30) {
+            builder.doubleSizeOn()
+        } else {
+            builder.normalSize()
+        }
+    }
+
+    fun format(
+        ticket: Ticket,
+        draw: Draw?,
+        sellerName: String,
+        ticketTitle: String = "GameOver Lotería",
+        footerNote: String = "",
+        ticketCodeFontSize: Int = 32,
+    ): ByteArray {
         val hasSpecial = ticket.lines.any { (it.specialAmount ?: 0.0) > 0 }
-        val dateStr = try {
-            dateFormatter.format(Instant.parse(ticket.createdAt))
-        } catch (e: Exception) { ticket.createdAt.take(16).replace("T", " ") }
+        val specialMultiplierValue = draw?.specialMultiplier?.value ?: ticket.draw?.specialMultiplier?.value
+        val drawHasSpecial = specialMultiplierValue?.let { it > 0 } ?: hasSpecial
+        val showSpecialColumn = drawHasSpecial && hasSpecial
+        val effectiveMultiplier = specialMultiplierValue
+        val dateStr = formatDate(ticket.createdAt)
+        val drawLabel = formatDrawLabel(draw).ifBlank { draw?.name ?: ticket.draw?.name ?: ticket.drawId }
+        val footerLines = footerNote
+            .split("\n")
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
 
         return EscPosBuilder()
             .init()
-            // Header
             .alignCenter()
-            .boldOn().doubleSizeOn()
-            .textLn(businessName)
-            .normalSize().boldOff()
-            .lineFeed()
-            .boldOn()
-            .textLn(ticket.code)
-            .boldOff()
+            .boldOn().textLn(ticketTitle).boldOff()
+            .run { applyTicketCodeSize(this, ticketCodeFontSize) }
+            .boldOn().textLn(ticket.code).boldOff().normalSize()
             .alignLeft()
-            .lineFeed()
-            // Details
-            .textLn("Sorteo: ${draw?.name ?: ticket.drawId}")
+            .textLn("Sorteo: $drawLabel")
+            .run { if (ticket.customerName.isNotBlank()) textLn("Cliente: ${ticket.customerName}") else textLn("Cliente:") }
+            .textLn("Vendedor: $sellerName")
             .textLn("Fecha:  $dateStr")
-            .textLn("Caja:   $sellerName")
-            .run { if (ticket.customerName.isNotBlank()) textLn("Cliente: ${ticket.customerName}") else this }
             .divider()
-            // Lines header
             .run {
-                if (hasSpecial) {
-                    textLn("Num  Regular    Especial")
-                    textLn("---- ---------- ----------")
+                if (showSpecialColumn) {
+                    boldOn()
+                        .textLn("Numero  Regular Especial Total")
+                        .boldOff()
                 } else {
-                    textLn("Num  Monto (C$)")
-                    textLn("---- ----------")
+                    boldOn()
+                        .textLn("Numero    Regular      Total")
+                        .boldOff()
                 }
             }
-            // Bet lines
             .run {
                 var builder = this
                 for (line in ticket.lines) {
-                    val num = line.number.padStart(4)
-                    val amt = "%.2f".format(line.amount).padStart(10)
-                    if (hasSpecial) {
-                        val special = "%.2f".format(line.specialAmount ?: 0.0).padStart(10)
-                        builder = builder.textLn("$num $amt $special")
+                    val number = padRight(line.number, 6)
+                    val regular = padLeft("C$${"%.2f".format(line.amount)}", 8)
+                    if (showSpecialColumn) {
+                        val special = padLeft("C$${"%.2f".format(line.specialAmount ?: 0.0)}", 8)
+                        val total = padLeft("C$${"%.2f".format(line.amount + (line.specialAmount ?: 0.0))}", 8)
+                        builder = builder.textLn("$number $regular $special $total")
                     } else {
-                        builder = builder.textLn("$num $amt")
+                        val total = padLeft("C$${"%.2f".format(line.amount)}", 10)
+                        builder = builder.textLn("$number ${padLeft("C$${"%.2f".format(line.amount)}", 10)} $total")
                     }
                 }
                 builder
             }
             .divider()
-            // Total
             .alignRight()
             .boldOn()
             .textLn("TOTAL: C$ ${"%.2f".format(ticket.total)}")
             .boldOff()
             .alignCenter()
-            .lineFeed()
-            // QR code
-            .qrCode(ticket.code)
+            .run {
+                if (effectiveMultiplier != null) {
+                    textLn("Multiplicador: ${effectiveMultiplier}x")
+                } else {
+                    this
+                }
+            }
+            .run {
+                if (footerLines.isEmpty()) {
+                    this
+                } else {
+                    var builder = this
+                    for (line in footerLines) {
+                        builder = builder.textLn(line)
+                    }
+                    builder
+                }
+            }
             .lineFeed(2)
-            // Footer
-            .textLn(businessName)
-            .textLn("Gracias por su preferencia")
             .lineFeed(3)
             .partialCut()
             .build()

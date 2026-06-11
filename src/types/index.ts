@@ -57,6 +57,12 @@ export interface UserRestrictionLimitUpdateResult {
   userDrawSaleLimit: number | null;
 }
 
+export interface FrontendTicketSettings {
+  ticketTitle: string;
+  footerNote: string;
+  ticketCodeFontSize: number;
+}
+
 // ─── Special Multipliers ─────────────────────────────────────────────────────
 
 export interface SpecialMultiplier {

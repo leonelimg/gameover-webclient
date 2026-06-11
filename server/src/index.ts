@@ -19,6 +19,7 @@ import paymentRoutes from './routes/payments.js';
 import cashMovementRoutes from './routes/cashMovements.js';
 import roleRoutes from './routes/roles.js';
 import announcementRoutes from './routes/announcements.js';
+import frontendSettingsRoutes from './routes/frontendSettings.js';
 import numberRestrictionRoutes from './routes/numberRestrictions.js';
 
 const app = express();
@@ -85,6 +86,7 @@ app.use('/api/payments', apiLimiter, paymentRoutes);
 app.use('/api/cash-movements', apiLimiter, cashMovementRoutes);
 app.use('/api/roles', apiLimiter, roleRoutes);
 app.use('/api/announcements', apiLimiter, announcementRoutes);
+app.use('/api/frontend-settings', apiLimiter, frontendSettingsRoutes);
 app.use('/api/number-restrictions', apiLimiter, numberRestrictionRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────

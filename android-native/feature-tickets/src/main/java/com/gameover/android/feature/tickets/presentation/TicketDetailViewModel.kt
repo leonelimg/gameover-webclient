@@ -7,6 +7,7 @@ import com.gameover.android.core.data.local.TokenDataStore
 import com.gameover.android.core.domain.model.User
 import com.gameover.android.core.domain.repository.AuthRepository
 import com.gameover.android.core.domain.repository.DrawsRepository
+import com.gameover.android.core.domain.repository.FrontendSettingsRepository
 import com.gameover.android.core.domain.repository.TicketsRepository
 import com.gameover.android.core.domain.util.PermissionChecker
 import com.gameover.android.feature.bluetooth.BluetoothPrinterManager
@@ -26,6 +27,7 @@ class TicketDetailViewModel @Inject constructor(
     private val ticketsRepository: TicketsRepository,
     private val authRepository: AuthRepository,
     private val drawsRepository: DrawsRepository,
+    private val frontendSettingsRepository: FrontendSettingsRepository,
     private val bluetoothPrinterManager: BluetoothPrinterManager,
     private val tokenDataStore: TokenDataStore,
     private val savedStateHandle: SavedStateHandle,
@@ -110,7 +112,15 @@ class TicketDetailViewModel @Inject constructor(
                     ?: currentUser?.fullName
                     ?: currentUser?.username
                     ?: "Caja"
-                val data = TicketFormatter.format(ticket = ticket, draw = draw, sellerName = sellerName)
+                val appearanceSettings = runCatching { frontendSettingsRepository.getTicketAppearance() }.getOrNull()
+                val data = TicketFormatter.format(
+                    ticket = ticket,
+                    draw = draw,
+                    sellerName = sellerName,
+                    ticketTitle = appearanceSettings?.ticketTitle ?: "GameOver Lotería",
+                    footerNote = appearanceSettings?.footerNote.orEmpty(),
+                    ticketCodeFontSize = appearanceSettings?.ticketCodeFontSize ?: 32,
+                )
                 val printResult = bluetoothPrinterManager.print(data)
                 if (printResult.isFailure) {
                     _uiState.update {

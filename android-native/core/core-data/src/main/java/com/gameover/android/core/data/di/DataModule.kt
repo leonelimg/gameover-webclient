@@ -62,4 +62,7 @@ abstract class DataBindsModule {
 
     @Binds
     abstract fun bindDataRefreshNotifier(impl: DataRefreshNotifierImpl): DataRefreshNotifier
+
+    @Binds
+    abstract fun bindFrontendSettingsRepository(impl: FrontendSettingsRepositoryImpl): FrontendSettingsRepository
 }

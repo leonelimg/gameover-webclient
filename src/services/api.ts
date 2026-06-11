@@ -6,6 +6,7 @@ import {
   Ticket,
   Announcement,
   AnnouncementPayload,
+  FrontendTicketSettings,
   GlobalNumberRestrictionSettings,
   CurrentUserRestrictionSettings,
   RolePermissionRow,
@@ -180,6 +181,17 @@ export const numberRestrictionsApi = {
     const res = await api.patch<UserRestrictionLimitUpdateResult>(`/api/number-restrictions/users/${userId}/draw-sale-limit`, {
       limit,
     });
+    return res.data;
+  },
+};
+
+export const frontendSettingsApi = {
+  getTicketAppearance: async (): Promise<FrontendTicketSettings> => {
+    const res = await api.get<FrontendTicketSettings>('/api/frontend-settings/ticket-appearance');
+    return res.data;
+  },
+  updateTicketAppearance: async (settings: FrontendTicketSettings): Promise<FrontendTicketSettings> => {
+    const res = await api.patch<FrontendTicketSettings>('/api/frontend-settings/ticket-appearance', settings);
     return res.data;
   },
 };

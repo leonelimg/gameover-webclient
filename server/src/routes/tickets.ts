@@ -140,8 +140,35 @@ router.get('/:id', authorizeAnyResource('/sales', '/ticket-payments', '/reports/
     where: { id },
     include: {
       lines: true,
-      draw: { select: { id: true, name: true, closeTime: true, minutosPreviosCierre: true } },
-      seller: { select: { id: true, fullName: true, username: true } },
+      draw: {
+        select: {
+          id: true,
+          name: true,
+          closeTime: true,
+          minutosPreviosCierre: true,
+          specialMultiplier: {
+            select: {
+              id: true,
+              name: true,
+              value: true,
+            },
+          },
+        },
+      },
+      seller: {
+        select: {
+          id: true,
+          fullName: true,
+          username: true,
+          plan: {
+            select: {
+              id: true,
+              name: true,
+              multiplier: true,
+            },
+          },
+        },
+      },
       associate: { select: { id: true, fullName: true } },
     },
   });
@@ -280,7 +307,38 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
       associateId,
       lines: { create: body.lines.map((l) => ({ number: l.number, amount: l.amount, isNicaEspecial: l.isNicaEspecial })) },
     },
-    include: { lines: true, draw: { select: { id: true, name: true } } },
+    include: {
+      lines: true,
+      draw: {
+        select: {
+          id: true,
+          name: true,
+          closeTime: true,
+          minutosPreviosCierre: true,
+          specialMultiplier: {
+            select: {
+              id: true,
+              name: true,
+              value: true,
+            },
+          },
+        },
+      },
+      seller: {
+        select: {
+          id: true,
+          fullName: true,
+          username: true,
+          plan: {
+            select: {
+              id: true,
+              name: true,
+              multiplier: true,
+            },
+          },
+        },
+      },
+    },
   });
   res.status(201).json(ticket);
 });

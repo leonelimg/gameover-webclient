@@ -13,6 +13,11 @@ import { drawsApi, ticketsApi, reportsApi, numberRestrictionsApi, CreateTicketPa
 import { mapSaleTicketToPrintBridge, printBridgeApi } from '@/services/printBridge';
 import { useTicketActions } from '@/hooks/useTicketActions';
 import { printSaleTicket } from '@/utils/ticketPrint';
+import {
+  getFrontendTicketFooterLines,
+  getFrontendTicketSettings,
+  loadFrontendTicketSettings,
+} from '@/utils/ticketAppearance';
 
 interface SaleLine {
   id: string;
@@ -1276,7 +1281,7 @@ const NativePrintControls = React.memo(function NativePrintControls({
     setNativePrinting(true);
 
     try {
-      const payload = mapSaleTicketToPrintBridge({ ticket, draw, user });
+      const payload = await mapSaleTicketToPrintBridge({ ticket, draw, user });
       const result = await printBridgeApi.printTicket(payload);
       onJobIdChange?.(result.jobId);
       setNativePrintMsg(`En cola para imprimir (Job: ${result.jobId})`);
@@ -1320,8 +1325,32 @@ function TicketPrintView({
   draw?: Draw;
   sellerName: string;
 }) {
+  const [ticketSettings, setTicketSettings] = useState(() => getFrontendTicketSettings());
+  const hasSpecialAmounts = ticket.lines.some((line) => (line.specialAmount ?? 0) > 0);
   const regularMultiplier = ticket.seller?.plan?.multiplier;
   const specialMultiplier = draw?.specialMultiplier?.value ?? ticket.draw?.specialMultiplier?.value;
+  const drawUsesSpecial = typeof specialMultiplier === 'number' ? specialMultiplier > 0 : hasSpecialAmounts;
+  const showSpecialColumn = drawUsesSpecial && hasSpecialAmounts;
+  const effectiveMultiplier = showSpecialColumn && typeof specialMultiplier === 'number'
+    ? specialMultiplier
+    : regularMultiplier;
+  const footerLines = getFrontendTicketFooterLines(effectiveMultiplier);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    loadFrontendTicketSettings()
+      .then((settings) => {
+        if (!cancelled) {
+          setTicketSettings(settings);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div
@@ -1329,8 +1358,7 @@ function TicketPrintView({
       style={{ minWidth: 280 }}
     >
       <div className="text-center mb-4">
-        <div className="font-bold text-xl">PM Comercial</div>
-        <div className="text-xs text-slate-500">Venta de Tickets</div>
+        <div className="font-bold text-xl">{ticketSettings.ticketTitle}</div>
         <div className="border-t-2 border-dashed border-slate-300 mt-3 pt-3 font-bold text-lg tracking-widest">
           {ticket.code}
         </div>
@@ -1364,18 +1392,18 @@ function TicketPrintView({
       </div>
 
       <div className="border-t border-dashed border-slate-300 pt-3 mb-3">
-        <div className="grid grid-cols-4 text-xs font-bold text-slate-500 mb-1">
+        <div className={`grid ${showSpecialColumn ? 'grid-cols-4' : 'grid-cols-3'} text-xs font-bold text-slate-500 mb-1`}>
           <span>Número</span>
           <span className="text-center">Regular</span>
-          <span className="text-center text-purple-600">Especial</span>
+          {showSpecialColumn && <span className="text-center text-purple-600">Especial</span>}
           <span className="text-right">Total</span>
         </div>
         {ticket.lines.map((l, i) => (
-          <div key={i} className="grid grid-cols-4 text-xs py-0.5">
+          <div key={i} className={`grid ${showSpecialColumn ? 'grid-cols-4' : 'grid-cols-3'} text-xs py-0.5`}>
             <span className="font-bold">{l.number}</span>
             <span className="text-center">{formatCurrency(l.amount)}</span>
-            <span className="text-center text-purple-700">{formatCurrency(l.specialAmount ?? 0)}</span>
-            <span className="text-right">{formatCurrency(l.amount + (l.specialAmount ?? 0))}</span>
+            {showSpecialColumn && <span className="text-center text-purple-700">{formatCurrency(l.specialAmount ?? 0)}</span>}
+            <span className="text-right">{formatCurrency(l.amount + (showSpecialColumn ? (l.specialAmount ?? 0) : 0))}</span>
           </div>
         ))}
       </div>
@@ -1387,9 +1415,13 @@ function TicketPrintView({
         </div>
       </div>
 
-      <div className="text-center text-xs text-slate-400 mt-4 border-t border-slate-200 pt-3">
-        Gracias por su compra
-      </div>
+      {footerLines?.length ? (
+        <div className="text-center text-xs text-slate-400 mt-4 border-t border-slate-200 pt-3 space-y-1">
+          {footerLines.map((line, index) => (
+            <div key={`${line}-${index}`}>{line}</div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
