@@ -86,6 +86,10 @@ const groupTicketLinesByAmount = (
 const bridgeUrl = (import.meta.env['VITE_PRINTBRIDGE_URL'] as string | undefined) ?? 'http://127.0.0.1:17890';
 const bridgeToken = import.meta.env['VITE_PRINTBRIDGE_TOKEN'] as string | undefined;
 
+type LoopbackRequestInit = RequestInit & {
+  targetAddressSpace?: 'loopback';
+};
+
 const withBridgeHeaders = (includeJsonContentType = false) => {
   const headers: HeadersInit = {};
 
@@ -100,6 +104,11 @@ const withBridgeHeaders = (includeJsonContentType = false) => {
   return headers;
 };
 
+const bridgeFetchInit = (init: RequestInit = {}): LoopbackRequestInit => ({
+  ...init,
+  targetAddressSpace: 'loopback',
+});
+
 const parseResponse = async <T>(res: Response): Promise<T> => {
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
@@ -111,51 +120,51 @@ const parseResponse = async <T>(res: Response): Promise<T> => {
 
 export const printBridgeApi = {
   health: async () => {
-    const res = await fetch(`${bridgeUrl}/health`, {
+    const res = await fetch(`${bridgeUrl}/health`, bridgeFetchInit({
       headers: withBridgeHeaders(),
-    });
+    }));
     return parseResponse<{ ok: boolean; queue: PrintQueueStats }>(res);
   },
 
   printTicket: async (ticket: PrintBridgeTicket) => {
-    const res = await fetch(`${bridgeUrl}/print-ticket`, {
+    const res = await fetch(`${bridgeUrl}/print-ticket`, bridgeFetchInit({
       method: 'POST',
       headers: withBridgeHeaders(true),
       body: JSON.stringify({ ticket }),
-    });
+    }));
 
     return parseResponse<{ jobId: string; status: string }>(res);
   },
 
   testPrint: async (message: string) => {
-    const res = await fetch(`${bridgeUrl}/test-print`, {
+    const res = await fetch(`${bridgeUrl}/test-print`, bridgeFetchInit({
       method: 'POST',
       headers: withBridgeHeaders(true),
       body: JSON.stringify({ message }),
-    });
+    }));
 
     return parseResponse<{ jobId: string; status: string }>(res);
   },
 
   getJobs: async (limit = 50) => {
-    const res = await fetch(`${bridgeUrl}/jobs?limit=${limit}`, {
+    const res = await fetch(`${bridgeUrl}/jobs?limit=${limit}`, bridgeFetchInit({
       headers: withBridgeHeaders(),
-    });
+    }));
     return parseResponse<{ jobs: PrintJob[] }>(res);
   },
 
   getJob: async (id: string) => {
-    const res = await fetch(`${bridgeUrl}/jobs/${encodeURIComponent(id)}`, {
+    const res = await fetch(`${bridgeUrl}/jobs/${encodeURIComponent(id)}`, bridgeFetchInit({
       headers: withBridgeHeaders(),
-    });
+    }));
     return parseResponse<PrintJob>(res);
   },
 
   retryJob: async (id: string) => {
-    const res = await fetch(`${bridgeUrl}/jobs/${encodeURIComponent(id)}/retry`, {
+    const res = await fetch(`${bridgeUrl}/jobs/${encodeURIComponent(id)}/retry`, bridgeFetchInit({
       method: 'POST',
       headers: withBridgeHeaders(true),
-    });
+    }));
     return parseResponse<{ id: string; status: string; attempts: number }>(res);
   },
 };
