@@ -4,7 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { AxiosError } from 'axios';
-import logoPM from '@/assets/LogoPM.svg';
+import logoPM from '@/assets/logoPM.svg';
 
 export default function LoginPage() {
   const { login } = useAuth();

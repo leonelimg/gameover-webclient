@@ -141,9 +141,10 @@ npx tsx prisma/seed.ts
 npm run build
 ```
 
-Crear servicio systemd (`/etc/systemd/system/gameover-api.service`):
+Crear servicio systemd:
 
-```ini
+```bash
+sudo tee /etc/systemd/system/gameover-api.service > /dev/null << 'EOF'
 [Unit]
 Description=GameOver API
 After=network.target postgresql.service
@@ -158,6 +159,7 @@ Environment=NODE_ENV=production
 
 [Install]
 WantedBy=multi-user.target
+EOF
 ```
 
 Habilitar servicio:
@@ -186,12 +188,13 @@ npm ci
 npm run build
 ```
 
-Nginx (ejemplo `/etc/nginx/sites-available/gameover`):
+Crear archivo de configuracion de Nginx (reemplaza `app.tudominio.com` con tu dominio real):
 
-```nginx
+```bash
+sudo tee /etc/nginx/sites-available/gameover > /dev/null << 'EOF'
 server {
     listen 80;
-    server_name app.tudominio.com;
+    server_name web.pmcomercial.com;
 
     root /opt/gameover-webclient/dist;
     index index.html;
@@ -207,12 +210,18 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 }
+EOF
 ```
 
 Activar sitio:
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/gameover /etc/nginx/sites-enabled/gameover
+# opcional: desactivar el sitio default para evitar conflictos
+sudo rm -f /etc/nginx/sites-enabled/default
+
+# crear/actualizar enlace simbolico sin error si ya existe
+sudo ln -sfn /etc/nginx/sites-available/gameover /etc/nginx/sites-enabled/gameover
+
 sudo nginx -t
 sudo systemctl reload nginx
 ```
@@ -221,7 +230,7 @@ sudo systemctl reload nginx
 
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d app.tudominio.com
+sudo certbot --nginx -d web.pmcomercial.com
 ```
 
 ## 4) Checklist Rapido de Produccion
@@ -238,3 +247,103 @@ sudo certbot --nginx -d app.tudominio.com
 - Front no conecta API: revisa `VITE_API_URL` y `CORS_ORIGIN`
 - Error Prisma: ejecuta `npx prisma generate` y `npx prisma db push`
 - Error de permisos en `/opt`: corregir con `chown -R`
+
+### Caso: 500 Internal Server Error
+
+1. Verifica si el backend responde localmente en el servidor:
+
+```bash
+curl -i http://127.0.0.1:4000/api/auth/me
+```
+
+2. Revisa logs del backend:
+
+Si usas Docker Compose:
+
+```bash
+cd /opt/gameover-webclient
+docker compose logs -f api
+```
+
+Si usas systemd:
+
+```bash
+sudo journalctl -u gameover-api -f -n 200
+```
+
+3. Revisa errores comunes de base de datos/Prisma:
+
+```bash
+cd /opt/gameover-webclient/server
+npx prisma generate
+npx prisma db push
+```
+
+4. Verifica que las variables criticas esten definidas en `server/.env`:
+
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `JWT_REFRESH_SECRET`
+- `CORS_ORIGIN`
+
+5. Reinicia servicios despues de corregir configuracion:
+
+Docker Compose:
+
+```bash
+cd /opt/gameover-webclient
+docker compose up -d --build
+```
+
+Systemd + Nginx:
+
+```bash
+sudo systemctl restart gameover-api
+sudo systemctl reload nginx
+```
+
+6. Si persiste, valida Nginx (aunque normalmente Nginx devuelve `502/504`, no `500`):
+
+```bash
+sudo nginx -t
+sudo tail -n 200 /var/log/nginx/error.log
+```
+
+### Caso: error en `npm run build` del frontend
+
+1. Verifica version de Node (recomendado: 22.x):
+
+```bash
+node -v
+npm -v
+```
+
+2. Reinstala dependencias limpias en la raiz del proyecto:
+
+```bash
+cd /opt/gameover-webclient
+rm -rf node_modules package-lock.json
+npm install
+```
+
+3. Ejecuta build con salida detallada:
+
+```bash
+npm run build
+```
+
+4. Si falla por TypeScript/ESLint, revisa errores de tipado y corrige antes de publicar.
+
+5. Si solo necesitas desplegar y el error parece de cache/permiso:
+
+```bash
+sudo chown -R $USER:$USER /opt/gameover-webclient
+npm run build
+```
+
+6. Confirma que se genero el build:
+
+```bash
+ls -lah /opt/gameover-webclient/dist
+test -f /opt/gameover-webclient/dist/index.html && echo "build OK" || echo "build FAIL"
+```
