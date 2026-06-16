@@ -37,7 +37,7 @@ const defaultSettings = (): BridgeSettings => ({
   port: Number(process.env.PRINTBRIDGE_PORT ?? 17890),
   host: process.env.PRINTBRIDGE_HOST ?? "127.0.0.1",
   token: process.env.PRINTBRIDGE_TOKEN ?? "",
-  allowedOrigins: process.env.PRINTBRIDGE_ALLOWED_ORIGINS ?? "http://localhost:5173",
+  allowedOrigins: process.env.PRINTBRIDGE_ALLOWED_ORIGINS ?? "http://localhost:5173,https://web.pmcomercial.com",
   transport: (process.env.PRINTER_TRANSPORT as BridgeSettings["transport"]) ?? "serial",
   serialPort: process.env.PRINTER_SERIAL_PORT ?? "COM5",
   serialBaud: Number(process.env.PRINTER_SERIAL_BAUD ?? 9600),

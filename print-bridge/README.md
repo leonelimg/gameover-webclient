@@ -48,6 +48,7 @@ Valores importantes:
 - `PRINTBRIDGE_PORT=17890`
 - `PRINTBRIDGE_HOST=127.0.0.1`
 - `PRINTBRIDGE_TOKEN=change-me`
+- `PRINTBRIDGE_ALLOWED_ORIGINS=http://localhost:5173,https://web.pmcomercial.com`
 - `PRINTER_SERIAL_PORT=COM5`
 - `PRINTER_SERIAL_BAUD=9600`
 

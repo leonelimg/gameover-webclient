@@ -86,10 +86,12 @@ const groupTicketLinesByAmount = (
 const bridgeUrl = (import.meta.env['VITE_PRINTBRIDGE_URL'] as string | undefined) ?? 'http://127.0.0.1:17890';
 const bridgeToken = import.meta.env['VITE_PRINTBRIDGE_TOKEN'] as string | undefined;
 
-const withAuthHeaders = () => {
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  };
+const withBridgeHeaders = (includeJsonContentType = false) => {
+  const headers: HeadersInit = {};
+
+  if (includeJsonContentType) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   if (bridgeToken) {
     headers.Authorization = `Bearer ${bridgeToken}`;
@@ -110,7 +112,7 @@ const parseResponse = async <T>(res: Response): Promise<T> => {
 export const printBridgeApi = {
   health: async () => {
     const res = await fetch(`${bridgeUrl}/health`, {
-      headers: withAuthHeaders(),
+      headers: withBridgeHeaders(),
     });
     return parseResponse<{ ok: boolean; queue: PrintQueueStats }>(res);
   },
@@ -118,7 +120,7 @@ export const printBridgeApi = {
   printTicket: async (ticket: PrintBridgeTicket) => {
     const res = await fetch(`${bridgeUrl}/print-ticket`, {
       method: 'POST',
-      headers: withAuthHeaders(),
+      headers: withBridgeHeaders(true),
       body: JSON.stringify({ ticket }),
     });
 
@@ -128,7 +130,7 @@ export const printBridgeApi = {
   testPrint: async (message: string) => {
     const res = await fetch(`${bridgeUrl}/test-print`, {
       method: 'POST',
-      headers: withAuthHeaders(),
+      headers: withBridgeHeaders(true),
       body: JSON.stringify({ message }),
     });
 
@@ -137,14 +139,14 @@ export const printBridgeApi = {
 
   getJobs: async (limit = 50) => {
     const res = await fetch(`${bridgeUrl}/jobs?limit=${limit}`, {
-      headers: withAuthHeaders(),
+      headers: withBridgeHeaders(),
     });
     return parseResponse<{ jobs: PrintJob[] }>(res);
   },
 
   getJob: async (id: string) => {
     const res = await fetch(`${bridgeUrl}/jobs/${encodeURIComponent(id)}`, {
-      headers: withAuthHeaders(),
+      headers: withBridgeHeaders(),
     });
     return parseResponse<PrintJob>(res);
   },
@@ -152,7 +154,7 @@ export const printBridgeApi = {
   retryJob: async (id: string) => {
     const res = await fetch(`${bridgeUrl}/jobs/${encodeURIComponent(id)}/retry`, {
       method: 'POST',
-      headers: withAuthHeaders(),
+      headers: withBridgeHeaders(true),
     });
     return parseResponse<{ id: string; status: string; attempts: number }>(res);
   },

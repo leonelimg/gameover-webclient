@@ -14,20 +14,70 @@ import {
 const app = express();
 const queue = new PrintQueueService(printerTransport);
 
+const isAllowedOrigin = (origin?: string) => {
+  return !origin || origin === "null" || config.server.allowedOrigins.includes(origin);
+};
+
 app.use(express.json({ limit: "1mb" }));
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (!isAllowedOrigin(origin)) {
+    next();
+    return;
+  }
+
+  if (origin) {
+    res.header("Access-Control-Allow-Origin", origin);
+    res.header("Vary", "Origin, Access-Control-Request-Private-Network");
+  }
+
+  if (req.headers["access-control-request-private-network"] === "true") {
+    res.header("Access-Control-Allow-Private-Network", "true");
+  }
+
+  next();
+});
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || origin === "null" || config.server.allowedOrigins.includes(origin)) {
+      if (isAllowedOrigin(origin)) {
         callback(null, true);
         return;
       }
       callback(new Error("Origin not allowed"));
-    }
+    },
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    optionsSuccessStatus: 204
   })
 );
 
+app.options("*", (req, res) => {
+  const origin = req.headers.origin;
+  if (!isAllowedOrigin(origin)) {
+    res.status(403).json({ error: "Origin not allowed" });
+    return;
+  }
+
+  if (origin) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+  res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  if (req.headers["access-control-request-private-network"] === "true") {
+    res.header("Access-Control-Allow-Private-Network", "true");
+  }
+
+  res.sendStatus(204);
+});
+
 app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    next();
+    return;
+  }
+
   if (!config.server.token) {
     next();
     return;
