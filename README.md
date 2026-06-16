@@ -2,6 +2,8 @@
 
 Aplicación web completa para gestión de tickets de lotería (loto), con arquitectura escalable, control de usuarios por roles y jerarquía de asociados.
 
+Guía de despliegue en Debian: ver `GUIA_RAPIDA_DESPLIEGUE_DEBIAN.md`.
+
 ---
 
 ## Arquitectura

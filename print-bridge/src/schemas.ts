@@ -18,6 +18,7 @@ export const ticketSchema = z.object({
   businessName: z.string().max(120).optional(),
   businessTaxId: z.string().max(40).optional(),
   drawLabel: z.string().max(120).optional(),
+  drawDateIso: z.string().max(80).optional(),
   customerName: z.string().max(120).optional(),
   sellerName: z.string().max(120).optional(),
   showSpecialColumn: z.boolean().optional(),

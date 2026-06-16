@@ -177,8 +177,9 @@ export class PrintQueueService {
           if (!ticket) {
             throw new Error("Ticket payload missing");
           }
+          const effectiveColumns = ticket.width === 58 ? 32 : ticket.width === 80 ? 48 : config.printer.columns;
           await withTimeout(
-            this.printer.printRaw(buildTicketPrint(ticket, config.printer.columns)),
+            this.printer.printRaw(buildTicketPrint(ticket, effectiveColumns)),
             config.printer.printTimeoutMs,
             "Ticket print"
           );

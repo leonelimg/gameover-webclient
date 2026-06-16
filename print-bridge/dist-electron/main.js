@@ -23,8 +23,11 @@ const defaultSettings = () => ({
     host: process.env.PRINTBRIDGE_HOST ?? "127.0.0.1",
     token: process.env.PRINTBRIDGE_TOKEN ?? "",
     allowedOrigins: process.env.PRINTBRIDGE_ALLOWED_ORIGINS ?? "http://localhost:5173",
+    transport: process.env.PRINTER_TRANSPORT ?? "serial",
     serialPort: process.env.PRINTER_SERIAL_PORT ?? "COM5",
-    serialBaud: Number(process.env.PRINTER_SERIAL_BAUD ?? 9600)
+    serialBaud: Number(process.env.PRINTER_SERIAL_BAUD ?? 9600),
+    rawPath: process.env.PRINTER_RAW_PATH ?? "\\\\.\\USB001",
+    windowsName: process.env.PRINTER_WINDOWS_NAME ?? ""
 });
 let currentSettings = defaultSettings();
 const getSettingsPath = () => path.join(app.getPath("userData"), "bridge-settings.json");
@@ -33,13 +36,18 @@ const sanitizeSettings = (raw) => {
     const defaults = defaultSettings();
     const port = Number(raw.port ?? defaults.port);
     const serialBaud = Number(raw.serialBaud ?? defaults.serialBaud);
+    const rawTransport = String(raw.transport ?? defaults.transport);
+    const transport = rawTransport === "rawfile" || rawTransport === "winspooler" ? rawTransport : "serial";
     return {
         port: Number.isFinite(port) && port > 0 && port <= 65535 ? port : defaults.port,
         host: String(raw.host ?? defaults.host).trim() || defaults.host,
         token: String(raw.token ?? defaults.token),
         allowedOrigins: String(raw.allowedOrigins ?? defaults.allowedOrigins).trim() || defaults.allowedOrigins,
+        transport,
         serialPort: String(raw.serialPort ?? defaults.serialPort).trim() || defaults.serialPort,
-        serialBaud: Number.isFinite(serialBaud) && serialBaud > 0 ? serialBaud : defaults.serialBaud
+        serialBaud: Number.isFinite(serialBaud) && serialBaud > 0 ? serialBaud : defaults.serialBaud,
+        rawPath: String(raw.rawPath ?? defaults.rawPath).trim() || defaults.rawPath,
+        windowsName: String(raw.windowsName ?? defaults.windowsName).trim()
     };
 };
 const loadSettings = () => {
@@ -121,12 +129,12 @@ const buildMainHtml = (settings) => `<!doctype html>
           <div class="value">${escapeHtml(settings.host)}</div>
         </div>
         <div class="panel">
-          <div class="label">Puerto COM</div>
-          <div class="value">${escapeHtml(settings.serialPort)}</div>
+          <div class="label">Transporte</div>
+          <div class="value">${settings.transport}</div>
         </div>
         <div class="panel">
-          <div class="label">Baud Rate</div>
-          <div class="value">${settings.serialBaud}</div>
+          <div class="label">${settings.transport === "serial" ? "Puerto COM" : settings.transport === "rawfile" ? "Ruta USB" : "Nombre de impresora"}</div>
+          <div class="value">${settings.transport === "serial" ? escapeHtml(settings.serialPort) : settings.transport === "rawfile" ? escapeHtml(settings.rawPath) : escapeHtml(settings.windowsName)}</div>
         </div>
       </div>
 
@@ -283,16 +291,45 @@ const buildSettingsHtml = (settings) => `<!doctype html>
         <label for="allowedOrigins">Allowed Origins (coma separados)</label>
         <input id="allowedOrigins" name="allowedOrigins" type="text" value="${escapeHtml(settings.allowedOrigins)}" />
 
-        <div class="row">
-          <div>
-            <label for="serialPort">Puerto COM</label>
-            <input id="serialPort" name="serialPort" type="text" required value="${escapeHtml(settings.serialPort)}" />
-          </div>
-          <div>
-            <label for="serialBaud">Baud Rate</label>
-            <input id="serialBaud" name="serialBaud" type="number" min="1" required value="${settings.serialBaud}" />
+        <label for="transport">Transporte de impresora</label>
+        <select id="transport" name="transport" onchange="onTransportChange(this.value)" style="width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:8px;padding:10px 12px;font-size:14px;">
+          <option value="serial"${settings.transport === "serial" ? " selected" : ""}>Serial / COM (puerto COM virtual)</option>
+          <option value="rawfile"${settings.transport === "rawfile" ? " selected" : ""}>Raw USB (\\.\USB001, /dev/usb/lp0)</option>
+          <option value="winspooler"${settings.transport === "winspooler" ? " selected" : ""}>Windows Spooler (Dispositivos e impresoras)</option>
+        </select>
+
+        <div id="section-serial" style="display:${settings.transport === "serial" ? "block" : "none"}">
+          <div class="row">
+            <div>
+              <label for="serialPort">Puerto COM</label>
+              <input id="serialPort" name="serialPort" type="text" value="${escapeHtml(settings.serialPort)}" placeholder="COM5" />
+            </div>
+            <div>
+              <label for="serialBaud">Baud Rate</label>
+              <input id="serialBaud" name="serialBaud" type="number" min="1" value="${settings.serialBaud}" placeholder="9600" />
+            </div>
           </div>
         </div>
+
+        <div id="section-rawfile" style="display:${settings.transport === "rawfile" ? "block" : "none"}">
+          <label for="rawPath">Ruta del dispositivo USB</label>
+          <input id="rawPath" name="rawPath" type="text" value="${escapeHtml(settings.rawPath)}" placeholder="\\\\.\\USB001" />
+          <div class="hint">Windows: <code>\\\\.\\USB001</code>, <code>\\\\.\\USB002</code> &nbsp;|&nbsp; Linux: <code>/dev/usb/lp0</code></div>
+        </div>
+
+        <div id="section-winspooler" style="display:${settings.transport === "winspooler" ? "block" : "none"}">
+          <label for="windowsName">Nombre de impresora</label>
+          <input id="windowsName" name="windowsName" type="text" value="${escapeHtml(settings.windowsName)}" placeholder="EPSON TM-T20III" />
+          <div class="hint">Nombre exacto tal como aparece en <em>Dispositivos e impresoras</em> de Windows.</div>
+        </div>
+
+        <script>
+          function onTransportChange(val) {
+            document.getElementById('section-serial').style.display = val === 'serial' ? 'block' : 'none';
+            document.getElementById('section-rawfile').style.display = val === 'rawfile' ? 'block' : 'none';
+            document.getElementById('section-winspooler').style.display = val === 'winspooler' ? 'block' : 'none';
+          }
+        <\/script>
 
         <div class="actions">
           <button class="primary" type="submit">Guardar y reiniciar</button>
@@ -332,8 +369,11 @@ const openSettingsWindow = () => {
                 host: parsedUrl.searchParams.get("host") ?? currentSettings.host,
                 token: parsedUrl.searchParams.get("token") ?? currentSettings.token,
                 allowedOrigins: parsedUrl.searchParams.get("allowedOrigins") ?? currentSettings.allowedOrigins,
+                transport: parsedUrl.searchParams.get("transport") ?? currentSettings.transport,
                 serialPort: parsedUrl.searchParams.get("serialPort") ?? currentSettings.serialPort,
-                serialBaud: Number(parsedUrl.searchParams.get("serialBaud") ?? currentSettings.serialBaud)
+                serialBaud: Number(parsedUrl.searchParams.get("serialBaud") ?? currentSettings.serialBaud),
+                rawPath: parsedUrl.searchParams.get("rawPath") ?? currentSettings.rawPath,
+                windowsName: parsedUrl.searchParams.get("windowsName") ?? currentSettings.windowsName
             });
             currentSettings = updated;
             saveSettings(updated);
@@ -396,8 +436,11 @@ const startBridge = () => {
             PRINTBRIDGE_TOKEN: currentSettings.token,
             PRINTBRIDGE_ALLOWED_ORIGINS: currentSettings.allowedOrigins,
             PRINTBRIDGE_DATA_DIR: dataDir,
+            PRINTER_TRANSPORT: currentSettings.transport,
             PRINTER_SERIAL_PORT: currentSettings.serialPort,
-            PRINTER_SERIAL_BAUD: String(currentSettings.serialBaud)
+            PRINTER_SERIAL_BAUD: String(currentSettings.serialBaud),
+            PRINTER_RAW_PATH: currentSettings.rawPath,
+            PRINTER_WINDOWS_NAME: currentSettings.windowsName
         }
     });
     bridgeProc.stdout.on("data", (chunk) => {

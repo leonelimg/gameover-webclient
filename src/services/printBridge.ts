@@ -3,9 +3,11 @@ import { formatDrawLabel } from '@/utils/helpers';
 import { getFrontendTicketFooterLines, loadFrontendTicketSettings } from '@/utils/ticketAppearance';
 
 export interface PrintBridgeTicket {
+  width?: 58 | 80;
   title?: string;
   businessName?: string;
   drawLabel?: string;
+  drawDateIso?: string;
   customerName?: string;
   sellerName?: string;
   showSpecialColumn?: boolean;
@@ -40,6 +42,46 @@ export interface PrintBridgeTicket {
   qrText?: string;
   footer?: string[];
 }
+
+interface GroupedTicketLine {
+  number: string;
+  regular: number;
+  special: number;
+  total: number;
+}
+
+const groupTicketLinesByAmount = (
+  lines: Array<{ number: string; amount: number; specialAmount?: number | null }>,
+  includeSpecial: boolean
+): GroupedTicketLine[] => {
+  const groups = new Map<string, { numbers: string[]; regular: number; special: number }>();
+
+  for (const line of lines) {
+    const special = includeSpecial ? (line.specialAmount ?? 0) : 0;
+    const key = includeSpecial
+      ? `${line.amount.toFixed(2)}|${special.toFixed(2)}`
+      : line.amount.toFixed(2);
+
+    const current = groups.get(key);
+    if (current) {
+      current.numbers.push(line.number);
+      continue;
+    }
+
+    groups.set(key, {
+      numbers: [line.number],
+      regular: line.amount,
+      special,
+    });
+  }
+
+  return Array.from(groups.values()).map((group) => ({
+    number: group.numbers.join(', '),
+    regular: group.regular,
+    special: group.special,
+    total: group.regular + group.special,
+  }));
+};
 
 const bridgeUrl = (import.meta.env['VITE_PRINTBRIDGE_URL'] as string | undefined) ?? 'http://127.0.0.1:17890';
 const bridgeToken = import.meta.env['VITE_PRINTBRIDGE_TOKEN'] as string | undefined;
@@ -126,43 +168,49 @@ export const mapSaleTicketToPrintBridge = ({
   user?: User | null;
 }): Promise<PrintBridgeTicket> => {
   return loadFrontendTicketSettings().then((ticketSettings) => {
-  const regularTotal = ticket.lines.reduce((sum, line) => sum + line.amount, 0);
-  const specialTotal = ticket.lines.reduce((sum, line) => sum + (line.specialAmount ?? 0), 0);
-  const hasSpecialAmounts = ticket.lines.some((line) => (line.specialAmount ?? 0) > 0);
-  const regularMultiplier = ticket.seller?.plan?.multiplier;
-  const effectiveDraw = draw ?? ticket.draw;
-  const specialMultiplier = effectiveDraw?.specialMultiplier?.value;
-  const drawUsesSpecial = typeof specialMultiplier === 'number' ? specialMultiplier > 0 : hasSpecialAmounts;
-  const showSpecialColumn = drawUsesSpecial && hasSpecialAmounts;
-  const effectiveMultiplier = showSpecialColumn && typeof specialMultiplier === 'number'
-    ? specialMultiplier
-    : regularMultiplier;
-  const footerLines = getFrontendTicketFooterLines(effectiveMultiplier);
-  const resolvedDrawLabel = effectiveDraw
-    ? formatDrawLabel({
-        name: effectiveDraw.name,
-        closeTime: 'closeTime' in effectiveDraw ? effectiveDraw.closeTime : undefined,
-      })
-    : ticket.drawId;
+    const regularTotal = ticket.lines.reduce((sum, line) => sum + line.amount, 0);
+    const specialTotal = ticket.lines.reduce((sum, line) => sum + (line.specialAmount ?? 0), 0);
+    const hasSpecialAmounts = ticket.lines.some((line) => (line.specialAmount ?? 0) > 0);
+    const regularMultiplier = ticket.seller?.plan?.multiplier;
+    const effectiveDraw = draw ?? ticket.draw;
+    const specialMultiplier = effectiveDraw?.specialMultiplier?.value;
+    const drawUsesSpecial = typeof specialMultiplier === 'number' ? specialMultiplier > 0 : hasSpecialAmounts;
+    const showSpecialColumn = drawUsesSpecial && hasSpecialAmounts;
+    const effectiveMultiplier = showSpecialColumn && typeof specialMultiplier === 'number'
+      ? specialMultiplier
+      : regularMultiplier;
+    const footerLines = getFrontendTicketFooterLines(effectiveMultiplier);
+    const resolvedDrawLabel = effectiveDraw
+      ? formatDrawLabel({
+          name: effectiveDraw.name,
+          closeTime: 'closeTime' in effectiveDraw ? effectiveDraw.closeTime : undefined,
+        })
+      : ticket.drawId;
+    const groupedLines = groupTicketLinesByAmount(ticket.lines, showSpecialColumn);
 
-  const notes = ticket.lines.map((line) => {
-    const tag = line.isNicaEspecial ? 'NE' : 'STD';
-    const special = line.specialAmount ?? 0;
-    if (showSpecialColumn) {
-      return `${line.number} ${tag} R:${line.amount.toFixed(2)} E:${special.toFixed(2)} T:${(line.amount + special).toFixed(2)}`;
-    }
-    return `${line.number} ${tag} ${line.amount.toFixed(2)}`;
-  });
+    const notes = groupedLines.map((line) => {
+      if (showSpecialColumn) {
+        return `${line.number} R:${line.regular.toFixed(2)} E:${line.special.toFixed(2)} T:${line.total.toFixed(2)}`;
+      }
+      return `${line.number} ${line.regular.toFixed(2)}`;
+    });
+
+    const sellerId = user?.id ?? ticket.seller?.id ?? ticket.sellerId;
+    const ticketWidth = ticketSettings.sellerTicketWidths[sellerId] ?? ticketSettings.defaultTicketWidth;
+    const customerName = (ticket.customerName ?? '').trim() || 'Anonimo';
+    const puesto = user?.fullName ?? ticket.seller?.fullName ?? ticket.sellerId;
 
     return {
+      width: ticketWidth,
       title: resolvedDrawLabel,
       businessName: ticketSettings.ticketTitle,
       drawLabel: resolvedDrawLabel,
-      customerName: ticket.customerName,
-      sellerName: user?.fullName ?? ticket.seller?.fullName ?? ticket.sellerId,
+      drawDateIso: effectiveDraw && 'closeTime' in effectiveDraw ? effectiveDraw.closeTime : ticket.draw?.closeTime,
+      customerName,
+      sellerName: puesto,
       showSpecialColumn,
       terminal: 'WEB',
-      cashier: user?.fullName,
+      cashier: puesto,
       ticketNumber: ticket.code,
       dateIso: ticket.createdAt,
       items: [
@@ -173,15 +221,6 @@ export const mapSaleTicketToPrintBridge = ({
           total: ticket.total,
         },
       ],
-      detailLines: ticket.lines.map((line) => {
-        const special = line.specialAmount ?? 0;
-        return {
-          number: line.number,
-          regular: line.amount,
-          special,
-          total: line.amount + special,
-        };
-      }),
       multipliers: {
         regular: regularMultiplier,
         special: drawUsesSpecial ? specialMultiplier : undefined,
@@ -191,12 +230,14 @@ export const mapSaleTicketToPrintBridge = ({
         total: ticket.total,
       },
       notes: [
-        `Sorteo: ${resolvedDrawLabel}`,
+        `Nombre del sorteo: ${resolvedDrawLabel}`,
+        `Fecha/hora: ${new Date(ticket.createdAt).toLocaleString('es-NI')}`,
         ...(typeof regularMultiplier === 'number' ? [`Multiplicador regular: x${regularMultiplier}`] : []),
         ...(showSpecialColumn ? [`Multiplicador especial: x${specialMultiplier}`] : []),
         ...(showSpecialColumn ? [`Subtotal especial: ${specialTotal.toFixed(2)}`] : []),
         ...notes,
       ],
+      detailLines: groupedLines,
       footer: footerLines,
     };
   });

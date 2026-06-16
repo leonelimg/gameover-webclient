@@ -9,6 +9,39 @@ const escapeHtml = (value: string) => value
   .replace(/"/g, '&quot;')
   .replace(/'/g, '&#39;');
 
+const groupLinesByAmount = (
+  lines: Array<{ number: string; amount: number; specialAmount?: number | null }>,
+  includeSpecial: boolean
+) => {
+  const groups = new Map<string, { numbers: string[]; regular: number; special: number }>();
+
+  for (const line of lines) {
+    const special = includeSpecial ? (line.specialAmount ?? 0) : 0;
+    const key = includeSpecial
+      ? `${line.amount.toFixed(2)}|${special.toFixed(2)}`
+      : line.amount.toFixed(2);
+    const current = groups.get(key);
+
+    if (current) {
+      current.numbers.push(line.number);
+      continue;
+    }
+
+    groups.set(key, {
+      numbers: [line.number],
+      regular: line.amount,
+      special,
+    });
+  }
+
+  return Array.from(groups.values()).map((group) => ({
+    number: group.numbers.join(', '),
+    regular: group.regular,
+    special: group.special,
+    total: group.regular + group.special,
+  }));
+};
+
 export async function printSaleTicket(ticket: Ticket): Promise<void> {
   const ticketSettings = await loadFrontendTicketSettings();
   const hasSpecialAmounts = ticket.lines.some((line) => (line.specialAmount ?? 0) > 0);
@@ -25,6 +58,11 @@ export async function printSaleTicket(ticket: Ticket): Promise<void> {
   const effectiveMultiplier = showSpecialColumn && typeof specialMultiplier === 'number'
     ? specialMultiplier
     : regularMultiplier;
+  const groupedLines = groupLinesByAmount(ticket.lines, showSpecialColumn);
+  const customerName = (ticket.customerName ?? '').trim() || 'Anonimo';
+  const drawLabel = ticket.draw ? formatDrawLabel(ticket.draw) : ticket.drawId;
+  const drawDate = ticket.draw?.closeTime ? formatDateTime(ticket.draw.closeTime) : formatDateTime(ticket.createdAt);
+  const puesto = ticket.seller?.fullName ?? ticket.sellerId;
   const footerNoteHtml = ticketSettings.footerNote
     ? escapeHtml(ticketSettings.footerNote).replace(/\n/g, '<br />')
     : '';
@@ -33,36 +71,31 @@ export async function printSaleTicket(ticket: Ticket): Promise<void> {
     ? `
       <tr>
         <th style="text-align:left;">Numero</th>
-        <th style="text-align:right;">Regular</th>
+        <th style="text-align:right;">Monto</th>
         <th style="text-align:right;">Especial</th>
-        <th style="text-align:right;">Total</th>
       </tr>`
     : `
       <tr>
         <th style="text-align:left;">Numero</th>
-        <th style="text-align:right;">Regular</th>
-        <th style="text-align:right;">Total</th>
+        <th style="text-align:right;">Monto</th>
       </tr>`;
 
-  const linesHtml = ticket.lines
+  const linesHtml = groupedLines
     .map(
       (line) => {
-        const special = line.specialAmount ?? 0;
         if (showSpecialColumn) {
           return `
       <tr>
         <td>${line.number}</td>
-        <td style="text-align:right;">C$ ${line.amount.toFixed(2)}</td>
-        <td style="text-align:right;">C$ ${special.toFixed(2)}</td>
-        <td style="text-align:right;">C$ ${(line.amount + special).toFixed(2)}</td>
+        <td style="text-align:right;">C$ ${line.regular.toFixed(2)}</td>
+        <td style="text-align:right;">C$ ${line.special.toFixed(2)}</td>
       </tr>`;
         }
 
         return `
       <tr>
         <td>${line.number}</td>
-        <td style="text-align:right;">C$ ${line.amount.toFixed(2)}</td>
-        <td style="text-align:right;">C$ ${line.amount.toFixed(2)}</td>
+        <td style="text-align:right;">C$ ${line.regular.toFixed(2)}</td>
       </tr>`;
       }
     )
@@ -91,10 +124,10 @@ export async function printSaleTicket(ticket: Ticket): Promise<void> {
         <div class="box">
           <div class="title">${escapeHtml(ticketSettings.ticketTitle)}</div>
           <div class="code">${ticket.code}</div>
-          <p class="line">Sorteo: ${ticket.draw ? formatDrawLabel(ticket.draw) : ticket.drawId}</p>
-          <p class="line">Cliente: ${ticket.customerName || ''}</p>
-          <p class="line">Vendedor: ${ticket.seller?.fullName ?? ticket.sellerId}</p>
-          <p class="line">Fecha: ${formatDateTime(ticket.createdAt)}</p>
+          <p class="line">${drawLabel}</p>
+          <p class="line">Fecha sorteo: ${drawDate}</p>
+          <p class="line">Cliente: ${customerName}</p>
+          <p class="line">Puesto: ${puesto}</p>
           ${typeof regularMultiplier === 'number' ? `<p class="line">Multiplicador regular: x${regularMultiplier}</p>` : ''}
           ${showSpecialColumn && typeof specialMultiplier === 'number' ? `<p class="line">Multiplicador especial: x${specialMultiplier}</p>` : ''}
           <table>

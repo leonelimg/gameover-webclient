@@ -3,7 +3,9 @@ import { z } from 'zod';
 import {
   DEFAULT_FRONTEND_TICKET_SETTINGS,
   FRONTEND_TICKET_CODE_FONT_SIZE_SETTING_KEY,
+  FRONTEND_TICKET_DEFAULT_WIDTH_SETTING_KEY,
   FRONTEND_TICKET_FOOTER_NOTE_SETTING_KEY,
+  FRONTEND_TICKET_SELLER_WIDTHS_SETTING_KEY,
   FRONTEND_TICKET_TITLE_SETTING_KEY,
   getFrontendTicketSettings,
   setFrontendTicketSettings,
@@ -19,7 +21,37 @@ const frontendTicketSettingsSchema = z.object({
   ticketTitle: z.string().trim().min(1).max(60),
   footerNote: z.string().max(240),
   ticketCodeFontSize: z.number().int().min(18).max(64),
+  defaultTicketWidth: z.union([z.literal(58), z.literal(80)]),
+  sellerTicketWidths: z.record(z.string(), z.union([z.literal(58), z.literal(80)])),
 });
+
+router.get(
+  '/ticket-vendor-widths',
+  authorizeResource('/roles:update'),
+  async (_req, res) => {
+    const [settings, sellers] = await Promise.all([
+      getFrontendTicketSettings(),
+      prisma.user.findMany({
+        where: { role: 'vendedor', status: { not: 'archivado' } },
+        select: {
+          id: true,
+          fullName: true,
+          username: true,
+          status: true,
+        },
+        orderBy: [{ fullName: 'asc' }],
+      }),
+    ]);
+
+    res.json({
+      defaultTicketWidth: settings.defaultTicketWidth,
+      sellers: sellers.map((seller) => ({
+        ...seller,
+        ticketWidth: settings.sellerTicketWidths[seller.id] ?? settings.defaultTicketWidth,
+      })),
+    });
+  }
+);
 
 router.get(
   '/ticket-appearance',
@@ -42,16 +74,20 @@ router.patch(
       data: {
         action: 'UPDATE_FRONTEND_TICKET_SETTINGS',
         entity: 'SystemSetting',
-        entityId: `${FRONTEND_TICKET_TITLE_SETTING_KEY},${FRONTEND_TICKET_FOOTER_NOTE_SETTING_KEY},${FRONTEND_TICKET_CODE_FONT_SIZE_SETTING_KEY}`,
+        entityId: `${FRONTEND_TICKET_TITLE_SETTING_KEY},${FRONTEND_TICKET_FOOTER_NOTE_SETTING_KEY},${FRONTEND_TICKET_CODE_FONT_SIZE_SETTING_KEY},${FRONTEND_TICKET_DEFAULT_WIDTH_SETTING_KEY},${FRONTEND_TICKET_SELLER_WIDTHS_SETTING_KEY}`,
         userId: req.user!.sub,
         details: {
           ticketTitle: settings.ticketTitle,
           footerNote: settings.footerNote,
           ticketCodeFontSize: settings.ticketCodeFontSize,
+          defaultTicketWidth: settings.defaultTicketWidth,
+          sellerTicketWidths: settings.sellerTicketWidths,
           defaults: {
             ticketTitle: DEFAULT_FRONTEND_TICKET_SETTINGS.ticketTitle,
             footerNote: DEFAULT_FRONTEND_TICKET_SETTINGS.footerNote,
             ticketCodeFontSize: DEFAULT_FRONTEND_TICKET_SETTINGS.ticketCodeFontSize,
+            defaultTicketWidth: DEFAULT_FRONTEND_TICKET_SETTINGS.defaultTicketWidth,
+            sellerTicketWidths: DEFAULT_FRONTEND_TICKET_SETTINGS.sellerTicketWidths,
           },
         },
       },

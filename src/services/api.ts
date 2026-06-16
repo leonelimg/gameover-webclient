@@ -7,6 +7,7 @@ import {
   Announcement,
   AnnouncementPayload,
   FrontendTicketSettings,
+  FrontendTicketVendorWidthsResponse,
   GlobalNumberRestrictionSettings,
   CurrentUserRestrictionSettings,
   RolePermissionRow,
@@ -192,6 +193,10 @@ export const frontendSettingsApi = {
   },
   updateTicketAppearance: async (settings: FrontendTicketSettings): Promise<FrontendTicketSettings> => {
     const res = await api.patch<FrontendTicketSettings>('/api/frontend-settings/ticket-appearance', settings);
+    return res.data;
+  },
+  getTicketVendorWidths: async (): Promise<FrontendTicketVendorWidthsResponse> => {
+    const res = await api.get<FrontendTicketVendorWidthsResponse>('/api/frontend-settings/ticket-vendor-widths');
     return res.data;
   },
 };

@@ -19,6 +19,39 @@ const padLeft = (text: string, width: number) => {
   return `${" ".repeat(width - text.length)}${text}`;
 };
 
+const wrapGroupedNumbers = (value: string, width: number) => {
+  const tokens = value
+    .split(",")
+    .map((token) => token.trim())
+    .filter(Boolean);
+
+  if (!tokens.length) {
+    return [""];
+  }
+
+  const lines: string[] = [];
+  let current = "";
+
+  for (const token of tokens) {
+    const candidate = current ? `${current}, ${token}` : token;
+    if (candidate.length <= width) {
+      current = candidate;
+      continue;
+    }
+
+    if (current) {
+      lines.push(current);
+    }
+    current = token;
+  }
+
+  if (current) {
+    lines.push(current);
+  }
+
+  return lines;
+};
+
 const getDetailColumnWidths = (columns: number) => {
   // 3 separator spaces are used between the 4 columns.
   if (columns <= 32) {
@@ -163,16 +196,18 @@ export const buildTicketPrint = (ticket: TicketPayload, columns: number) => {
 
   b.align("left");
   if (ticket.drawLabel || ticket.title) {
-    b.text(`Sorteo: ${ticket.drawLabel ?? ticket.title}`);
+    b.text(ticket.drawLabel ?? ticket.title ?? "");
   }
-  if (typeof ticket.customerName === "string") {
-    b.text(`Cliente: ${ticket.customerName}`);
+  if (ticket.drawDateIso) {
+    b.text(`Fecha sorteo: ${formatTicketDate(ticket.drawDateIso)}`);
   }
+  const customerName = (ticket.customerName ?? "").trim() || "Anonimo";
+  b.text(`Cliente: ${customerName}`);
   if (ticket.sellerName || ticket.cashier) {
-    b.text(`Vendedor: ${ticket.sellerName ?? ticket.cashier}`);
+    b.text(`Puesto: ${ticket.sellerName ?? ticket.cashier}`);
   }
-  if (ticket.dateIso) {
-    b.text(`Fecha: ${formatTicketDate(ticket.dateIso)}`);
+  if (!ticket.drawDateIso && ticket.dateIso) {
+    b.text(`Fecha sorteo: ${formatTicketDate(ticket.dateIso)}`);
   }
 
   b.text(hr(columns));
@@ -180,31 +215,46 @@ export const buildTicketPrint = (ticket: TicketPayload, columns: number) => {
   if (detailLines.length) {
     if (showSpecialColumn) {
       const { numberWidth, regularWidth, specialWidth, totalWidth } = getDetailColumnWidths(columns);
+      const amountWidth = regularWidth;
+      const effectiveNumberWidth = Math.max(8, numberWidth + Math.max(0, totalWidth - 2));
 
       b.bold(true).text(
-        `${padRight("Numero", numberWidth)} ${padRight("Regular", regularWidth)} ${padRight("Especial", specialWidth)} ${padRight("Total", totalWidth)}`
+        `${padRight("Numero", effectiveNumberWidth)} ${padRight("Monto", amountWidth)} ${padRight("Especial", specialWidth)}`
       );
       b.bold(false);
 
       for (const line of detailLines) {
-        b.text(
-          `${padRight(line.number, numberWidth)} ${padLeft(`C$ ${line.regular.toFixed(2)}`, regularWidth)} ${padLeft(`C$ ${line.special.toFixed(2)}`, specialWidth)} ${padLeft(`C$ ${line.total.toFixed(2)}`, totalWidth)}`
-        );
+        const wrappedNumbers = wrapGroupedNumbers(line.number, effectiveNumberWidth);
+        wrappedNumbers.forEach((numberLine, index) => {
+          if (index === 0) {
+            b.text(
+              `${padRight(numberLine, effectiveNumberWidth)} ${padLeft(`C$ ${line.regular.toFixed(2)}`, amountWidth)} ${padLeft(`C$ ${line.special.toFixed(2)}`, specialWidth)}`
+            );
+            return;
+          }
+
+          b.text(`${padRight(numberLine, effectiveNumberWidth)} ${padRight("", amountWidth)} ${padRight("", specialWidth)}`);
+        });
       }
     } else {
-      const numberWidth = columns <= 32 ? 7 : 10;
-      const regularWidth = columns <= 32 ? 11 : 15;
-      const totalWidth = Math.max(10, columns - numberWidth - regularWidth - 2);
+      const amountWidth = columns <= 32 ? 10 : 12;
+      const numberWidth = Math.max(12, columns - amountWidth - 1);
 
       b.bold(true).text(
-        `${padRight("Numero", numberWidth)} ${padRight("Regular", regularWidth)} ${padRight("Total", totalWidth)}`
+        `${padRight("Numero", numberWidth)} ${padRight("Monto", amountWidth)}`
       );
       b.bold(false);
 
       for (const line of detailLines) {
-        b.text(
-          `${padRight(line.number, numberWidth)} ${padLeft(`C$ ${line.regular.toFixed(2)}`, regularWidth)} ${padLeft(`C$ ${line.total.toFixed(2)}`, totalWidth)}`
-        );
+        const wrappedNumbers = wrapGroupedNumbers(line.number, numberWidth);
+        wrappedNumbers.forEach((numberLine, index) => {
+          if (index === 0) {
+            b.text(`${padRight(numberLine, numberWidth)} ${padLeft(`C$ ${line.regular.toFixed(2)}`, amountWidth)}`);
+            return;
+          }
+
+          b.text(numberLine);
+        });
       }
     }
   } else {

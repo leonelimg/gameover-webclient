@@ -21,14 +21,63 @@ object TicketFormatter {
         }
     }
 
-    private fun formatDrawLabel(draw: Draw?): String {
-        if (draw == null) return ""
-        val closeLabel = try {
-            dateFormatter.format(Instant.parse(draw.closeTime)).lowercase(localeNi)
-        } catch (_: Exception) {
-            ""
+    private data class GroupedLine(
+        val numbers: String,
+        val amount: Double,
+        val special: Double,
+    )
+
+    private fun wrapGroupedNumbers(numbers: String, width: Int): List<String> {
+        val tokens = numbers
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+
+        if (tokens.isEmpty()) return listOf("")
+
+        val lines = mutableListOf<String>()
+        var current = ""
+
+        for (token in tokens) {
+            val candidate = if (current.isBlank()) token else "$current, $token"
+            if (candidate.length <= width) {
+                current = candidate
+            } else {
+                if (current.isNotBlank()) lines.add(current)
+                current = token
+            }
         }
-        return if (closeLabel.isBlank()) draw.name else "${draw.name} - $closeLabel"
+
+        if (current.isNotBlank()) lines.add(current)
+        return lines
+    }
+
+    private fun groupLines(ticket: Ticket, showSpecialColumn: Boolean): List<GroupedLine> {
+        val grouped = linkedMapOf<String, Pair<MutableList<String>, Pair<Double, Double>>>()
+
+        for (line in ticket.lines) {
+            val special = if (showSpecialColumn) (line.specialAmount ?: 0.0) else 0.0
+            val key = if (showSpecialColumn) {
+                "%.2f|%.2f".format(line.amount, special)
+            } else {
+                "%.2f".format(line.amount)
+            }
+
+            val current = grouped[key]
+            if (current != null) {
+                current.first.add(line.number)
+            } else {
+                grouped[key] = Pair(mutableListOf(line.number), Pair(line.amount, special))
+            }
+        }
+
+        return grouped.values.map { (numbers, values) ->
+            GroupedLine(
+                numbers = numbers.joinToString(", "),
+                amount = values.first,
+                special = values.second,
+            )
+        }
     }
 
     private fun padRight(value: String, width: Int): String =
@@ -58,8 +107,10 @@ object TicketFormatter {
         val drawHasSpecial = specialMultiplierValue?.let { it > 0 } ?: hasSpecial
         val showSpecialColumn = drawHasSpecial && hasSpecial
         val effectiveMultiplier = specialMultiplierValue
-        val dateStr = formatDate(ticket.createdAt)
-        val drawLabel = formatDrawLabel(draw).ifBlank { draw?.name ?: ticket.draw?.name ?: ticket.drawId }
+        val drawName = draw?.name ?: ticket.draw?.name ?: ticket.drawId
+        val drawDateStr = formatDate(draw?.closeTime ?: ticket.createdAt)
+        val customerName = ticket.customerName.trim().ifBlank { "Anonimo" }
+        val groupedLines = groupLines(ticket, showSpecialColumn)
         val footerLines = footerNote
             .split("\n")
             .map { it.trim() }
@@ -72,34 +123,46 @@ object TicketFormatter {
             .run { applyTicketCodeSize(this, ticketCodeFontSize) }
             .boldOn().textLn(ticket.code).boldOff().normalSize()
             .alignLeft()
-            .textLn("Sorteo: $drawLabel")
-            .run { if (ticket.customerName.isNotBlank()) textLn("Cliente: ${ticket.customerName}") else textLn("Cliente:") }
-            .textLn("Vendedor: $sellerName")
-            .textLn("Fecha:  $dateStr")
+            .textLn(drawName)
+            .textLn("Fecha sorteo: $drawDateStr")
+            .textLn("Cliente: $customerName")
+            .textLn("Puesto: $sellerName")
             .divider()
             .run {
                 if (showSpecialColumn) {
                     boldOn()
-                        .textLn("Numero  Regular Especial Total")
+                        .textLn("Numero         Monto Especial")
                         .boldOff()
                 } else {
                     boldOn()
-                        .textLn("Numero    Regular      Total")
+                        .textLn("Numero               Monto")
                         .boldOff()
                 }
             }
             .run {
                 var builder = this
-                for (line in ticket.lines) {
-                    val number = padRight(line.number, 6)
-                    val regular = padLeft("C$${"%.2f".format(line.amount)}", 8)
+                for (line in groupedLines) {
                     if (showSpecialColumn) {
-                        val special = padLeft("C$${"%.2f".format(line.specialAmount ?: 0.0)}", 8)
-                        val total = padLeft("C$${"%.2f".format(line.amount + (line.specialAmount ?: 0.0))}", 8)
-                        builder = builder.textLn("$number $regular $special $total")
+                        val wrapped = wrapGroupedNumbers(line.numbers, 14)
+                        val amount = padLeft("C$${"%.2f".format(line.amount)}", 8)
+                        val special = padLeft("C$${"%.2f".format(line.special)}", 8)
+                        wrapped.forEachIndexed { index, value ->
+                            builder = if (index == 0) {
+                                builder.textLn("${padRight(value, 14)} $amount $special")
+                            } else {
+                                builder.textLn(value)
+                            }
+                        }
                     } else {
-                        val total = padLeft("C$${"%.2f".format(line.amount)}", 10)
-                        builder = builder.textLn("$number ${padLeft("C$${"%.2f".format(line.amount)}", 10)} $total")
+                        val wrapped = wrapGroupedNumbers(line.numbers, 20)
+                        val amount = padLeft("C$${"%.2f".format(line.amount)}", 11)
+                        wrapped.forEachIndexed { index, value ->
+                            builder = if (index == 0) {
+                                builder.textLn("${padRight(value, 20)} $amount")
+                            } else {
+                                builder.textLn(value)
+                            }
+                        }
                     }
                 }
                 builder

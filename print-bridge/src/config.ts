@@ -7,9 +7,13 @@ const envSchema = z.object({
   PRINTBRIDGE_TOKEN: z.string().optional(),
   PRINTBRIDGE_ALLOWED_ORIGINS: z.string().default("http://localhost:5173"),
   PRINTBRIDGE_DATA_DIR: z.string().default("./data"),
-  PRINTER_TRANSPORT: z.enum(["serial"]).default("serial"),
+  PRINTER_TRANSPORT: z.enum(["serial", "rawfile", "winspooler"]).default("serial"),
   PRINTER_SERIAL_PORT: z.string().default("COM5"),
   PRINTER_SERIAL_BAUD: z.coerce.number().int().positive().default(9600),
+  // rawfile transport: direct device path (e.g. \\\\.\\USB001 or /dev/usb/lp0)
+  PRINTER_RAW_PATH: z.string().default("\\\\.\\USB001"),
+  // winspooler transport: exact printer name shown in "Devices and Printers"
+  PRINTER_WINDOWS_NAME: z.string().default(""),
   PRINT_JOB_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(15000),
   PRINTER_COLUMNS: z.coerce.number().int().min(32).max(64).default(48),
   PRINTER_CHARSET: z.string().default("cp437"),
@@ -39,6 +43,8 @@ export const config = {
     transport: parsed.PRINTER_TRANSPORT,
     serialPort: parsed.PRINTER_SERIAL_PORT,
     serialBaud: parsed.PRINTER_SERIAL_BAUD,
+    rawPath: parsed.PRINTER_RAW_PATH,
+    windowsName: parsed.PRINTER_WINDOWS_NAME,
     printTimeoutMs: parsed.PRINT_JOB_TIMEOUT_MS,
     columns: parsed.PRINTER_COLUMNS,
     charset: parsed.PRINTER_CHARSET

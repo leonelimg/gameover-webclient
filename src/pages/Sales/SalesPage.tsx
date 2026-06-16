@@ -1335,6 +1335,43 @@ function TicketPrintView({
     ? specialMultiplier
     : regularMultiplier;
   const footerLines = getFrontendTicketFooterLines(effectiveMultiplier);
+  const customerName = (ticket.customerName ?? '').trim() || 'Anonimo';
+  const drawName = draw ? formatDrawLabel(draw) : ticket.drawId;
+  const drawDate = draw?.closeTime
+    ? formatDateTime(draw.closeTime)
+    : ticket.draw?.closeTime
+      ? formatDateTime(ticket.draw.closeTime)
+      : formatDateTime(ticket.createdAt);
+
+  const groupedLines = useMemo(() => {
+    const groups = new Map<string, { numbers: string[]; regular: number; special: number }>();
+
+    for (const line of ticket.lines) {
+      const special = showSpecialColumn ? (line.specialAmount ?? 0) : 0;
+      const key = showSpecialColumn
+        ? `${line.amount.toFixed(2)}|${special.toFixed(2)}`
+        : line.amount.toFixed(2);
+      const current = groups.get(key);
+
+      if (current) {
+        current.numbers.push(line.number);
+        continue;
+      }
+
+      groups.set(key, {
+        numbers: [line.number],
+        regular: line.amount,
+        special,
+      });
+    }
+
+    return Array.from(groups.values()).map((group) => ({
+      number: group.numbers.join(', '),
+      regular: group.regular,
+      special: group.special,
+      total: group.regular + group.special,
+    }));
+  }, [showSpecialColumn, ticket.lines]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1367,18 +1404,18 @@ function TicketPrintView({
       <div className="space-y-1 text-xs mb-4">
         <div className="flex justify-between">
           <span className="text-slate-500">Sorteo:</span>
-          <span>{draw ? formatDrawLabel(draw) : ticket.drawId}</span>
+          <span>{drawName}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-slate-500">Fecha sorteo:</span>
+          <span>{drawDate}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-slate-500">Cliente:</span>
-          <span>{ticket.customerName || 'Consumidor final'}</span>
+          <span>{customerName}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-slate-500">Fecha:</span>
-          <span>{formatDateTime(ticket.createdAt)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-slate-500">Vendedor:</span>
+          <span className="text-slate-500">Puesto:</span>
           <span>{sellerName}</span>
         </div>
         <div className="flex justify-between">
@@ -1392,18 +1429,16 @@ function TicketPrintView({
       </div>
 
       <div className="border-t border-dashed border-slate-300 pt-3 mb-3">
-        <div className={`grid ${showSpecialColumn ? 'grid-cols-4' : 'grid-cols-3'} text-xs font-bold text-slate-500 mb-1`}>
+        <div className={`grid ${showSpecialColumn ? 'grid-cols-3' : 'grid-cols-2'} text-xs font-bold text-slate-500 mb-1`}>
           <span>Número</span>
-          <span className="text-center">Regular</span>
+          <span className="text-center">Monto</span>
           {showSpecialColumn && <span className="text-center text-purple-600">Especial</span>}
-          <span className="text-right">Total</span>
         </div>
-        {ticket.lines.map((l, i) => (
-          <div key={i} className={`grid ${showSpecialColumn ? 'grid-cols-4' : 'grid-cols-3'} text-xs py-0.5`}>
+        {groupedLines.map((l, i) => (
+          <div key={i} className={`grid ${showSpecialColumn ? 'grid-cols-3' : 'grid-cols-2'} text-xs py-0.5`}>
             <span className="font-bold">{l.number}</span>
-            <span className="text-center">{formatCurrency(l.amount)}</span>
-            {showSpecialColumn && <span className="text-center text-purple-700">{formatCurrency(l.specialAmount ?? 0)}</span>}
-            <span className="text-right">{formatCurrency(l.amount + (showSpecialColumn ? (l.specialAmount ?? 0) : 0))}</span>
+            <span className="text-center">{formatCurrency(l.regular)}</span>
+            {showSpecialColumn && <span className="text-center text-purple-700">{formatCurrency(l.special)}</span>}
           </div>
         ))}
       </div>

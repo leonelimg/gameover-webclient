@@ -5,6 +5,8 @@ export const DEFAULT_FRONTEND_TICKET_SETTINGS: FrontendTicketSettings = {
   ticketTitle: 'GameOver Loteria',
   footerNote: '',
   ticketCodeFontSize: 32,
+  defaultTicketWidth: 80,
+  sellerTicketWidths: {},
 };
 
 let cachedFrontendTicketSettings: FrontendTicketSettings = DEFAULT_FRONTEND_TICKET_SETTINGS;
@@ -29,10 +31,33 @@ const normalizeTicketCodeFontSize = (value: number | string | null | undefined) 
   return Math.min(64, Math.max(18, rounded));
 };
 
+const normalizeTicketWidth = (value: number | string | null | undefined): 58 | 80 => {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return parsed === 58 ? 58 : 80;
+};
+
+const normalizeSellerTicketWidths = (
+  value: Record<string, number | string | null | undefined> | null | undefined
+): Record<string, 58 | 80> => {
+  const normalized: Record<string, 58 | 80> = {};
+
+  for (const [sellerId, width] of Object.entries(value ?? {})) {
+    const key = sellerId.trim();
+    if (!key) {
+      continue;
+    }
+    normalized[key] = normalizeTicketWidth(width);
+  }
+
+  return normalized;
+};
+
 const normalizeSettings = (value?: Partial<FrontendTicketSettings> | null): FrontendTicketSettings => ({
   ticketTitle: normalizeTicketTitle(value?.ticketTitle),
   footerNote: normalizeFooterNote(value?.footerNote),
   ticketCodeFontSize: normalizeTicketCodeFontSize(value?.ticketCodeFontSize),
+  defaultTicketWidth: normalizeTicketWidth(value?.defaultTicketWidth),
+  sellerTicketWidths: normalizeSellerTicketWidths(value?.sellerTicketWidths),
 });
 
 const setCachedFrontendTicketSettings = (value?: Partial<FrontendTicketSettings> | null): FrontendTicketSettings => {

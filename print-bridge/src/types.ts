@@ -33,6 +33,7 @@ export interface TicketPayload {
   businessName?: string;
   businessTaxId?: string;
   drawLabel?: string;
+  drawDateIso?: string;
   customerName?: string;
   sellerName?: string;
   showSpecialColumn?: boolean;

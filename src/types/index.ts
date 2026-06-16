@@ -61,6 +61,21 @@ export interface FrontendTicketSettings {
   ticketTitle: string;
   footerNote: string;
   ticketCodeFontSize: number;
+  defaultTicketWidth: 58 | 80;
+  sellerTicketWidths: Record<string, 58 | 80>;
+}
+
+export interface FrontendTicketVendorWidthRow {
+  id: string;
+  fullName: string;
+  username: string;
+  status: UserStatus;
+  ticketWidth: 58 | 80;
+}
+
+export interface FrontendTicketVendorWidthsResponse {
+  defaultTicketWidth: 58 | 80;
+  sellers: FrontendTicketVendorWidthRow[];
 }
 
 // ─── Special Multipliers ─────────────────────────────────────────────────────
