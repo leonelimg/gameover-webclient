@@ -1,6 +1,6 @@
 {
   "name": "gameover-print-bridge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "GameOver Loteria",
   "private": true,
   "description": "Local print bridge for GameOver tickets",
@@ -65,7 +65,7 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://updates.example.com/gameover-print-bridge"
+        "url": "https://web.pmcomercial.com/updates/print-bridge"
       }
     ]
   }

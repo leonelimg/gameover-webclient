@@ -533,15 +533,19 @@ const createTray = () => {
 };
 const configureUpdater = () => {
     autoUpdater.logger = log;
-    autoUpdater.autoDownload = false; // No descargar automáticamente
-    autoUpdater.autoInstallOnAppQuit = false; // No instalar automaticamente
+    autoUpdater.autoDownload = true; // Descargar automáticamente
+    autoUpdater.autoInstallOnAppQuit = true; // Instalar automáticamente al cerrar
     autoUpdater.on("update-available", (info) => {
         log.info(`Update available: ${info.version}`);
     });
     autoUpdater.on("update-downloaded", () => {
         log.info("Update downloaded, will install on next restart");
-        // NO llamar a quitAndInstall() automáticamente
+        autoUpdater.quitAndInstall();
     });
+    // Verificar actualizaciones periódicamente (cada 60 minutos)
+    setInterval(() => {
+        void autoUpdater.checkForUpdates();
+    }, 60 * 60 * 1000);
 };
 app.setName("GameOver Print Bridge");
 app.disableHardwareAcceleration();
@@ -559,7 +563,8 @@ app.whenReady().then(() => {
     scheduleInitialBridgeStart();
     createTray();
     openMainWindow();
-    // Deshabilitado: void autoUpdater.checkForUpdatesAndNotify();
+    // Verificar actualizaciones al iniciar
+    void autoUpdater.checkForUpdates();
 });
 app.on("before-quit", async (event) => {
     isQuitting = true;
