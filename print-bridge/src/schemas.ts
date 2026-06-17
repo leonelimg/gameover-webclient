@@ -39,7 +39,7 @@ export const ticketSchema = z.object({
   detailLines: z
     .array(
       z.object({
-        number: z.string().min(1).max(20),
+        number: z.string().min(1).max(500),
         regular: z.number().nonnegative(),
         special: z.number().nonnegative(),
         total: z.number().nonnegative()

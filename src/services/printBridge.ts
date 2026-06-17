@@ -109,6 +109,31 @@ const bridgeFetchInit = (init: RequestInit = {}): LoopbackRequestInit => ({
   targetAddressSpace: 'loopback',
 });
 
+const isLoopbackBridgeUrl = /^http:\/\/(127\.|localhost|\[::1\])/i.test(bridgeUrl);
+
+const buildLoopbackPermissionMessage = () => {
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'este sitio';
+  return [
+    'El navegador bloqueo el acceso al Print Bridge local (loopback).',
+    `Permite "Local Network Access" para ${origin} en la configuracion del navegador y vuelve a cargar la pagina.`,
+    'En Chrome/Edge abre: chrome://settings/content/localNetworkAccess'
+  ].join(' ');
+};
+
+const bridgeFetch = async (url: string, init: RequestInit = {}) => {
+  try {
+    return await fetch(url, bridgeFetchInit(init));
+  } catch (error) {
+    const isSecure = typeof window !== 'undefined' && window.isSecureContext;
+    if (isSecure && isLoopbackBridgeUrl) {
+      throw new Error(buildLoopbackPermissionMessage());
+    }
+
+    const message = error instanceof Error ? error.message : 'No se pudo conectar al Print Bridge';
+    throw new Error(message);
+  }
+};
+
 const parseResponse = async <T>(res: Response): Promise<T> => {
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
@@ -120,51 +145,51 @@ const parseResponse = async <T>(res: Response): Promise<T> => {
 
 export const printBridgeApi = {
   health: async () => {
-    const res = await fetch(`${bridgeUrl}/health`, bridgeFetchInit({
+    const res = await bridgeFetch(`${bridgeUrl}/health`, {
       headers: withBridgeHeaders(),
-    }));
+    });
     return parseResponse<{ ok: boolean; queue: PrintQueueStats }>(res);
   },
 
   printTicket: async (ticket: PrintBridgeTicket) => {
-    const res = await fetch(`${bridgeUrl}/print-ticket`, bridgeFetchInit({
+    const res = await bridgeFetch(`${bridgeUrl}/print-ticket`, {
       method: 'POST',
       headers: withBridgeHeaders(true),
       body: JSON.stringify({ ticket }),
-    }));
+    });
 
     return parseResponse<{ jobId: string; status: string }>(res);
   },
 
   testPrint: async (message: string) => {
-    const res = await fetch(`${bridgeUrl}/test-print`, bridgeFetchInit({
+    const res = await bridgeFetch(`${bridgeUrl}/test-print`, {
       method: 'POST',
       headers: withBridgeHeaders(true),
       body: JSON.stringify({ message }),
-    }));
+    });
 
     return parseResponse<{ jobId: string; status: string }>(res);
   },
 
   getJobs: async (limit = 50) => {
-    const res = await fetch(`${bridgeUrl}/jobs?limit=${limit}`, bridgeFetchInit({
+    const res = await bridgeFetch(`${bridgeUrl}/jobs?limit=${limit}`, {
       headers: withBridgeHeaders(),
-    }));
+    });
     return parseResponse<{ jobs: PrintJob[] }>(res);
   },
 
   getJob: async (id: string) => {
-    const res = await fetch(`${bridgeUrl}/jobs/${encodeURIComponent(id)}`, bridgeFetchInit({
+    const res = await bridgeFetch(`${bridgeUrl}/jobs/${encodeURIComponent(id)}`, {
       headers: withBridgeHeaders(),
-    }));
+    });
     return parseResponse<PrintJob>(res);
   },
 
   retryJob: async (id: string) => {
-    const res = await fetch(`${bridgeUrl}/jobs/${encodeURIComponent(id)}/retry`, bridgeFetchInit({
+    const res = await bridgeFetch(`${bridgeUrl}/jobs/${encodeURIComponent(id)}/retry`, {
       method: 'POST',
       headers: withBridgeHeaders(true),
-    }));
+    });
     return parseResponse<{ id: string; status: string; attempts: number }>(res);
   },
 };
