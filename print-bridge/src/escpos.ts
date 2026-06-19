@@ -108,6 +108,26 @@ const formatTicketDate = (value?: string) => {
   }).format(parsed);
 };
 
+const stripDateFromDrawLabel = (value?: string) => {
+  if (!value) {
+    return "";
+  }
+
+  const normalized = value.trim().replace(/\s+/g, " ");
+  const parts = normalized.split(/\s+-\s+/);
+  if (parts.length < 2) {
+    return normalized;
+  }
+
+  const suffix = parts.slice(1).join(" - ");
+  const looksLikeDateTime = /(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}|\d{1,2}:\d{2}|\b[ap]\.\s?m\.?\b)/i.test(suffix);
+  if (!looksLikeDateTime) {
+    return normalized;
+  }
+
+  return parts[0].trim();
+};
+
 export class EscPosBuilder {
   private chunks: Buffer[] = [];
 
@@ -185,6 +205,9 @@ export const buildTicketPrint = (ticket: TicketPayload, columns: number) => {
   const hasSpecialAmounts = detailLines.some((line) => line.special > 0);
   const drawHasSpecial = typeof ticket.multipliers?.special === "number" && ticket.multipliers.special > 0;
   const showSpecialColumn = ticket.showSpecialColumn ?? (drawHasSpecial && hasSpecialAmounts);
+  const drawName = stripDateFromDrawLabel(ticket.drawLabel ?? ticket.title ?? "");
+  const drawDate = ticket.drawDateIso ? formatTicketDate(ticket.drawDateIso) : "";
+  const ticketDate = ticket.dateIso ? formatTicketDate(ticket.dateIso) : "";
 
   b.init();
   b.align("center");
@@ -195,19 +218,21 @@ export const buildTicketPrint = (ticket: TicketPayload, columns: number) => {
   b.bold(false);
 
   b.align("left");
-  if (ticket.drawLabel || ticket.title) {
-    b.text(ticket.drawLabel ?? ticket.title ?? "");
+  if (drawName) {
+    b.bold(true).text(drawName).bold(false);
+  } else if (ticket.drawLabel || ticket.title) {
+    b.bold(true).text(ticket.drawLabel ?? ticket.title ?? "").bold(false);
   }
-  if (ticket.drawDateIso) {
-    b.text(`Fecha sorteo: ${formatTicketDate(ticket.drawDateIso)}`);
+  if (ticketDate) {
+    b.text(`Fecha ticket: ${ticketDate}`);
+  }
+  if (drawDate) {
+    b.text(`Fecha sorteo: ${drawDate}`);
   }
   const customerName = (ticket.customerName ?? "").trim() || "Anonimo";
   b.text(`Cliente: ${customerName}`);
   if (ticket.sellerName || ticket.cashier) {
-    b.text(`Puesto: ${ticket.sellerName ?? ticket.cashier}`);
-  }
-  if (!ticket.drawDateIso && ticket.dateIso) {
-    b.text(`Fecha sorteo: ${formatTicketDate(ticket.dateIso)}`);
+    b.bold(true).text(`Puesto: ${ticket.sellerName ?? ticket.cashier}`).bold(false);
   }
 
   b.text(hr(columns));

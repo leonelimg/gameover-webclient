@@ -4,6 +4,7 @@ export const GLOBAL_NUMBER_LIMIT_SETTING_KEY = 'sales.global-number-limit';
 export const USER_GLOBAL_NUMBER_LIMIT_PREFIX = 'sales.user-global-number-limit';
 export const USER_DRAW_SALE_LIMIT_PREFIX = 'sales.user-draw-sale-limit';
 let legacyUserLimitsMigrationPromise: Promise<void> | null = null;
+let legacyGlobalNumbersMigrationPromise: Promise<void> | null = null;
 
 function parseNumberLimit(value: string | null): number | null {
   if (value === null) {
@@ -104,6 +105,53 @@ async function ensureLegacyUserLimitsMigrated(): Promise<void> {
   }
 
   await legacyUserLimitsMigrationPromise;
+}
+
+async function migrateLegacyDrawRestrictedNumbersToGlobal(): Promise<void> {
+  const existingGlobalCount = await prisma.globalNumberRestriction.count();
+  if (existingGlobalCount > 0) {
+    return;
+  }
+
+  const legacyRows = await prisma.restrictedNumber.findMany({
+    select: {
+      number: true,
+      limit: true,
+    },
+  });
+
+  if (legacyRows.length === 0) {
+    return;
+  }
+
+  const lowestLimitByNumber = new Map<string, number>();
+  for (const row of legacyRows) {
+    const current = lowestLimitByNumber.get(row.number);
+    if (current === undefined || row.limit < current) {
+      lowestLimitByNumber.set(row.number, row.limit);
+    }
+  }
+
+  await prisma.$transaction(
+    Array.from(lowestLimitByNumber.entries()).map(([number, limit]) =>
+      prisma.globalNumberRestriction.upsert({
+        where: { number },
+        create: { number, limit },
+        update: { limit },
+      })
+    )
+  );
+}
+
+async function ensureLegacyGlobalNumbersMigrated(): Promise<void> {
+  if (!legacyGlobalNumbersMigrationPromise) {
+    legacyGlobalNumbersMigrationPromise = migrateLegacyDrawRestrictedNumbersToGlobal().catch((error) => {
+      legacyGlobalNumbersMigrationPromise = null;
+      throw error;
+    });
+  }
+
+  await legacyGlobalNumbersMigrationPromise;
 }
 
 export async function getGlobalNumberLimit(): Promise<number | null> {
@@ -234,4 +282,56 @@ export async function getAllUserRestrictionLimits(): Promise<
   }
 
   return limitsByUser;
+}
+
+export async function listGlobalNumberRestrictions(): Promise<Array<{ number: string; limit: number }>> {
+  await ensureLegacyGlobalNumbersMigrated();
+
+  const items = await prisma.globalNumberRestriction.findMany({
+    orderBy: { number: 'asc' },
+    select: {
+      number: true,
+      limit: true,
+    },
+  });
+
+  return items;
+}
+
+export async function getGlobalNumberRestrictionByNumber(number: string): Promise<{ number: string; limit: number } | null> {
+  await ensureLegacyGlobalNumbersMigrated();
+
+  const item = await prisma.globalNumberRestriction.findUnique({
+    where: { number },
+    select: {
+      number: true,
+      limit: true,
+    },
+  });
+
+  return item;
+}
+
+export async function upsertGlobalNumberRestriction(number: string, limit: number): Promise<{ number: string; limit: number }> {
+  await ensureLegacyGlobalNumbersMigrated();
+
+  const item = await prisma.globalNumberRestriction.upsert({
+    where: { number },
+    create: { number, limit },
+    update: { limit },
+    select: {
+      number: true,
+      limit: true,
+    },
+  });
+
+  return item;
+}
+
+export async function deleteGlobalNumberRestriction(number: string): Promise<void> {
+  await ensureLegacyGlobalNumbersMigrated();
+
+  await prisma.globalNumberRestriction.delete({
+    where: { number },
+  });
 }

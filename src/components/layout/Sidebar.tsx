@@ -125,7 +125,11 @@ const NAV_ITEMS: NavItem[] = [
         children: [
           {
             to: '/restrictions/global',
-            label: 'Global',
+            label: 'Global base',
+          },
+          {
+            to: '/restrictions/global-numbers',
+            label: 'Globales por número',
           },
           {
             to: '/restrictions/user-global',

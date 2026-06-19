@@ -21,6 +21,19 @@ object TicketFormatter {
         }
     }
 
+    private fun stripDateFromDrawLabel(value: String): String {
+        val normalized = value.trim().replace(Regex("\\s+"), " ")
+        val parts = normalized.split(Regex("\\s+-\\s+"))
+        if (parts.size < 2) return normalized
+
+        val suffix = parts.drop(1).joinToString(" - ")
+        val looksLikeDateTime = Regex("(\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4}|\\d{1,2}:\\d{2}|\\b[ap]\\.?\\s?m\\.?\\b)", RegexOption.IGNORE_CASE)
+            .containsMatchIn(suffix)
+        if (!looksLikeDateTime) return normalized
+
+        return parts.first().trim()
+    }
+
     private data class GroupedLine(
         val numbers: String,
         val amount: Double,
@@ -107,8 +120,10 @@ object TicketFormatter {
         val drawHasSpecial = specialMultiplierValue?.let { it > 0 } ?: hasSpecial
         val showSpecialColumn = drawHasSpecial && hasSpecial
         val effectiveMultiplier = specialMultiplierValue
-        val drawName = draw?.name ?: ticket.draw?.name ?: ticket.drawId
-        val drawDateStr = formatDate(draw?.closeTime ?: ticket.createdAt)
+        val rawDrawName = draw?.name ?: ticket.draw?.name ?: ticket.drawId
+        val drawName = stripDateFromDrawLabel(rawDrawName)
+        val drawDateStr = draw?.closeTime?.let(::formatDate) ?: ""
+        val ticketDateStr = formatDate(ticket.createdAt)
         val customerName = ticket.customerName.trim().ifBlank { "Anonimo" }
         val groupedLines = groupLines(ticket, showSpecialColumn)
         val footerLines = footerNote
@@ -123,10 +138,17 @@ object TicketFormatter {
             .run { applyTicketCodeSize(this, ticketCodeFontSize) }
             .boldOn().textLn(ticket.code).boldOff().normalSize()
             .alignLeft()
-            .textLn(drawName)
-            .textLn("Fecha sorteo: $drawDateStr")
+            .boldOn().textLn(drawName).boldOff()
+            .textLn("Fecha ticket: $ticketDateStr")
+            .run {
+                if (drawDateStr.isNotBlank()) {
+                    textLn("Fecha sorteo: $drawDateStr")
+                } else {
+                    this
+                }
+            }
             .textLn("Cliente: $customerName")
-            .textLn("Puesto: $sellerName")
+            .boldOn().textLn("Puesto: $sellerName").boldOff()
             .divider()
             .run {
                 if (showSpecialColumn) {

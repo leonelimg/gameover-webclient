@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/prisma.js';
-import { getGlobalNumberLimit, getUserDrawSaleLimit, getUserGlobalNumberLimit } from '../config/numberRestrictions.js';
+import { getGlobalNumberLimit, getUserDrawSaleLimit, getUserGlobalNumberLimit, listGlobalNumberRestrictions } from '../config/numberRestrictions.js';
 import { authenticate, authorizeAnyResource, authorizeResource } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { param } from '../middleware/params.js';
@@ -183,7 +183,6 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
   const [draw, globalNumberLimit, userGlobalNumberLimit, userDrawSaleLimit] = await Promise.all([
     prisma.draw.findUnique({
       where: { id: body.drawId },
-      include: { restrictedNumbers: true },
     }),
     getGlobalNumberLimit(),
     getUserGlobalNumberLimit(req.user!.sub),
@@ -231,6 +230,9 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
     }
   }
 
+  const globalRestrictions = await listGlobalNumberRestrictions();
+  const globalRestrictionByNumber = new Map(globalRestrictions.map((item) => [item.number, item.limit]));
+
   const soldGlobalByNumber = new Map<string, number>();
   const soldByUserNumber = new Map<string, number>();
   await Promise.all(
@@ -259,12 +261,10 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
   );
 
   for (const [number, requestedAmount] of requestedByNumber.entries()) {
-    const individualRestriction = draw.restrictedNumbers.find(
-      (rn: { number: string; limit: number }) => rn.number === number
-    );
-    const effectiveLimit = individualRestriction?.limit ?? userGlobalNumberLimit ?? globalNumberLimit;
-    const restrictionType = individualRestriction
-      ? 'individual'
+    const globalByNumberLimit = globalRestrictionByNumber.get(number) ?? null;
+    const effectiveLimit = globalByNumberLimit ?? userGlobalNumberLimit ?? globalNumberLimit;
+    const restrictionType = globalByNumberLimit !== null
+      ? 'global-numero'
       : userGlobalNumberLimit !== null
         ? 'global-usuario'
         : 'global';
@@ -272,7 +272,7 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
       continue;
     }
 
-    const sold = individualRestriction
+    const sold = globalByNumberLimit !== null
       ? soldGlobalByNumber.get(number) ?? 0
       : userGlobalNumberLimit !== null
         ? soldByUserNumber.get(number) ?? 0

@@ -8,6 +8,7 @@ import {
   AnnouncementPayload,
   FrontendTicketSettings,
   FrontendTicketVendorWidthsResponse,
+  GlobalNumberRestrictionItem,
   GlobalNumberRestrictionSettings,
   CurrentUserRestrictionSettings,
   RolePermissionRow,
@@ -184,6 +185,26 @@ export const numberRestrictionsApi = {
     });
     return res.data;
   },
+  listGlobalNumbers: async (): Promise<GlobalNumberRestrictionItem[]> => {
+    const res = await api.get<{ items: GlobalNumberRestrictionItem[] }>('/api/number-restrictions/global-numbers');
+    return res.data.items;
+  },
+  upsertGlobalNumber: async (number: string, limit: number): Promise<GlobalNumberRestrictionItem> => {
+    const res = await api.post<GlobalNumberRestrictionItem>('/api/number-restrictions/global-numbers', {
+      number,
+      limit,
+    });
+    return res.data;
+  },
+  updateGlobalNumber: async (number: string, limit: number): Promise<GlobalNumberRestrictionItem> => {
+    const res = await api.patch<GlobalNumberRestrictionItem>(`/api/number-restrictions/global-numbers/${encodeURIComponent(number)}`, {
+      limit,
+    });
+    return res.data;
+  },
+  deleteGlobalNumber: async (number: string): Promise<void> => {
+    await api.delete(`/api/number-restrictions/global-numbers/${encodeURIComponent(number)}`);
+  },
 };
 
 export const frontendSettingsApi = {
@@ -328,13 +349,6 @@ export const drawsApi = {
   },
   delete: async (id: string): Promise<void> => {
     await api.delete(`/api/draws/${id}`);
-  },
-  addRestrictedNumber: async (drawId: string, number: string, limit: number) => {
-    const res = await api.post(`/api/draws/${drawId}/restricted-numbers`, { number, limit });
-    return res.data;
-  },
-  removeRestrictedNumber: async (drawId: string, number: string) => {
-    await api.delete(`/api/draws/${drawId}/restricted-numbers/${encodeURIComponent(number)}`);
   },
 };
 

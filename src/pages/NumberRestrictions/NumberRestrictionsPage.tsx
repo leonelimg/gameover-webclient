@@ -53,7 +53,7 @@ export default function NumberRestrictionsPage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Restricción global de números</h1>
         <p className="text-sm text-slate-500">
-          Define el límite base por número para todos los sorteos. Si un número tiene restricción individual en un sorteo, esa individual prevalece.
+          Define el límite base por número. Esta regla aplica cuando el número no tiene una restricción específica en Globales por número ni una restricción global por usuario.
         </p>
       </div>
 
@@ -85,7 +85,7 @@ export default function NumberRestrictionsPage() {
           />
 
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            La restricción global aplica a todos los números dentro de cada sorteo. Si un número tiene límite individual configurado en Sorteos, ese límite individual es el que se usa.
+            Prioridad de reglas al vender: Globales por número, luego Global por usuario y finalmente esta restricción global base.
           </div>
 
           <div className="flex justify-end">

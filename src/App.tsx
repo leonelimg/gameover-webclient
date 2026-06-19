@@ -22,6 +22,7 @@ import CashMovementsPage from '@/pages/CashMovements/CashMovementsPage';
 import AnnouncementsPage from '@/pages/Announcements/AnnouncementsPage';
 import FrontendSettingsPage from '@/pages/FrontendSettings/FrontendSettingsPage';
 import NumberRestrictionsPage from '@/pages/NumberRestrictions/NumberRestrictionsPage';
+import GlobalNumberRestrictionsPage from '@/pages/Restrictions/GlobalNumberRestrictionsPage';
 import UserGlobalRestrictionsPage from '@/pages/Restrictions/UserGlobalRestrictionsPage';
 import UserSalesRestrictionsPage from '@/pages/Restrictions/UserSalesRestrictionsPage';
 
@@ -48,6 +49,7 @@ export default function App() {
             <Route path="/plans" element={<ProtectedByPermission resourceKey="/plans" element={<PlansPage />} />} />
             <Route path="/draws" element={<ProtectedByPermission resourceKey="/draws" element={<DrawsPage />} />} />
             <Route path="/restrictions/global" element={<ProtectedByPermission resourceKey="/restrictions/global" element={<NumberRestrictionsPage />} />} />
+            <Route path="/restrictions/global-numbers" element={<ProtectedByPermission resourceKey="/restrictions/global-numbers" element={<GlobalNumberRestrictionsPage />} />} />
             <Route path="/restrictions/user-global" element={<ProtectedByPermission resourceKey="/restrictions/user-global" element={<UserGlobalRestrictionsPage />} />} />
             <Route path="/restrictions/user-sales-limit" element={<ProtectedByPermission resourceKey="/restrictions/user-sales-limit" element={<UserSalesRestrictionsPage />} />} />
             <Route path="/number-restrictions" element={<ProtectedByPermission resourceKey="/restrictions/global" element={<Navigate to="/restrictions/global" replace />} />} />

@@ -2,14 +2,18 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/prisma.js';
 import {
+  deleteGlobalNumberRestriction,
   getAllUserRestrictionLimits,
   getGlobalNumberLimit,
+  getGlobalNumberRestrictionByNumber,
   getUserDrawSaleLimit,
   getUserGlobalNumberLimit,
   GLOBAL_NUMBER_LIMIT_SETTING_KEY,
+  listGlobalNumberRestrictions,
   setGlobalNumberLimit,
   setUserDrawSaleLimit,
   setUserGlobalNumberLimit,
+  upsertGlobalNumberRestriction,
 } from '../config/numberRestrictions.js';
 import { authenticate, authorizeAnyResource, authorizeResource } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
@@ -24,6 +28,15 @@ const globalNumberLimitSchema = z.object({
 
 const userLimitSchema = z.object({
   limit: z.number().positive().nullable(),
+});
+
+const globalNumberRestrictionItemSchema = z.object({
+  number: z.string().regex(/^\d{2}$/, 'El número debe tener exactamente 2 dígitos.'),
+  limit: z.number().positive(),
+});
+
+const globalNumberRestrictionUpdateSchema = z.object({
+  limit: z.number().positive(),
 });
 
 router.get('/global', authorizeAnyResource('/number-restrictions', '/restrictions/global', '/sales', '/draws/list'), async (_req, res) => {
@@ -58,6 +71,89 @@ router.patch('/global', authorizeAnyResource('/number-restrictions', '/restricti
   });
 
   res.json({ globalLimit });
+});
+
+router.get('/global-numbers', authorizeAnyResource('/restrictions/global-numbers', '/restrictions/global', '/sales', '/draws/list'), async (_req, res) => {
+  const items = await listGlobalNumberRestrictions();
+  res.json({ items });
+});
+
+router.post(
+  '/global-numbers',
+  authorizeResource('/restrictions:update-global-numbers'),
+  validate(globalNumberRestrictionItemSchema),
+  async (req, res) => {
+    const body = req.body as z.infer<typeof globalNumberRestrictionItemSchema>;
+    const item = await upsertGlobalNumberRestriction(body.number, body.limit);
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'UPSERT_GLOBAL_NUMBER_RESTRICTION',
+        entity: 'GlobalNumberRestriction',
+        entityId: item.number,
+        userId: req.user!.sub,
+        details: item,
+      },
+    });
+
+    res.status(201).json(item);
+  }
+);
+
+router.patch(
+  '/global-numbers/:number',
+  authorizeResource('/restrictions:update-global-numbers'),
+  validate(globalNumberRestrictionUpdateSchema),
+  async (req, res) => {
+    const number = param(req, 'number');
+    if (!/^\d{2}$/.test(number)) {
+      res.status(400).json({ message: 'El número debe tener exactamente 2 dígitos.' });
+      return;
+    }
+
+    const body = req.body as z.infer<typeof globalNumberRestrictionUpdateSchema>;
+    const item = await upsertGlobalNumberRestriction(number, body.limit);
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'UPDATE_GLOBAL_NUMBER_RESTRICTION',
+        entity: 'GlobalNumberRestriction',
+        entityId: item.number,
+        userId: req.user!.sub,
+        details: item,
+      },
+    });
+
+    res.json(item);
+  }
+);
+
+router.delete('/global-numbers/:number', authorizeResource('/restrictions:update-global-numbers'), async (req, res) => {
+  const number = param(req, 'number');
+  if (!/^\d{2}$/.test(number)) {
+    res.status(400).json({ message: 'El número debe tener exactamente 2 dígitos.' });
+    return;
+  }
+
+  const existing = await getGlobalNumberRestrictionByNumber(number);
+  if (!existing) {
+    res.status(404).json({ message: 'La restricción no existe.' });
+    return;
+  }
+
+  await deleteGlobalNumberRestriction(number);
+
+  await prisma.auditLog.create({
+    data: {
+      action: 'DELETE_GLOBAL_NUMBER_RESTRICTION',
+      entity: 'GlobalNumberRestriction',
+      entityId: number,
+      userId: req.user!.sub,
+      details: existing,
+    },
+  });
+
+  res.status(204).send();
 });
 
 router.get('/users-limits', authorizeAnyResource('/restrictions/user-global', '/restrictions/user-sales-limit'), async (req, res) => {

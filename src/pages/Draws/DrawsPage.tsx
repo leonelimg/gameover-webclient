@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Edit, Trash2, AlertCircle, Zap, CalendarDays, LayoutGrid, List } from 'lucide-react';
+import { Plus, Edit, Trash2, Zap, CalendarDays, LayoutGrid, List } from 'lucide-react';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
@@ -112,7 +112,6 @@ export default function DrawsPage() {
   const canCreateDraw = hasPermission('/draws:create');
   const canUpdateDraw = hasPermission('/draws:update');
   const canDeleteDraw = hasPermission('/draws:delete');
-  const canManageRestrictedNumbers = hasPermission('/draws:restricted-numbers');
   const canOpenDrawModal = canCreateDraw || canUpdateDraw;
   const [draws, setDraws] = useState<Draw[]>([]);
   const [totalDraws, setTotalDraws] = useState(0);
@@ -242,11 +241,6 @@ export default function DrawsPage() {
   });
   const [formError, setFormError] = useState('');
 
-  // Restricted numbers editing
-  const [rnDraw, setRnDraw] = useState<Draw | null>(null);
-  const [rnNumber, setRnNumber] = useState('');
-  const [rnLimit, setRnLimit] = useState('');
-
   const openCreate = () => {
     setEditingDraw(null);
     const now = new Date();
@@ -343,35 +337,12 @@ export default function DrawsPage() {
     } catch { /* ignore */ }
   };
 
-  const addRestrictedNumber = async () => {
-    if (!rnDraw || !rnNumber || !rnLimit) return;
-    const limit = parseInt(rnLimit);
-    if (isNaN(limit) || limit <= 0) return;
-    try {
-      await drawsApi.addRestrictedNumber(rnDraw.id, rnNumber, limit);
-      const updated = await drawsApi.get(rnDraw.id);
-      setDraws((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
-      setRnDraw(updated);
-      setRnNumber('');
-      setRnLimit('');
-    } catch { /* ignore */ }
-  };
-
-  const removeRestrictedNumber = async (draw: Draw, number: string) => {
-    try {
-      await drawsApi.removeRestrictedNumber(draw.id, number);
-      const updated = await drawsApi.get(draw.id);
-      setDraws((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
-      setRnDraw(updated);
-    } catch { /* ignore */ }
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Sorteos</h1>
-          <p className="text-sm text-slate-500">Gestión de sorteos y números restringidos</p>
+          <p className="text-sm text-slate-500">Gestión de sorteos</p>
         </div>
         {canCreateDraw && (
           <Button onClick={openCreate}>
@@ -517,37 +488,6 @@ export default function DrawsPage() {
                   )}
                 </div>
 
-                {/* Restricted numbers */}
-                <div className="mt-3 pt-3 border-t border-slate-100">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-medium text-slate-500 flex items-center gap-1">
-                      <AlertCircle size={12} />
-                      Números restringidos ({draw.restrictedNumbers.length})
-                    </span>
-                    {canManageRestrictedNumbers && (
-                      <button
-                        onClick={() => setRnDraw(draw)}
-                        className="text-xs text-blue-600 hover:underline"
-                      >
-                        Gestionar
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {draw.restrictedNumbers.map((rn) => (
-                      <span
-                        key={rn.number}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-700 text-xs rounded-md font-mono"
-                      >
-                        {rn.number}
-                        <span className="text-red-400">≤{rn.limit}</span>
-                      </span>
-                    ))}
-                    {draw.restrictedNumbers.length === 0 && (
-                      <span className="text-xs text-slate-400">Sin restricciones</span>
-                    )}
-                  </div>
-                </div>
               </CardBody>
             </Card>
           ))}
@@ -564,7 +504,6 @@ export default function DrawsPage() {
                   <th className="px-4 py-3 text-left font-medium text-slate-600">Bloqueo previo</th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">Ganador</th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">Multiplicador</th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">Restringidos</th>
                   <th className="px-4 py-3 text-right font-medium text-slate-600">Acciones</th>
                 </tr>
               </thead>
@@ -595,19 +534,6 @@ export default function DrawsPage() {
                       ) : (
                         <span className="text-slate-400">Sin multiplicador</span>
                       )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-slate-600">{draw.restrictedNumbers.length}</span>
-                        {canManageRestrictedNumbers && (
-                          <button
-                            onClick={() => setRnDraw(draw)}
-                            className="text-xs text-blue-600 hover:underline"
-                          >
-                            Gestionar
-                          </button>
-                        )}
-                      </div>
                     </td>
                     <td className="px-4 py-3">
                       {(canUpdateDraw || canDeleteDraw) && (
@@ -766,63 +692,6 @@ export default function DrawsPage() {
         </Modal>
       )}
 
-      {/* Restricted Numbers Modal */}
-      {canManageRestrictedNumbers && (
-        <Modal
-          open={!!rnDraw}
-          onClose={() => setRnDraw(null)}
-          title={`Números Restringidos — ${rnDraw?.name ?? ''}`}
-          size="md"
-        >
-          <div className="p-6 space-y-4">
-          <p className="text-sm text-slate-500">
-            Define números con límites máximos de venta acumulada para toda la plataforma.
-          </p>
-
-          <div className="flex gap-2">
-            <Input
-              placeholder="Número (ej: 00)"
-              value={rnNumber}
-              onChange={(e) => setRnNumber(e.target.value.replace(/\D/g, '').slice(0, 2))}
-              className="w-28"
-            />
-            <Input
-              type="number"
-              placeholder="Límite (C$)"
-              value={rnLimit}
-              onChange={(e) => setRnLimit(e.target.value)}
-              className="flex-1"
-            />
-            <Button onClick={addRestrictedNumber} size="md">
-              Agregar
-            </Button>
-          </div>
-
-          <div className="space-y-2">
-            {rnDraw?.restrictedNumbers.map((rn) => (
-              <div
-                key={rn.number}
-                className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="font-mono font-bold text-slate-800">{rn.number}</span>
-                  <span className="text-sm text-slate-500">Límite: C$ {rn.limit}</span>
-                </div>
-                <button
-                  onClick={() => rnDraw && removeRestrictedNumber(rnDraw, rn.number)}
-                  className="text-red-500 hover:text-red-700"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
-            {rnDraw?.restrictedNumbers.length === 0 && (
-              <p className="text-slate-400 text-sm text-center py-4">Sin números restringidos</p>
-            )}
-          </div>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }

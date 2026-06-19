@@ -53,7 +53,7 @@ const rnInclude = {
 
 // GET /api/draws
 router.get('/', authorizeAnyResource('/draws/list', '/draws', '/sales', '/ticket-payments', '/reports/sales-stats', '/reports/balance-breakdown', '/reports/sales-by-user', '/reports/draw-lists', '/reports/commissions'), async (_req, res) => {
-  const draws = await prisma.draw.findMany({ include: rnInclude, orderBy: { closeTime: 'desc' } });
+  const draws = await prisma.draw.findMany({ include: rnInclude, orderBy: { closeTime: 'asc' } });
   res.json(draws.map((draw) => withResolvedStatus(draw)));
 });
 
@@ -99,7 +99,7 @@ router.get('/search', authorizeAnyResource('/draws/list', '/draws', '/sales', '/
   const items = await prisma.draw.findMany({
     where,
     include: rnInclude,
-    orderBy: { closeTime: 'desc' },
+    orderBy: { closeTime: 'asc' },
     skip,
     take: pageSize,
   });
@@ -172,22 +172,22 @@ router.delete('/:id', authorizeResource('/draws:delete'), async (req, res) => {
 
 // POST /api/draws/:id/restricted-numbers
 router.post('/:id/restricted-numbers', authorizeResource('/draws:restricted-numbers'), validate(rnSchema), async (req, res) => {
-  const drawId = param(req, 'id');
+  param(req, 'id');
   const body = req.body as z.infer<typeof rnSchema>;
-  const rn = await prisma.restrictedNumber.upsert({
-    where: { drawId_number: { drawId, number: body.number } },
+  const rn = await prisma.globalNumberRestriction.upsert({
+    where: { number: body.number },
     update: { limit: body.limit },
-    create: { drawId, number: body.number, limit: body.limit },
+    create: { number: body.number, limit: body.limit },
   });
   res.status(201).json(rn);
 });
 
 // DELETE /api/draws/:id/restricted-numbers/:number
 router.delete('/:id/restricted-numbers/:number', authorizeResource('/draws:restricted-numbers'), async (req, res) => {
-  const drawId = param(req, 'id');
+  param(req, 'id');
   const number = param(req, 'number');
-  await prisma.restrictedNumber.delete({
-    where: { drawId_number: { drawId, number } },
+  await prisma.globalNumberRestriction.delete({
+    where: { number },
   });
   res.status(204).send();
 });

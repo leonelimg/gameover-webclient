@@ -36,6 +36,11 @@ export interface GlobalNumberRestrictionSettings {
   globalLimit: number | null;
 }
 
+export interface GlobalNumberRestrictionItem {
+  number: string;
+  limit: number;
+}
+
 export interface CurrentUserRestrictionSettings {
   userGlobalLimit: number | null;
   userDrawSaleLimit: number | null;
@@ -116,6 +121,7 @@ export interface Draw {
   minutosPreviosCierre: number;
   winnerNumber?: string;
   status: DrawStatus;
+  // Transitional compatibility field while legacy endpoints are being phased out.
   restrictedNumbers: RestrictedNumber[];
   specialMultiplier?: { id: string; name: string; value: number } | null;
   createdAt: string;

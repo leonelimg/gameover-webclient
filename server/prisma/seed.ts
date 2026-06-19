@@ -141,13 +141,19 @@ async function main() {
       closeTime,
       minutosPreviosCierre: 10,
       status: 'abierto',
-      restrictedNumbers: {
-        create: [
-          { number: '00', limit: 500 },
-          { number: '11', limit: 300 },
-        ],
-      },
     },
+  });
+
+  await prisma.globalNumberRestriction.upsert({
+    where: { number: '00' },
+    update: { limit: 500 },
+    create: { number: '00', limit: 500 },
+  });
+
+  await prisma.globalNumberRestriction.upsert({
+    where: { number: '11' },
+    update: { limit: 300 },
+    create: { number: '11', limit: 300 },
   });
 
   console.log('✅  Seed complete');

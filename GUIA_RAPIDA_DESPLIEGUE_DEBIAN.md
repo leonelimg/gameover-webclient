@@ -233,7 +233,91 @@ sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d web.pmcomercial.com
 ```
 
-## 4) Checklist Rapido de Produccion
+## 4) Actualizar Despues de Cambios (Frontend + Backend + Base de Datos)
+
+Usa esta seccion cuando publicas una nueva version que trae cambios en UI, API y/o Prisma.
+
+### 4.1 Preparacion (aplica a ambos escenarios)
+
+1. Respalda la base de datos antes de actualizar.
+2. Verifica que tienes acceso al servidor y permisos para reiniciar servicios.
+3. Revisa rapidamente variables de entorno en:
+    - `server/.env` (DATABASE_URL, JWT_SECRET, JWT_REFRESH_SECRET, CORS_ORIGIN)
+    - `.env` de frontend (VITE_API_URL)
+
+### 4.2 Actualizacion con Docker Compose
+
+```bash
+cd /opt/gameover-webclient
+git pull
+
+# Recomendado: aplicar migraciones de Prisma en modo deploy
+docker compose run --rm api sh -lc "cd /app/server && npx prisma migrate deploy && npx prisma generate"
+
+# Si no usas migraciones versionadas y solo sincronizas schema:
+# docker compose run --rm api sh -lc "cd /app/server && npx prisma db push && npx prisma generate"
+
+# Rebuild y restart de servicios
+docker compose up -d --build
+
+# Verificar estado
+docker compose ps
+docker compose logs -f api
+```
+
+### 4.3 Actualizacion sin Docker (Node + systemd + Nginx)
+
+```bash
+cd /opt/gameover-webclient
+git pull
+
+# Backend
+cd /opt/gameover-webclient/server
+npm ci
+
+# Recomendado en produccion
+npx prisma migrate deploy
+npx prisma generate
+
+# Si aun no manejas migraciones versionadas:
+# npx prisma db push
+# npx prisma generate
+
+npm run build
+sudo systemctl restart gameover-api
+sudo systemctl status gameover-api --no-pager
+
+# Frontend
+cd /opt/gameover-webclient
+npm ci
+npm run build
+sudo systemctl reload nginx
+```
+
+### 4.4 Validacion post-actualizacion
+
+```bash
+# API viva (401 en /api/auth/me es valido sin token)
+curl -i http://127.0.0.1:4000/api/auth/me
+
+# Frontend publicado
+curl -I http://127.0.0.1
+```
+
+Adicionalmente valida en la aplicacion:
+
+- Navegacion de frontend en modulos afectados.
+- Flujo de venta/facturacion.
+- Endpoints nuevos o cambiados.
+- Reglas de base de datos que dependan de Prisma.
+
+### 4.5 Recomendacion importante sobre Prisma en produccion
+
+- Preferir `prisma migrate deploy` cuando ya existe carpeta de migraciones en el repo.
+- Usar `prisma db push` solo como alternativa controlada cuando no trabajas con migraciones versionadas.
+- Siempre ejecutar `prisma generate` despues de cambios de schema.
+
+## 5) Checklist Rapido de Produccion
 
 - Cambiar secrets JWT por valores robustos
 - Restringir puertos con firewall (`ufw`)
@@ -241,7 +325,7 @@ sudo certbot --nginx -d web.pmcomercial.com
 - Verificar backups de PostgreSQL
 - Revisar logs (`docker compose logs` o `journalctl -u gameover-api -f`)
 
-## 5) Solucion de Problemas Rapida
+## 6) Solucion de Problemas Rapida
 
 - API no inicia: valida `DATABASE_URL` y estado de PostgreSQL
 - Front no conecta API: revisa `VITE_API_URL` y `CORS_ORIGIN`
