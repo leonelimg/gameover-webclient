@@ -1,6 +1,6 @@
 {
   "name": "gameover-print-bridge",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "author": "GameOver Loteria",
   "private": true,
   "description": "Local print bridge for GameOver tickets",

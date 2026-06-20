@@ -568,10 +568,25 @@ export default function SalesPage() {
       } else {
         setLastTicket(null);
       }
-      setNativePrintMsg('');
-      setNativePrintJobId('');
-      setNativePrintJob(null);
-      setNativePrintStatusError('');
+
+      // Trigger native print automatically after a successful sale.
+      try {
+        setNativePrintStatusError('');
+        setNativePrintJob(null);
+        const printPayload = await mapSaleTicketToPrintBridge({
+          ticket,
+          draw: selectedDraw,
+          user,
+        });
+        const result = await printBridgeApi.printTicket(printPayload);
+        setNativePrintJobId(result.jobId);
+        setNativePrintMsg(`En cola para imprimir (Job: ${result.jobId})`);
+      } catch (printErr: unknown) {
+        setNativePrintJobId('');
+        const printMessage = printErr instanceof Error ? printErr.message : 'No se pudo imprimir en bridge local';
+        setNativePrintMsg(`Venta registrada, pero fallo la impresion nativa: ${printMessage}`);
+      }
+
       setCustomerName('');
       setLines([{ id: generateId(), number: '', amount: '', specialAmount: '' }]);
       refreshDrawData(selectedDrawId);

@@ -30,6 +30,8 @@ const drawSearchQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(12),
 });
 
+const DRAWS_TIMEZONE_OFFSET = '-06:00';
+
 function resolveStatus(closeTime: string | Date, minutosPreviosCierre: number, winner?: string | null): DrawStatusValue {
   if (winner) return 'finalizado';
   const now = Date.now();
@@ -44,6 +46,34 @@ function withResolvedStatus<T extends { closeTime: Date; minutosPreviosCierre: n
     ...draw,
     status: resolveStatus(draw.closeTime, draw.minutosPreviosCierre, draw.winnerNumber),
   };
+}
+
+function parseDateYmdToUtc(dateValue: string, endOfDay: boolean): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  const overflowCheck = new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
+  if (
+    overflowCheck.getUTCFullYear() !== year ||
+    overflowCheck.getUTCMonth() !== month - 1 ||
+    overflowCheck.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  const boundaryTime = endOfDay ? '23:59:59.999' : '00:00:00.000';
+  const parsed = new Date(`${dateValue}T${boundaryTime}${DRAWS_TIMEZONE_OFFSET}`);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
 }
 
 const rnInclude = {
@@ -84,11 +114,26 @@ router.get('/search', authorizeAnyResource('/draws/list', '/draws', '/sales', '/
   }
 
   if (fromDate) {
-    where.closeTime!.gte = new Date(`${fromDate}T00:00:00.000`);
+    const parsed = parseDateYmdToUtc(fromDate, false);
+    if (!parsed) {
+      res.status(400).json({ message: 'fromDate inválida. Use formato YYYY-MM-DD.' });
+      return;
+    }
+    where.closeTime!.gte = parsed;
   }
 
   if (toDate) {
-    where.closeTime!.lte = new Date(`${toDate}T23:59:59.999`);
+    const parsed = parseDateYmdToUtc(toDate, true);
+    if (!parsed) {
+      res.status(400).json({ message: 'toDate inválida. Use formato YYYY-MM-DD.' });
+      return;
+    }
+    where.closeTime!.lte = parsed;
+  }
+
+  if (where.closeTime?.gte && where.closeTime?.lte && where.closeTime.gte > where.closeTime.lte) {
+    res.status(400).json({ message: 'El rango de fechas es inválido.' });
+    return;
   }
 
   const total = await prisma.draw.count({ where });
