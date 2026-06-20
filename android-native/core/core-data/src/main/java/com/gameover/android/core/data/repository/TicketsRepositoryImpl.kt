@@ -5,7 +5,6 @@ import com.gameover.android.core.domain.repository.CreateTicketLine
 import com.gameover.android.core.domain.repository.DataRefreshNotifier
 import com.gameover.android.core.domain.repository.TicketsRepository
 import com.gameover.android.core.network.api.TicketsApi
-import com.gameover.android.core.network.dto.CancelTicketRequest
 import com.gameover.android.core.network.dto.CreateTicketLineRequestDto
 import com.gameover.android.core.network.dto.CreateTicketRequest
 import com.gameover.android.core.network.mapper.toDomain
@@ -64,7 +63,12 @@ class TicketsRepositoryImpl @Inject constructor(
     }
 
     override suspend fun cancelTicket(id: String, reason: String?): Ticket = withContext(Dispatchers.IO) {
-        val response = ticketsApi.cancelTicket(id, CancelTicketRequest(reason))
+        val payload = reason
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { mapOf("reason" to it) }
+            ?: emptyMap()
+        val response = ticketsApi.cancelTicket(id, payload)
         if (!response.isSuccessful) {
             val errorBody = response.errorBody()?.string() ?: ""
             val msg = try {

@@ -24,6 +24,6 @@ interface TicketsApi {
     @PATCH("api/tickets/{id}/cancel")
     suspend fun cancelTicket(
         @Path("id") id: String,
-        @Body request: CancelTicketRequest,
+        @Body request: Map<String, String>,
     ): Response<TicketDto>
 }
