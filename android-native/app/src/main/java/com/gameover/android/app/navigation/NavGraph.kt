@@ -3,11 +3,15 @@ package com.gameover.android.app.navigation
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -61,6 +65,13 @@ fun AppNavGraph(
     val navController = rememberNavController()
     val isAuthenticated by sessionManager.isAuthenticated.collectAsState(initial = null)
     var currentUser by remember { mutableStateOf<User?>(null) }
+
+    if (isAuthenticated == null) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
 
     // Watch session: navigate to login when session is cleared
     LaunchedEffect(isAuthenticated) {
@@ -130,6 +141,7 @@ fun AppNavGraph(
                 }
             }
         },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
         NavHost(
             navController = navController,

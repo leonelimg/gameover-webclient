@@ -60,7 +60,7 @@ export const ticketSchema = z.object({
     paid: z.number().nonnegative().optional(),
     change: z.number().nonnegative().optional()
   }),
-  notes: z.array(z.string().max(120)).max(30).optional(),
+  notes: z.array(z.string().max(500)).max(200).optional(),
   qrText: z.string().max(300).optional(),
   footer: z.array(z.string().max(120)).max(20).optional()
 });

@@ -33,6 +33,7 @@ val GoDarkOnPrimary = Color.White
 
 // Status Colors
 val GoSuccess = Color(0xFF43A047)
+val GoSuccessDark = Color(0xFF2E7D32)
 val GoSuccessLight = Color(0xFFAED581)
 val GoWarning = Color(0xFFFFA726)
 val GoWarningLight = Color(0xFFFFD54F)

@@ -6,6 +6,7 @@ import com.gameover.android.core.data.local.TokenDataStore
 import com.gameover.android.core.domain.repository.CreateTicketLine
 import com.gameover.android.core.domain.repository.AuthRepository
 import com.gameover.android.core.domain.repository.DrawsRepository
+import com.gameover.android.core.domain.repository.FrontendSettingsRepository
 import com.gameover.android.core.domain.repository.OfflineQueueRepository
 import com.gameover.android.core.domain.repository.TicketsRepository
 import com.gameover.android.core.domain.usecase.CreateTicketUseCase
@@ -35,6 +36,7 @@ class SalesViewModel @Inject constructor(
     private val bluetoothPrinterManager: BluetoothPrinterManager,
     private val tokenDataStore: TokenDataStore,
     private val authRepository: AuthRepository,
+    private val frontendSettingsRepository: FrontendSettingsRepository,
     private val ticketsRepository: TicketsRepository,
 ) : ViewModel() {
 
@@ -151,8 +153,22 @@ class SalesViewModel @Inject constructor(
                 ?: currentUser?.fullName
                 ?: currentUser?.username
                 ?: "Caja"
+            val appearanceSettings = runCatching { frontendSettingsRepository.getTicketAppearance() }.getOrNull()
+            val hasSpecialAmounts = ticket.lines.any { (it.specialAmount ?: 0.0) > 0 }
+            val specialMultiplier = draw?.specialMultiplier?.value ?: ticket.draw?.specialMultiplier?.value
+            val drawUsesSpecial = specialMultiplier?.let { it > 0 } ?: hasSpecialAmounts
+            val showSpecialColumn = drawUsesSpecial && hasSpecialAmounts
+            val effectiveMultiplier = if (showSpecialColumn && specialMultiplier != null) specialMultiplier else null
 
-            val data = TicketFormatter.format(ticket = ticket, draw = draw, sellerName = sellerName)
+            val data = TicketFormatter.format(
+                ticket = ticket,
+                draw = draw,
+                sellerName = sellerName,
+                ticketTitle = appearanceSettings?.ticketTitle ?: "GameOver Lotería",
+                footerNote = appearanceSettings?.footerNote.orEmpty(),
+                effectiveMultiplier = effectiveMultiplier,
+                ticketCodeFontSize = appearanceSettings?.ticketCodeFontSize ?: 32,
+            )
             val result = bluetoothPrinterManager.print(data)
             if (result.isSuccess) {
                 val updated = runCatching { ticketsRepository.markPrinted(ticket.id) }.getOrNull()
@@ -173,6 +189,32 @@ class SalesViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    suspend fun getTicketLinesForSharing(): List<TicketFormatter.TicketTextLine>? {
+        val ticket = _uiState.value.lastTicket ?: return null
+        val draw = _uiState.value.draws.find { it.id == ticket.drawId }
+        val currentUser = authRepository.getStoredUser().first()
+        val sellerName = ticket.seller?.fullName
+            ?: currentUser?.fullName
+            ?: currentUser?.username
+            ?: "Caja"
+        val appearanceSettings = runCatching { frontendSettingsRepository.getTicketAppearance() }.getOrNull()
+        val hasSpecialAmounts = ticket.lines.any { (it.specialAmount ?: 0.0) > 0 }
+        val specialMultiplier = draw?.specialMultiplier?.value ?: ticket.draw?.specialMultiplier?.value
+        val drawUsesSpecial = specialMultiplier?.let { it > 0 } ?: hasSpecialAmounts
+        val showSpecialColumn = drawUsesSpecial && hasSpecialAmounts
+        val effectiveMultiplier = if (showSpecialColumn && specialMultiplier != null) specialMultiplier else null
+
+        return TicketFormatter.getTicketLines(
+            ticket = ticket,
+            draw = draw,
+            sellerName = sellerName,
+            ticketTitle = appearanceSettings?.ticketTitle ?: "GameOver Lotería",
+            footerNote = appearanceSettings?.footerNote.orEmpty(),
+            effectiveMultiplier = effectiveMultiplier,
+            ticketCodeFontSize = appearanceSettings?.ticketCodeFontSize ?: 32,
+        )
     }
 
     fun sell() {

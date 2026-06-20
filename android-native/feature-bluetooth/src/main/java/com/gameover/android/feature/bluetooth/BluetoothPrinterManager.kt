@@ -60,7 +60,11 @@ class BluetoothPrinterManager @Inject constructor(
             return emptyList()
         }
         return try {
-            bluetoothAdapter?.bondedDevices?.toList() ?: emptyList()
+            bluetoothAdapter?.bondedDevices?.filter { device ->
+                val bClass = device.bluetoothClass
+                bClass?.majorDeviceClass == android.bluetooth.BluetoothClass.Device.Major.IMAGING ||
+                bClass?.hasService(android.bluetooth.BluetoothClass.Service.RENDER) == true
+            } ?: emptyList()
         } catch (_: SecurityException) {
             _connectionState.value = BtState.Error("Permiso Bluetooth denegado")
             emptyList()

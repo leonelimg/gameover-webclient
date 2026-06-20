@@ -43,6 +43,7 @@ class TicketDetailViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             currentUser = authRepository.getStoredUser().first()
+            _uiState.update { it.copy(canCancel = canCancelTicket()) }
             loadTicket()
         }
     }
@@ -107,20 +108,7 @@ class TicketDetailViewModel @Inject constructor(
                     return@launch
                 }
 
-                val draw = runCatching { drawsRepository.getDraws().find { it.id == ticket.drawId } }.getOrNull()
-                val sellerName = ticket.seller?.fullName
-                    ?: currentUser?.fullName
-                    ?: currentUser?.username
-                    ?: "Caja"
-                val appearanceSettings = runCatching { frontendSettingsRepository.getTicketAppearance() }.getOrNull()
-                val data = TicketFormatter.format(
-                    ticket = ticket,
-                    draw = draw,
-                    sellerName = sellerName,
-                    ticketTitle = appearanceSettings?.ticketTitle ?: "GameOver Lotería",
-                    footerNote = appearanceSettings?.footerNote.orEmpty(),
-                    ticketCodeFontSize = appearanceSettings?.ticketCodeFontSize ?: 32,
-                )
+                val data = prepareTicketData(ticket)
                 val printResult = bluetoothPrinterManager.print(data)
                 if (printResult.isFailure) {
                     _uiState.update {
@@ -138,6 +126,55 @@ class TicketDetailViewModel @Inject constructor(
                 _uiState.update { it.copy(isMarkingPrinted = false, error = e.message) }
             }
         }
+    }
+
+    private suspend fun prepareTicketData(ticket: com.gameover.android.core.domain.model.Ticket): ByteArray {
+        val draw = runCatching { drawsRepository.getDraws().find { it.id == ticket.drawId } }.getOrNull()
+        val sellerName = ticket.seller?.fullName
+            ?: currentUser?.fullName
+            ?: currentUser?.username
+            ?: "Caja"
+        val appearanceSettings = runCatching { frontendSettingsRepository.getTicketAppearance() }.getOrNull()
+        val hasSpecialAmounts = ticket.lines.any { (it.specialAmount ?: 0.0) > 0 }
+        val specialMultiplier = draw?.specialMultiplier?.value ?: ticket.draw?.specialMultiplier?.value
+        val drawUsesSpecial = specialMultiplier?.let { it > 0 } ?: hasSpecialAmounts
+        val showSpecialColumn = drawUsesSpecial && hasSpecialAmounts
+        val effectiveMultiplier = if (showSpecialColumn && specialMultiplier != null) specialMultiplier else null
+        
+        return TicketFormatter.format(
+            ticket = ticket,
+            draw = draw,
+            sellerName = sellerName,
+            ticketTitle = appearanceSettings?.ticketTitle ?: "GameOver Lotería",
+            footerNote = appearanceSettings?.footerNote.orEmpty(),
+            effectiveMultiplier = effectiveMultiplier,
+            ticketCodeFontSize = appearanceSettings?.ticketCodeFontSize ?: 32,
+        )
+    }
+
+    suspend fun getTicketLinesForSharing(): List<TicketFormatter.TicketTextLine>? {
+        val ticket = _uiState.value.ticket ?: return null
+        val draw = runCatching { drawsRepository.getDraws().find { it.id == ticket.drawId } }.getOrNull()
+        val sellerName = ticket.seller?.fullName
+            ?: currentUser?.fullName
+            ?: currentUser?.username
+            ?: "Caja"
+        val appearanceSettings = runCatching { frontendSettingsRepository.getTicketAppearance() }.getOrNull()
+        val hasSpecialAmounts = ticket.lines.any { (it.specialAmount ?: 0.0) > 0 }
+        val specialMultiplier = draw?.specialMultiplier?.value ?: ticket.draw?.specialMultiplier?.value
+        val drawUsesSpecial = specialMultiplier?.let { it > 0 } ?: hasSpecialAmounts
+        val showSpecialColumn = drawUsesSpecial && hasSpecialAmounts
+        val effectiveMultiplier = if (showSpecialColumn && specialMultiplier != null) specialMultiplier else null
+
+        return TicketFormatter.getTicketLines(
+            ticket = ticket,
+            draw = draw,
+            sellerName = sellerName,
+            ticketTitle = appearanceSettings?.ticketTitle ?: "GameOver Lotería",
+            footerNote = appearanceSettings?.footerNote.orEmpty(),
+            effectiveMultiplier = effectiveMultiplier,
+            ticketCodeFontSize = appearanceSettings?.ticketCodeFontSize ?: 32,
+        )
     }
 
     private suspend fun ensureConnectedToSavedPrinter(printerAddress: String): Boolean {

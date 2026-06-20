@@ -80,7 +80,7 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             // Bluetooth section header
@@ -246,6 +246,18 @@ fun SettingsScreen(
                     )
                 }
             }
+
+            item { Spacer(modifier = Modifier.height(24.dp)) }
+
+            // Logout section
+            item {
+                GoButton(
+                    text = "Cerrar Sesión",
+                    onClick = viewModel::logout,
+                    modifier = Modifier.fillMaxWidth(),
+                    variant = ButtonVariant.OUTLINED,
+                )
+            }
         }
     }
 }
@@ -276,10 +288,10 @@ private fun DeviceListItem(
     GoCard(elevation = 2f) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(modifier = Modifier.weight(0.6f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(
                         Icons.Default.BluetoothAudio,
@@ -296,8 +308,22 @@ private fun DeviceListItem(
                 }
                 Text(device.address, fontSize = 11.sp, color = GoNeutral, style = MaterialTheme.typography.bodySmall)
             }
+
             if (isConnected) {
-                GoBadge("Conectado", BadgeVariant.SUCCESS)
+                Box(modifier = Modifier.weight(0.4f), contentAlignment = Alignment.CenterEnd) {
+                    GoBadge("Conectado", BadgeVariant.SUCCESS)
+                }
+            } else if (!isConnecting) {
+                GoButton(
+                    text = "Conectar",
+                    onClick = onConnect,
+                    variant = ButtonVariant.SECONDARY,
+                    modifier = Modifier.weight(0.4f)
+                )
+            } else {
+                Box(modifier = Modifier.weight(0.4f), contentAlignment = Alignment.CenterEnd) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                }
             }
         }
         if (isConnected) {
@@ -306,14 +332,6 @@ private fun DeviceListItem(
                 text = "Desconectar",
                 onClick = onDisconnect,
                 variant = ButtonVariant.OUTLINED,
-                modifier = Modifier.fillMaxWidth()
-            )
-        } else if (!isConnecting) {
-            Spacer(modifier = Modifier.height(8.dp))
-            GoButton(
-                text = "Conectar",
-                onClick = onConnect,
-                variant = ButtonVariant.SECONDARY,
                 modifier = Modifier.fillMaxWidth()
             )
         }

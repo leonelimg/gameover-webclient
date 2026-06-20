@@ -27,8 +27,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gameover.android.core.ui.component.GoButton
 import com.gameover.android.core.ui.component.GoTextField
-import com.gameover.android.core.ui.theme.GoRed
-import com.gameover.android.core.ui.theme.GoRedDark
+import com.gameover.android.core.ui.theme.GoBlue
+import com.gameover.android.core.ui.theme.GoBlueDark
 
 @Composable
 fun LoginScreen(
@@ -51,8 +51,8 @@ fun LoginScreen(
         )
     } else {
         listOf(
-            GoRedDark.copy(alpha = 0.95f),
-            GoRed.copy(alpha = 0.85f),
+            GoBlue.copy(alpha = 0.95f),
+            GoBlueDark.copy(alpha = 0.85f),
         )
     }
 
@@ -108,17 +108,17 @@ fun LoginScreen(
                 },
             ) {
                 Column(
-                    modifier = Modifier.padding(32.dp),
+                    modifier = Modifier.padding(horizontal = 32.dp, vertical = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     // Logo / Title with better hierarchy
-                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = "GameOver",
                         fontSize = 36.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = GoRed,
+                        color = GoBlue,
+                        modifier = Modifier.padding(top = 8.dp)
                     )
                     Text(
                         text = "Sistema de Gestión de Lotería",
@@ -126,7 +126,7 @@ fun LoginScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     // Username field with better styling
                     GoTextField(
@@ -168,7 +168,7 @@ fun LoginScreen(
                                 Icon(
                                     if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                                     contentDescription = if (passwordVisible) "Ocultar contraseña" else "Mostrar contraseña",
-                                    tint = if (passwordVisible) GoRed else MaterialTheme.colorScheme.onSurfaceVariant
+                                    tint = if (passwordVisible) GoBlue else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         },

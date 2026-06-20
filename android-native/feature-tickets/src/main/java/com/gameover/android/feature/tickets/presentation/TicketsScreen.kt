@@ -3,6 +3,7 @@ package com.gameover.android.feature.tickets.presentation
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -64,8 +65,8 @@ fun TicketsScreen(
                 .padding(padding),
         ) {
             LazyColumn(
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item { NoConnectionBanner(isVisible = !uiState.isOnline) }
 
@@ -172,23 +173,28 @@ fun TicketsScreen(
 
 @Composable
 private fun TicketListItem(ticket: Ticket, onClick: () -> Unit) {
-    GoCard(
-        modifier = Modifier,
-        elevation = 2f,
-        onClick = onClick
+    val purchaseDate = ticket.createdAt.take(10)
+    val purchaseTime = ticket.createdAt.substringAfter('T', "").take(5).ifBlank { "--:--" }
+    val drawName = ticket.draw?.name ?: "Sorteo"
+
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
                 Text(
                     text = ticket.code,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
                     fontSize = 14.sp,
                     style = MaterialTheme.typography.labelLarge
                 )
@@ -200,28 +206,32 @@ private fun TicketListItem(ticket: Ticket, onClick: () -> Unit) {
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
-                ticket.draw?.let {
-                    Text(
-                        text = it.name,
-                        fontSize = 11.sp,
-                        color = GoNeutral,
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
+                Text(
+                    text = drawName,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text(
+                    text = purchaseDate,
+                    fontSize = 11.sp,
+                    color = GoNeutral,
+                    style = MaterialTheme.typography.labelSmall,
+                )
             }
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
+
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = CurrencyFormatter.format(ticket.total),
-                    fontWeight = FontWeight.ExtraBold,
+                    fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     style = MaterialTheme.typography.labelLarge
                 )
-                PaymentStatusBadge(
-                    status = ticket.paymentStatus.name,
-                    isCanceled = ticket.canceledAt != null,
+                Text(
+                    text = purchaseTime,
+                    fontSize = 12.sp,
+                    color = GoNeutral,
+                    style = MaterialTheme.typography.labelMedium,
                 )
             }
         }

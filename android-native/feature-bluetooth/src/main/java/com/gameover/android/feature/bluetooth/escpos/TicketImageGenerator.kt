@@ -10,10 +10,10 @@ import java.io.FileOutputStream
 
 object TicketImageGenerator {
 
-    private const val BITMAP_WIDTH = 400
-    private const val PADDING = 20
+    private const val BITMAP_WIDTH = 500
+    private const val PADDING = 30
     private const val LINE_SPACING = 4
-    private const val FONT_SIZE = 24f
+    private const val FONT_SIZE = 22f
 
     fun shareTicketAsImage(context: Context, lines: List<TicketFormatter.TicketTextLine>) {
         val bitmap = generateBitmap(lines)

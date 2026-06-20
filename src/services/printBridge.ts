@@ -134,10 +134,22 @@ const bridgeFetch = async (url: string, init: RequestInit = {}) => {
   }
 };
 
+type PrintBridgeErrorBody = {
+  error?: string;
+  details?: {
+    fieldErrors?: Record<string, string[] | undefined>;
+    formErrors?: string[];
+  };
+};
+
 const parseResponse = async <T>(res: Response): Promise<T> => {
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body.error ?? `Print bridge error (${res.status})`);
+    const body = (await res.json().catch(() => ({}))) as PrintBridgeErrorBody;
+    const details = body.details?.fieldErrors;
+    const firstField = details ? Object.entries(details).find(([, messages]) => Array.isArray(messages) && messages.length > 0) : undefined;
+    const detailMessage = firstField ? `${firstField[0]}: ${firstField[1]![0]}` : body.details?.formErrors?.[0];
+    const baseMessage = body.error ?? `Print bridge error (${res.status})`;
+    throw new Error(detailMessage ? `${baseMessage} - ${detailMessage}` : baseMessage);
   }
 
   return (await res.json()) as T;

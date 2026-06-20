@@ -32,4 +32,5 @@ data class TicketDetailUiState(
     val isCanceling: Boolean = false,
     val isMarkingPrinted: Boolean = false,
     val operationSuccess: String? = null,
+    val canCancel: Boolean = false,
 )

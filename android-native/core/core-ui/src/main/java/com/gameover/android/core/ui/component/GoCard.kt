@@ -10,6 +10,7 @@ import androidx.compose.ui.unit.dp
 fun GoCard(
     modifier: Modifier = Modifier,
     elevation: Float = 4.dp.value,
+    padding: PaddingValues = PaddingValues(16.dp),
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -28,7 +29,7 @@ fun GoCard(
             shape = MaterialTheme.shapes.medium,
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(padding),
                 content = content
             )
         }
@@ -42,7 +43,7 @@ fun GoCard(
             shape = MaterialTheme.shapes.medium,
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(padding),
                 content = content
             )
         }

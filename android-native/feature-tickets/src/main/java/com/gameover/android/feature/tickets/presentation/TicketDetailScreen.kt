@@ -1,14 +1,19 @@
 package com.gameover.android.feature.tickets.presentation
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -17,6 +22,13 @@ import com.gameover.android.core.domain.model.Ticket
 import com.gameover.android.core.domain.util.CurrencyFormatter
 import com.gameover.android.core.ui.component.*
 import com.gameover.android.core.ui.theme.GoNeutral
+import com.gameover.android.core.ui.theme.GoBlue
+import com.gameover.android.core.ui.theme.GoSuccess
+
+import androidx.compose.ui.platform.LocalContext
+import com.gameover.android.core.ui.theme.GoSuccessDark
+import com.gameover.android.feature.bluetooth.escpos.TicketImageGenerator
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -26,6 +38,8 @@ fun TicketDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(uiState.operationSuccess, uiState.error) {
         uiState.operationSuccess?.let {
@@ -59,12 +73,20 @@ fun TicketDetailScreen(
                 uiState.ticket != null -> {
                     TicketDetailContent(
                         ticket = uiState.ticket!!,
-                        canCancel = viewModel.canCancelTicket(),
+                        canCancel = uiState.canCancel,
                         isMarkingPrinted = uiState.isMarkingPrinted,
                         isCanceling = uiState.isCanceling,
                         onReprint = viewModel::markPrinted,
+                        onShareWhatsapp = {
+                            scope.launch {
+                                val lines = viewModel.getTicketLinesForSharing()
+                                if (lines != null) {
+                                    TicketImageGenerator.shareTicketAsImage(context, lines)
+                                }
+                            }
+                        },
                         onCancelClick = viewModel::showCancelDialog,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                     )
                 }
                 else -> {
@@ -108,11 +130,12 @@ private fun TicketDetailContent(
     isMarkingPrinted: Boolean,
     isCanceling: Boolean,
     onReprint: () -> Unit,
+    onShareWhatsapp: () -> Unit,
     onCancelClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.padding(16.dp),
+        modifier = modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         // Header
@@ -161,20 +184,36 @@ private fun TicketDetailContent(
 
         // Action buttons
         if (ticket.canceledAt == null) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                GoButton(
-                    text = "Reimprimir",
-                    onClick = onReprint,
-                    modifier = Modifier.weight(1f),
-                    variant = ButtonVariant.OUTLINED,
-                    loading = isMarkingPrinted,
-                )
+            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GoButton(
+                        text = "Reimprimir",
+                        onClick = onReprint,
+                        modifier = Modifier.weight(1f),
+                        variant = ButtonVariant.PRIMARY,
+                        containerColor = GoBlue,
+                        contentColor = Color.White,
+                        trailingIcon = Icons.Default.Bluetooth,
+                        loading = isMarkingPrinted,
+                    )
+                    GoButton(
+                        text = "WhatsApp",
+                        onClick = onShareWhatsapp,
+                        modifier = Modifier.weight(1f),
+                        variant = ButtonVariant.PRIMARY,
+                        containerColor = GoSuccessDark,
+                        contentColor = Color.White,
+                        trailingIcon = Icons.Default.Share,
+                    )
+                }
                 if (canCancel) {
                     GoButton(
-                        text = "Anular",
+                        text = "Anular Ticket",
                         onClick = onCancelClick,
-                        modifier = Modifier.weight(1f),
-                        variant = ButtonVariant.OUTLINED,
+                        modifier = Modifier.fillMaxWidth(),
+                        variant = ButtonVariant.PRIMARY,
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = Color.White,
                         loading = isCanceling,
                     )
                 }

@@ -4,6 +4,7 @@ import android.bluetooth.BluetoothDevice
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gameover.android.core.data.local.TokenDataStore
+import com.gameover.android.core.domain.repository.AuthRepository
 import com.gameover.android.feature.bluetooth.BluetoothPrinterManager
 import com.gameover.android.feature.bluetooth.BtState
 import com.gameover.android.feature.bluetooth.escpos.EscPosBuilder
@@ -19,6 +20,7 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val bluetoothPrinterManager: BluetoothPrinterManager,
     private val tokenDataStore: TokenDataStore,
+    private val authRepository: AuthRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -86,6 +88,12 @@ class SettingsViewModel @Inject constructor(
                 isTestPrinting = false,
                 statusMessage = if (result.isSuccess) "Impresión de prueba exitosa" else "Error: ${result.exceptionOrNull()?.message}",
             )}
+        }
+    }
+
+    fun logout() {
+        viewModelScope.launch {
+            authRepository.logout()
         }
     }
 

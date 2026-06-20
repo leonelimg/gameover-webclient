@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -14,6 +15,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -33,6 +37,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gameover.android.core.domain.model.Draw
 import com.gameover.android.core.domain.model.Ticket
@@ -44,6 +49,10 @@ import com.gameover.android.core.ui.component.NoConnectionBanner
 import com.gameover.android.core.ui.component.ButtonVariant
 import com.gameover.android.core.ui.theme.*
 
+import androidx.compose.ui.platform.LocalContext
+import com.gameover.android.feature.bluetooth.escpos.TicketImageGenerator
+import kotlinx.coroutines.launch
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SalesScreen(
@@ -52,6 +61,16 @@ fun SalesScreen(
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val focusManager = LocalFocusManager.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+
+    // Auto-scroll to bottom when a new line is added
+    LaunchedEffect(uiState.lines.size) {
+        if (uiState.lines.isNotEmpty()) {
+            listState.animateScrollToItem(uiState.lines.size + 5) // Scroll past lines to ensure visibility
+        }
+    }
 
     LaunchedEffect(uiState.saleResult) {
         when (val result = uiState.saleResult) {
@@ -103,6 +122,71 @@ fun SalesScreen(
                 ),
             )
         },
+        bottomBar = {
+            // Persistent bottom bar for Total and Submit button (only if not showing success)
+            if (!(uiState.lastTicket != null && uiState.saleResult is SaleResult.Success)) {
+                Surface(
+                    tonalElevation = 8.dp,
+                    shadowElevation = 8.dp,
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = MaterialTheme.shapes.extraLarge.copy(
+                        bottomStart = androidx.compose.foundation.shape.CornerSize(0.dp),
+                        bottomEnd = androidx.compose.foundation.shape.CornerSize(0.dp)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .imePadding()
+                            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(0.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column {
+                                Text(
+                                    "TOTAL A PAGAR",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                    color = GoSuccessDark,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                                Text(
+                                    CurrencyFormatter.format(uiState.total),
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 28.sp,
+                                    color = GoSuccessDark,
+                                )
+                            }
+                            Button(
+                                onClick = viewModel::sell,
+                                enabled = uiState.selectedDrawId.isNotEmpty() && uiState.saleResult !is SaleResult.Loading,
+                                modifier = Modifier
+                                    .height(56.dp)
+                                    .padding(start = 16.dp),
+                                shape = MaterialTheme.shapes.large,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = GoSuccessDark,
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                if (uiState.saleResult is SaleResult.Loading) {
+                                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                                } else {
+                                    Icon(Icons.Default.ShoppingCart, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("VENDER", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         PullToRefreshBox(
@@ -113,9 +197,10 @@ fun SalesScreen(
                 .padding(padding),
         ) {
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 item { NoConnectionBanner(isVisible = !uiState.isOnline) }
 
@@ -126,6 +211,14 @@ fun SalesScreen(
                             ticket = uiState.lastTicket!!,
                             isPrinting = uiState.isPrintingTicket,
                             onPrint = viewModel::printLastTicket,
+                            onShareWhatsapp = {
+                                scope.launch {
+                                    val lines = viewModel.getTicketLinesForSharing()
+                                    if (lines != null) {
+                                        TicketImageGenerator.shareTicketAsImage(context, lines)
+                                    }
+                                }
+                            },
                             onNewSale = { viewModel.clearLastTicket() },
                         )
                     }
@@ -236,42 +329,6 @@ fun SalesScreen(
                         onNextLine = { viewModel.addLine() }
                     )
                 }
-
-                // Running total summary
-                item {
-                    GoCard(elevation = 4f) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                "Total:",
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 16.sp,
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                            Text(
-                                CurrencyFormatter.format(uiState.total),
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 20.sp,
-                                color = GoRed,
-                            )
-                        }
-                    }
-                }
-
-                // Submit button
-                item {
-                    GoButton(
-                        text = "Registrar Venta",
-                        onClick = viewModel::sell,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = uiState.selectedDrawId.isNotEmpty(),
-                        loading = uiState.saleResult is SaleResult.Loading,
-                    )
-                }
             }
         }
     }
@@ -345,12 +402,11 @@ private fun BetLineRow(
         specialAmountValue = specialAmountValue.copy(text = line.specialAmount)
     }
 
-    GoCard(elevation = 2f) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
             OutlinedTextField(
                 value = line.number,
                 onValueChange = onNumberChange,
@@ -460,15 +516,23 @@ private fun BetLineRow(
                     textStyle = MaterialTheme.typography.bodySmall,
                 )
             }
-            IconButton(onClick = onDelete, enabled = canDelete) {
+            FilledIconButton(
+                onClick = onDelete,
+                enabled = canDelete,
+                modifier = Modifier.size(36.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = GoDanger.copy(alpha = 0.1f),
+                    contentColor = GoDanger,
+                    disabledContainerColor = GoNeutral.copy(alpha = 0.05f),
+                    disabledContentColor = GoNeutral
+                )
+            ) {
                 Icon(
                     Icons.Default.Delete,
                     contentDescription = "Eliminar línea",
-                    tint = if (canDelete) GoDanger else GoNeutral,
                     modifier = Modifier.size(20.dp)
                 )
             }
-        }
     }
 }
 
@@ -477,6 +541,7 @@ private fun TicketSuccessCard(
     ticket: Ticket,
     isPrinting: Boolean,
     onPrint: () -> Unit,
+    onShareWhatsapp: () -> Unit,
     onNewSale: () -> Unit,
 ) {
     GoCard(elevation = 6f) {
@@ -505,7 +570,7 @@ private fun TicketSuccessCard(
                 "¡Venta Registrada!",
                 fontWeight = FontWeight.ExtraBold,
                 fontSize = 18.sp,
-                color = GoSuccess,
+                color = GoSuccessDark,
                 style = MaterialTheme.typography.titleMedium
             )
             
@@ -522,7 +587,7 @@ private fun TicketSuccessCard(
                 Text(
                     "Total: ${CurrencyFormatter.format(ticket.total)}",
                     fontSize = 14.sp,
-                    color = GoTextSecondary,
+                    color = GoSuccessDark,
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -534,13 +599,27 @@ private fun TicketSuccessCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                GoButton(
-                    text = "Imprimir Ticket",
-                    onClick = onPrint,
-                    loading = isPrinting,
-                    modifier = Modifier.fillMaxWidth(),
-                    variant = ButtonVariant.OUTLINED,
-                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GoButton(
+                        text = "Imprimir",
+                        onClick = onPrint,
+                        loading = isPrinting,
+                        modifier = Modifier.weight(1f),
+                        variant = ButtonVariant.PRIMARY,
+                        containerColor = GoBlue,
+                        contentColor = Color.White,
+                        trailingIcon = Icons.Default.Bluetooth,
+                    )
+                    GoButton(
+                        text = "WhatsApp",
+                        onClick = onShareWhatsapp,
+                        modifier = Modifier.weight(1f),
+                        variant = ButtonVariant.PRIMARY,
+                        containerColor = GoSuccessDark,
+                        contentColor = Color.White,
+                        trailingIcon = Icons.Default.Share,
+                    )
+                }
                 GoButton(
                     text = "Nueva Venta",
                     onClick = onNewSale,

@@ -99,12 +99,21 @@ object TicketFormatter {
     private fun padLeft(value: String, width: Int): String =
         if (value.length >= width) value.takeLast(width) else " ".repeat(width - value.length) + value
 
-    private fun applyTicketCodeSize(builder: EscPosBuilder, ticketCodeFontSize: Int): EscPosBuilder {
-        return if (ticketCodeFontSize >= 30) {
-            builder.doubleSizeOn()
-        } else {
-            builder.normalSize()
+    private fun buildFooterLines(footerNote: String, effectiveMultiplier: Number?): List<String> {
+        val lines = mutableListOf<String>()
+
+        if (effectiveMultiplier != null) {
+            lines.add("Multiplicador: ${effectiveMultiplier}x")
         }
+
+        lines.addAll(
+            footerNote
+                .split("\n")
+                .map { it.trim() }
+                .filter { it.isNotBlank() },
+        )
+
+        return lines
     }
 
     fun format(
@@ -113,109 +122,121 @@ object TicketFormatter {
         sellerName: String,
         ticketTitle: String = "GameOver Lotería",
         footerNote: String = "",
+        effectiveMultiplier: Number? = null,
         ticketCodeFontSize: Int = 32,
     ): ByteArray {
+        val lines = getTicketLines(
+            ticket, draw, sellerName, ticketTitle, footerNote, effectiveMultiplier, ticketCodeFontSize
+        )
+
+        val builder = EscPosBuilder().init()
+        for (line in lines) {
+            when (line.alignment) {
+                TicketAlignment.CENTER -> builder.alignCenter()
+                TicketAlignment.LEFT -> builder.alignLeft()
+                TicketAlignment.RIGHT -> builder.alignRight()
+            }
+
+            if (line.isBold) builder.boldOn() else builder.boldOff()
+            if (line.isDoubleSize) builder.doubleSizeOn() else builder.normalSize()
+
+            if (line.text == "---DIVIDER---") {
+                builder.divider()
+            } else {
+                builder.textLn(line.text)
+            }
+        }
+
+        return builder
+            .lineFeed(2)
+            .lineFeed(3)
+            .partialCut()
+            .build()
+    }
+
+    data class TicketTextLine(
+        val text: String,
+        val isBold: Boolean = false,
+        val alignment: TicketAlignment = TicketAlignment.LEFT,
+        val isDoubleSize: Boolean = false
+    )
+
+    enum class TicketAlignment { LEFT, CENTER, RIGHT }
+
+    fun getTicketLines(
+        ticket: Ticket,
+        draw: Draw?,
+        sellerName: String,
+        ticketTitle: String = "GameOver Lotería",
+        footerNote: String = "",
+        effectiveMultiplier: Number? = null,
+        ticketCodeFontSize: Int = 32,
+    ): List<TicketTextLine> {
         val hasSpecial = ticket.lines.any { (it.specialAmount ?: 0.0) > 0 }
         val specialMultiplierValue = draw?.specialMultiplier?.value ?: ticket.draw?.specialMultiplier?.value
         val drawHasSpecial = specialMultiplierValue?.let { it > 0 } ?: hasSpecial
         val showSpecialColumn = drawHasSpecial && hasSpecial
-        val effectiveMultiplier = specialMultiplierValue
         val rawDrawName = draw?.name ?: ticket.draw?.name ?: ticket.drawId
         val drawName = stripDateFromDrawLabel(rawDrawName)
         val drawDateStr = draw?.closeTime?.let(::formatDate) ?: ""
         val ticketDateStr = formatDate(ticket.createdAt)
         val customerName = ticket.customerName.trim().ifBlank { "Anonimo" }
         val groupedLines = groupLines(ticket, showSpecialColumn)
-        val footerLines = footerNote
-            .split("\n")
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
+        val footerLines = buildFooterLines(footerNote, effectiveMultiplier)
 
-        return EscPosBuilder()
-            .init()
-            .alignCenter()
-            .boldOn().textLn(ticketTitle).boldOff()
-            .run { applyTicketCodeSize(this, ticketCodeFontSize) }
-            .boldOn().textLn(ticket.code).boldOff().normalSize()
-            .alignLeft()
-            .boldOn().textLn(drawName).boldOff()
-            .textLn("Fecha ticket: $ticketDateStr")
-            .run {
-                if (drawDateStr.isNotBlank()) {
-                    textLn("Fecha sorteo: $drawDateStr")
-                } else {
-                    this
-                }
-            }
-            .textLn("Cliente: $customerName")
-            .boldOn().textLn("Puesto: $sellerName").boldOff()
-            .divider()
-            .run {
-                if (showSpecialColumn) {
-                    boldOn()
-                        .textLn("Numero         Monto Especial")
-                        .boldOff()
-                } else {
-                    boldOn()
-                        .textLn("Numero               Monto")
-                        .boldOff()
-                }
-            }
-            .run {
-                var builder = this
-                for (line in groupedLines) {
-                    if (showSpecialColumn) {
-                        val wrapped = wrapGroupedNumbers(line.numbers, 14)
-                        val amount = padLeft("C$${"%.2f".format(line.amount)}", 8)
-                        val special = padLeft("C$${"%.2f".format(line.special)}", 8)
-                        wrapped.forEachIndexed { index, value ->
-                            builder = if (index == 0) {
-                                builder.textLn("${padRight(value, 14)} $amount $special")
-                            } else {
-                                builder.textLn(value)
-                            }
-                        }
+        val result = mutableListOf<TicketTextLine>()
+
+        result.add(TicketTextLine(ticketTitle, isBold = true, alignment = TicketAlignment.CENTER))
+        result.add(TicketTextLine(ticket.code, isBold = true, alignment = TicketAlignment.CENTER, isDoubleSize = ticketCodeFontSize >= 30))
+        result.add(TicketTextLine(drawName, isBold = true, alignment = TicketAlignment.LEFT))
+        if (drawDateStr.isNotBlank()) {
+            result.add(TicketTextLine("Fecha sorteo: $drawDateStr"))
+        }
+        result.add(TicketTextLine("Fecha ticket: $ticketDateStr"))
+        result.add(TicketTextLine("Cliente: $customerName"))
+        result.add(TicketTextLine("Puesto: $sellerName", isBold = true))
+        result.add(TicketTextLine("---DIVIDER---"))
+
+        if (showSpecialColumn) {
+            result.add(TicketTextLine("Numero         Monto Especial", isBold = true))
+        } else {
+            result.add(TicketTextLine("Numero               Monto", isBold = true))
+        }
+
+        for (line in groupedLines) {
+            if (showSpecialColumn) {
+                val wrapped = wrapGroupedNumbers(line.numbers, 14)
+                val amount = padLeft("C$${"%.2f".format(line.amount)}", 8)
+                val special = padLeft("C$${"%.2f".format(line.special)}", 8)
+                wrapped.forEachIndexed { index, value ->
+                    if (index == 0) {
+                        result.add(TicketTextLine("${padRight(value, 14)} $amount $special"))
                     } else {
-                        val wrapped = wrapGroupedNumbers(line.numbers, 20)
-                        val amount = padLeft("C$${"%.2f".format(line.amount)}", 11)
-                        wrapped.forEachIndexed { index, value ->
-                            builder = if (index == 0) {
-                                builder.textLn("${padRight(value, 20)} $amount")
-                            } else {
-                                builder.textLn(value)
-                            }
-                        }
+                        result.add(TicketTextLine(value))
                     }
                 }
-                builder
-            }
-            .divider()
-            .alignRight()
-            .boldOn()
-            .textLn("TOTAL: C$ ${"%.2f".format(ticket.total)}")
-            .boldOff()
-            .alignCenter()
-            .run {
-                if (effectiveMultiplier != null) {
-                    textLn("Multiplicador: ${effectiveMultiplier}x")
-                } else {
-                    this
-                }
-            }
-            .run {
-                if (footerLines.isEmpty()) {
-                    this
-                } else {
-                    var builder = this
-                    for (line in footerLines) {
-                        builder = builder.textLn(line)
+            } else {
+                val wrapped = wrapGroupedNumbers(line.numbers, 20)
+                val amount = padLeft("C$${"%.2f".format(line.amount)}", 11)
+                wrapped.forEachIndexed { index, value ->
+                    if (index == 0) {
+                        result.add(TicketTextLine("${padRight(value, 20)} $amount"))
+                    } else {
+                        result.add(TicketTextLine(value))
                     }
-                    builder
                 }
             }
-            .lineFeed(2)
-            .lineFeed(3)
-            .partialCut()
-            .build()
+        }
+
+        result.add(TicketTextLine("---DIVIDER---"))
+        result.add(TicketTextLine("TOTAL: C$ ${"%.2f".format(ticket.total)}", isBold = true, alignment = TicketAlignment.RIGHT))
+
+        if (footerLines.isNotEmpty()) {
+            for (line in footerLines) {
+                result.add(TicketTextLine(line, alignment = TicketAlignment.CENTER))
+            }
+        }
+
+        return result
     }
 }

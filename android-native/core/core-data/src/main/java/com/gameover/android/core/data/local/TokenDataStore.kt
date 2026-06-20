@@ -71,8 +71,27 @@ class TokenDataStore @Inject constructor(@ApplicationContext private val context
      * Returns the in-memory cached access token (non-blocking, safe for OkHttp interceptor).
      * Falls back to a blocking DataStore read only if the cache is empty (app cold start).
      */
-    fun getCachedAccessToken(): String? = _cachedAccessToken.get()
-    fun getCachedRefreshToken(): String? = _cachedRefreshToken.get()
+    fun getCachedAccessToken(): String? {
+        val cached = _cachedAccessToken.get()
+        if (cached != null) return cached
+        
+        return kotlinx.coroutines.runBlocking {
+            val stored = context.dataStore.data.map { it[ACCESS_TOKEN] }.first()
+            _cachedAccessToken.compareAndSet(null, stored)
+            stored
+        }
+    }
+
+    fun getCachedRefreshToken(): String? {
+        val cached = _cachedRefreshToken.get()
+        if (cached != null) return cached
+
+        return kotlinx.coroutines.runBlocking {
+            val stored = context.dataStore.data.map { it[REFRESH_TOKEN] }.first()
+            _cachedRefreshToken.compareAndSet(null, stored)
+            stored
+        }
+    }
 
     suspend fun getAccessTokenOnce(): String? {
         val cached = _cachedAccessToken.get()
