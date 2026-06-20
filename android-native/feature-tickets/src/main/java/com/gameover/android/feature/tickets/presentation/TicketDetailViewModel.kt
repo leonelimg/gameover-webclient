@@ -33,6 +33,10 @@ class TicketDetailViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
+    companion object {
+        private const val MAX_CANCEL_REASON_LENGTH = 300
+    }
+
     private val ticketId: String = savedStateHandle["ticketId"] ?: ""
 
     private val _uiState = MutableStateFlow(TicketDetailUiState())
@@ -49,7 +53,8 @@ class TicketDetailViewModel @Inject constructor(
     }
 
     fun canCancelTicket(): Boolean = currentUser?.let {
-        PermissionChecker.hasPermission(it, "/sales:cancel")
+        // The backend can override role permissions in DB; keep UI permissive and rely on API auth.
+        PermissionChecker.hasPermission(it, "/sales")
     } ?: false
 
     fun loadTicket() {
@@ -67,14 +72,17 @@ class TicketDetailViewModel @Inject constructor(
 
     fun showCancelDialog() = _uiState.update { it.copy(cancelDialog = true) }
     fun hideCancelDialog() = _uiState.update { it.copy(cancelDialog = false, cancelReason = "") }
-    fun onCancelReasonChanged(reason: String) = _uiState.update { it.copy(cancelReason = reason) }
+    fun onCancelReasonChanged(reason: String) = _uiState.update {
+        it.copy(cancelReason = reason.take(MAX_CANCEL_REASON_LENGTH))
+    }
 
     fun cancelTicket() {
         val ticket = _uiState.value.ticket ?: return
+        val reason = _uiState.value.cancelReason.trim().takeIf { it.isNotBlank() }
         _uiState.update { it.copy(isCanceling = true, cancelDialog = false) }
         viewModelScope.launch {
             try {
-                val updated = ticketsRepository.cancelTicket(ticket.id, _uiState.value.cancelReason.takeIf { it.isNotBlank() })
+                val updated = ticketsRepository.cancelTicket(ticket.id, reason)
                 _uiState.update { it.copy(ticket = updated, isCanceling = false, operationSuccess = "Ticket anulado correctamente.") }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isCanceling = false, error = e.message) }

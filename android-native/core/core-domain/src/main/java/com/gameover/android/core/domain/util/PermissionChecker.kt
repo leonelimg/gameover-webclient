@@ -26,7 +26,7 @@ object PermissionChecker {
         "/multiplicadores" to setOf(UserRole.admin),
         "/sales" to setOf(UserRole.admin, UserRole.asociado, UserRole.vendedor),
         "/sales:create" to setOf(UserRole.admin, UserRole.asociado, UserRole.vendedor),
-        "/sales:cancel" to setOf(UserRole.admin, UserRole.asociado, UserRole.vendedor),
+        "/sales:cancel" to setOf(UserRole.admin, UserRole.asociado),
         "/ticket-payments" to setOf(UserRole.admin, UserRole.asociado, UserRole.vendedor),
         "/reports" to setOf(UserRole.admin, UserRole.asociado),
         "/reports/sales-stats" to setOf(UserRole.admin, UserRole.asociado),

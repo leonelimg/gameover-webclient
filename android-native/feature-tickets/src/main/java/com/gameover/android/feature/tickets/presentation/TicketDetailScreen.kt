@@ -104,7 +104,7 @@ fun TicketDetailScreen(
                             GoTextField(
                                 value = uiState.cancelReason,
                                 onValueChange = viewModel::onCancelReasonChanged,
-                                label = "Motivo (opcional)",
+                                label = "Motivo (opcional, max 300)",
                                 singleLine = false,
                             )
                         }
