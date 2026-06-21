@@ -161,18 +161,18 @@ private fun TicketDetailContent(
                 Divider()
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Text("Núm.", modifier = Modifier.weight(1f), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = GoNeutral)
-                    Text("Regular", modifier = Modifier.weight(1f), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = GoNeutral)
                     if (ticket.lines.any { (it.specialAmount ?: 0.0) > 0 }) {
                         Text("Especial", modifier = Modifier.weight(1f), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = GoNeutral)
                     }
+                    Text("Monto", modifier = Modifier.weight(1f), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = GoNeutral)
                 }
                 ticket.lines.forEach { line ->
                     Row(modifier = Modifier.fillMaxWidth()) {
                         Text(line.number, modifier = Modifier.weight(1f), fontSize = 13.sp)
-                        Text(CurrencyFormatter.format(line.amount), modifier = Modifier.weight(1f), fontSize = 13.sp)
                         if (ticket.lines.any { (it.specialAmount ?: 0.0) > 0 }) {
                             Text(CurrencyFormatter.format(line.specialAmount ?: 0.0), modifier = Modifier.weight(1f), fontSize = 13.sp)
                         }
+                        Text(CurrencyFormatter.format(line.amount), modifier = Modifier.weight(1f), fontSize = 13.sp)
                     }
                 }
                 Divider()

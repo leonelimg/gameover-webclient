@@ -16,8 +16,8 @@ class TicketsRepositoryImpl @Inject constructor(
     private val ticketsApi: TicketsApi,
     private val dataRefreshNotifier: DataRefreshNotifier,
 ) : TicketsRepository {
-    override suspend fun getTickets(drawId: String?, includeCanceled: Boolean, fromDate: String?, toDate: String?): List<Ticket> = withContext(Dispatchers.IO) {
-        val response = ticketsApi.getTickets(drawId = drawId, includeCanceled = includeCanceled, fromDate = fromDate, toDate = toDate)
+    override suspend fun getTickets(drawId: String?, includeCanceled: Boolean, fromDate: String?, toDate: String?, code: String?): List<Ticket> = withContext(Dispatchers.IO) {
+        val response = ticketsApi.getTickets(drawId = drawId, includeCanceled = includeCanceled, fromDate = fromDate, toDate = toDate, code = code)
         if (!response.isSuccessful) throw Exception("Error al cargar tickets: ${response.code()}")
         response.body()?.map { it.toDomain() } ?: emptyList()
     }

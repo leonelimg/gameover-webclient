@@ -47,15 +47,9 @@ class TicketDetailViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             currentUser = authRepository.getStoredUser().first()
-            _uiState.update { it.copy(canCancel = canCancelTicket()) }
             loadTicket()
         }
     }
-
-    fun canCancelTicket(): Boolean = currentUser?.let {
-        // The backend can override role permissions in DB; keep UI permissive and rely on API auth.
-        PermissionChecker.hasPermission(it, "/sales")
-    } ?: false
 
     fun loadTicket() {
         if (ticketId.isBlank()) return

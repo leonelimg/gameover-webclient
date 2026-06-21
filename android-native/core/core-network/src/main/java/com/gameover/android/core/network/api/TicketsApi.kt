@@ -12,6 +12,7 @@ interface TicketsApi {
         @Query("includeCanceled") includeCanceled: Boolean? = null,
         @Query("fromDate") fromDate: String? = null,
         @Query("toDate") toDate: String? = null,
+        @Query("code") code: String? = null,
     ): Response<List<TicketDto>>
 
     @GET("api/tickets/{id}")

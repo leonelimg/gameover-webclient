@@ -10,6 +10,7 @@ import com.gameover.android.core.domain.repository.FrontendSettingsRepository
 import com.gameover.android.core.domain.repository.OfflineQueueRepository
 import com.gameover.android.core.domain.repository.ReportsRepository
 import com.gameover.android.core.domain.repository.TicketsRepository
+import com.gameover.android.core.domain.usecase.CancelTicketUseCase
 import com.gameover.android.core.domain.usecase.CreateTicketUseCase
 import com.gameover.android.core.domain.usecase.EnqueueOfflineSaleUseCase
 import com.gameover.android.core.ui.util.NetworkMonitor
@@ -30,6 +31,7 @@ import javax.inject.Inject
 class SalesViewModel @Inject constructor(
     private val drawsRepository: DrawsRepository,
     private val createTicketUseCase: CreateTicketUseCase,
+    private val cancelTicketUseCase: CancelTicketUseCase,
     private val enqueueOfflineSaleUseCase: EnqueueOfflineSaleUseCase,
     private val offlineQueueRepository: OfflineQueueRepository,
     private val networkMonitor: NetworkMonitor,
@@ -357,6 +359,86 @@ class SalesViewModel @Inject constructor(
     fun clearError() {
         if (_uiState.value.saleResult is SaleResult.Error) {
             _uiState.update { it.copy(saleResult = SaleResult.Idle) }
+        }
+    }
+
+    fun showCancelDialog() = _uiState.update { it.copy(cancelDialog = true) }
+    fun hideCancelDialog() = _uiState.update { it.copy(cancelDialog = false, cancelReason = "") }
+    fun onCancelReasonChanged(reason: String) = _uiState.update {
+        it.copy(cancelReason = reason.take(300))
+    }
+
+    fun showSearchDialog() = _uiState.update { it.copy(searchDialog = true, searchError = null) }
+    fun hideSearchDialog() = _uiState.update { it.copy(searchDialog = false, searchTicketCode = "", searchError = null) }
+    fun onSearchTicketCodeChanged(code: String) = _uiState.update { it.copy(searchTicketCode = code) }
+
+    fun searchAndLoadTicket() {
+        val code = _uiState.value.searchTicketCode.trim()
+        if (code.isBlank()) return
+
+        _uiState.update { it.copy(isSearchingTicket = true, searchError = null) }
+        viewModelScope.launch {
+            try {
+                // Search by code via list endpoint, then fetch full ticket by ID
+                val matches = ticketsRepository.getTickets(code = code, includeCanceled = true)
+                val matchedId = matches.firstOrNull()?.id
+                    ?: throw Exception("Ticket no encontrado con código: $code")
+                val ticket = ticketsRepository.getTicket(matchedId)
+                
+                _uiState.update { state ->
+                    val saleLines = ticket.lines.map { line ->
+                        SaleLine(
+                            number = line.number,
+                            amount = line.amount.toString(),
+                            specialAmount = (line.specialAmount ?: 0.0).toString()
+                        )
+                    }
+                    
+                    val selectedDrawId = if (state.draws.any { it.id == ticket.drawId }) ticket.drawId else state.selectedDrawId
+                    if (selectedDrawId != state.selectedDrawId) {
+                        loadDrawSummary(selectedDrawId)
+                    }
+
+                    state.copy(
+                        lines = saleLines,
+                        selectedDrawId = selectedDrawId,
+                        isSearchingTicket = false,
+                        searchDialog = false,
+                        searchTicketCode = ""
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isSearchingTicket = false, searchError = e.message ?: "Ticket no encontrado") }
+            }
+        }
+    }
+
+    fun cancelLastTicket() {
+        val ticket = _uiState.value.lastTicket ?: return
+        val reason = _uiState.value.cancelReason.trim().takeIf { it.isNotBlank() }
+        _uiState.update { it.copy(isCanceling = true, cancelDialog = false) }
+        viewModelScope.launch {
+            val result = cancelTicketUseCase(ticket.id, reason)
+            result.fold(
+                onSuccess = { updated ->
+                    _uiState.update {
+                        it.copy(
+                            lastTicket = updated,
+                            isCanceling = false,
+                            saleResult = SaleResult.Idle // Clear success card after cancellation
+                        )
+                    }
+                    loadDrawSummary(ticket.drawId)
+                },
+                onFailure = { error ->
+                    _uiState.update {
+                        it.copy(
+                            isCanceling = false,
+                            saleResult = SaleResult.Error(error.message ?: "Error al anular ticket")
+                        )
+                    }
+                }
+            )
         }
     }
 }

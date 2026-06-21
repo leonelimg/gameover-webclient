@@ -19,7 +19,8 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "API_BASE_URL", "\"http://192.168.0.110:4000\"")
+        //buildConfigField("String", "API_BASE_URL", "\"http://192.168.0.110:4000\"")
+        buildConfigField("String", "API_BASE_URL", "\"https://web.pmcomercial.com\"")
     }
 
     buildTypes {
@@ -96,9 +97,6 @@ dependencies {
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-
-    // Coil
-    implementation("io.coil-kt:coil-compose:2.7.0")
 
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")

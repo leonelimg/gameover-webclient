@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Bluetooth
@@ -118,6 +119,9 @@ fun SalesScreen(
                             )
                         }
                     }
+                    IconButton(onClick = viewModel::showSearchDialog) {
+                        Icon(Icons.Default.Search, contentDescription = "Buscar ticket")
+                    }
                     IconButton(onClick = viewModel::loadDraws) {
                         Icon(Icons.Default.Refresh, contentDescription = "Actualizar sorteos")
                     }
@@ -195,146 +199,212 @@ fun SalesScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
-        PullToRefreshBox(
-            isRefreshing = uiState.isLoadingDraws,
-            onRefresh = viewModel::loadDraws,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+        Box(modifier = Modifier.fillMaxSize()) {
+            PullToRefreshBox(
+                isRefreshing = uiState.isLoadingDraws,
+                onRefresh = viewModel::loadDraws,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
             ) {
-                item { NoConnectionBanner(isVisible = !uiState.isOnline) }
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    item { NoConnectionBanner(isVisible = !uiState.isOnline) }
 
-                // After successful sale: show confirmation card and stop rendering the form
-                if (uiState.lastTicket != null && uiState.saleResult is SaleResult.Success) {
+                    // After successful sale: show confirmation card and stop rendering the form
+                    if (uiState.lastTicket != null && uiState.saleResult is SaleResult.Success) {
+                        item {
+                            TicketSuccessCard(
+                                ticket = uiState.lastTicket!!,
+                                isPrinting = uiState.isPrintingTicket,
+                                isCanceling = uiState.isCanceling,
+                                onPrint = viewModel::printLastTicket,
+                                onShareWhatsapp = {
+                                    scope.launch {
+                                        val lines = viewModel.getTicketLinesForSharing()
+                                        if (lines != null) {
+                                            TicketImageGenerator.shareTicketAsImage(context, lines)
+                                        }
+                                    }
+                                },
+                                onCancel = viewModel::showCancelDialog,
+                                onNewSale = { viewModel.clearLastTicket() },
+                            )
+                        }
+                        return@LazyColumn
+                    }
+
+                    // Draw selector
                     item {
-                        TicketSuccessCard(
-                            ticket = uiState.lastTicket!!,
-                            isPrinting = uiState.isPrintingTicket,
-                            onPrint = viewModel::printLastTicket,
-                            onShareWhatsapp = {
-                                scope.launch {
-                                    val lines = viewModel.getTicketLinesForSharing()
-                                    if (lines != null) {
-                                        TicketImageGenerator.shareTicketAsImage(context, lines)
+                        DrawSelector(
+                            openDraws = uiState.openDraws,
+                            selectedDrawId = uiState.selectedDrawId,
+                            onDrawSelected = viewModel::onDrawSelected,
+                            isLoading = uiState.isLoadingDraws,
+                        )
+                    }
+
+                    // Customer name (optional)
+                    item {
+                        GoTextField(
+                            value = uiState.customerName,
+                            onValueChange = viewModel::onCustomerNameChanged,
+                            label = "Nombre del cliente",
+                            placeholder = "Juan Pérez (opcional)",
+                        )
+                    }
+
+                    // Active special multiplier indicator
+                    uiState.selectedDraw?.specialMultiplier?.let { sm ->
+                        item {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = GoGold.copy(alpha = 0.15f),
+                                shape = MaterialTheme.shapes.medium,
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = GoGold,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = "Multiplicador activo: ${sm.name} (×${sm.value})",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = GoGold,
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Bet lines header
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "Números",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 16.sp,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            TextButton(onClick = viewModel::addLine) {
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Agregar", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+
+                    // Bet lines
+                    itemsIndexed(uiState.lines, key = { _, line -> line.id }) { index, line ->
+                        val numberFocusRequester = remember { FocusRequester() }
+
+                        // Auto-focus the new line when added
+                        LaunchedEffect(Unit) {
+                            if (line.number.isEmpty() && index > 0) {
+                                numberFocusRequester.requestFocus()
+                            }
+                        }
+
+                        BetLineRow(
+                            line = line,
+                            showSpecial = uiState.hasSpecialMultiplier,
+                            canDelete = uiState.lines.size > 1,
+                            onNumberChange = {
+                                if (it.length <= 2) {
+                                    viewModel.onLineNumberChanged(line.id, it)
+                                    if (it.length == 2) {
+                                        focusManager.moveFocus(FocusDirection.Next)
                                     }
                                 }
                             },
-                            onNewSale = { viewModel.clearLastTicket() },
+                            onAmountChange = { viewModel.onLineAmountChanged(line.id, it) },
+                            onSpecialAmountChange = { viewModel.onLineSpecialAmountChanged(line.id, it) },
+                            onDelete = { viewModel.removeLine(line.id) },
+                            numberFocusRequester = numberFocusRequester,
+                            isLastLine = index == uiState.lines.lastIndex,
+                            onNextLine = { viewModel.addLine() }
                         )
                     }
-                    return@LazyColumn
                 }
+            }
 
-                // Draw selector
-                item {
-                    DrawSelector(
-                        openDraws = uiState.openDraws,
-                        selectedDrawId = uiState.selectedDrawId,
-                        onDrawSelected = viewModel::onDrawSelected,
-                        isLoading = uiState.isLoadingDraws,
-                    )
-                }
+            if (uiState.cancelDialog) {
+                AlertDialog(
+                    onDismissRequest = viewModel::hideCancelDialog,
+                    title = { Text("Anular Ticket") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("¿Estás seguro de que deseas anular este ticket?")
+                            GoTextField(
+                                value = uiState.cancelReason,
+                                onValueChange = viewModel::onCancelReasonChanged,
+                                label = "Motivo (opcional, max 300)",
+                                singleLine = false,
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = viewModel::cancelLastTicket) {
+                            Text("Anular", color = MaterialTheme.colorScheme.error)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = viewModel::hideCancelDialog) { Text("Cancelar") }
+                    },
+                )
+            }
 
-                // Customer name (optional)
-                item {
-                    GoTextField(
-                        value = uiState.customerName,
-                        onValueChange = viewModel::onCustomerNameChanged,
-                        label = "Nombre del cliente",
-                        placeholder = "Juan Pérez (opcional)",
-                    )
-                }
-
-                // Active special multiplier indicator
-                uiState.selectedDraw?.specialMultiplier?.let { sm ->
-                    item {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            color = GoGold.copy(alpha = 0.15f),
-                            shape = MaterialTheme.shapes.medium,
+            if (uiState.searchDialog) {
+                AlertDialog(
+                    onDismissRequest = viewModel::hideSearchDialog,
+                    title = { Text("Buscar Ticket") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Ingresa el código del ticket para cargar sus números.")
+                            GoTextField(
+                                value = uiState.searchTicketCode,
+                                onValueChange = viewModel::onSearchTicketCodeChanged,
+                                label = "Código del ticket",
+                                placeholder = "TK-XXXXXX",
+                                singleLine = true,
+                                isError = uiState.searchError != null,
+                                errorMessage = uiState.searchError
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = viewModel::searchAndLoadTicket,
+                            enabled = !uiState.isSearchingTicket && uiState.searchTicketCode.isNotBlank()
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.Check,
-                                    contentDescription = null,
-                                    tint = GoGold,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Text(
-                                    text = "Multiplicador activo: ${sm.name} (×${sm.value})",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = GoGold,
-                                )
+                            if (uiState.isSearchingTicket) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            } else {
+                                Text("Cargar")
                             }
                         }
-                    }
-                }
-
-                // Bet lines header
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "Números",
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 16.sp,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        TextButton(onClick = viewModel::addLine) {
-                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Agregar", style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                }
-
-                // Bet lines
-                itemsIndexed(uiState.lines, key = { _, line -> line.id }) { index, line ->
-                    val numberFocusRequester = remember { FocusRequester() }
-
-                    // Auto-focus the new line when added
-                    LaunchedEffect(Unit) {
-                        if (line.number.isEmpty() && index > 0) {
-                            numberFocusRequester.requestFocus()
-                        }
-                    }
-
-                    BetLineRow(
-                        line = line,
-                        showSpecial = uiState.hasSpecialMultiplier,
-                        canDelete = uiState.lines.size > 1,
-                        onNumberChange = {
-                            if (it.length <= 2) {
-                                viewModel.onLineNumberChanged(line.id, it)
-                                if (it.length == 2) {
-                                    focusManager.moveFocus(FocusDirection.Next)
-                                }
-                            }
-                        },
-                        onAmountChange = { viewModel.onLineAmountChanged(line.id, it) },
-                        onSpecialAmountChange = { viewModel.onLineSpecialAmountChanged(line.id, it) },
-                        onDelete = { viewModel.removeLine(line.id) },
-                        numberFocusRequester = numberFocusRequester,
-                        isLastLine = index == uiState.lines.lastIndex,
-                        onNextLine = { viewModel.addLine() }
-                    )
-                }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = viewModel::hideSearchDialog) { Text("Cancelar") }
+                    },
+                )
             }
         }
     }
@@ -546,8 +616,10 @@ private fun BetLineRow(
 private fun TicketSuccessCard(
     ticket: Ticket,
     isPrinting: Boolean,
+    isCanceling: Boolean,
     onPrint: () -> Unit,
     onShareWhatsapp: () -> Unit,
+    onCancel: () -> Unit,
     onNewSale: () -> Unit,
 ) {
     GoCard(elevation = 6f) {
@@ -626,6 +698,19 @@ private fun TicketSuccessCard(
                         trailingIcon = Icons.Default.Share,
                     )
                 }
+                
+                if (ticket.canceledAt == null) {
+                    GoButton(
+                        text = "Anular Ticket",
+                        onClick = onCancel,
+                        loading = isCanceling,
+                        modifier = Modifier.fillMaxWidth(),
+                        variant = ButtonVariant.PRIMARY,
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = Color.White,
+                    )
+                }
+
                 GoButton(
                     text = "Nueva Venta",
                     onClick = onNewSale,
