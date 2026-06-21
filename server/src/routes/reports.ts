@@ -1,5 +1,10 @@
 import { Router } from 'express';
 import { prisma } from '../config/prisma.js';
+import {
+  DrawFilterRule,
+  ReportingFilterSectionKey,
+  getReportingFilterSettings,
+} from '../config/reportingFilterSettings.js';
 import { authenticate, authorizeAnyResource, authorizeResource } from '../middleware/auth.js';
 
 type Stats = { totalSales: number; ticketCount: number };
@@ -43,13 +48,24 @@ router.use(authenticate);
 
 const REPORTS_TIMEZONE_OFFSET = '-06:00';
 
-const ELIGIBLE_DRAW_FILTER = {
-  status: 'finalizado' as const,
-  winnerNumber: { not: null as string | null },
-};
+async function getDrawFilterRule(sectionKey: ReportingFilterSectionKey): Promise<DrawFilterRule> {
+  const settings = await getReportingFilterSettings();
+  return settings.sections[sectionKey];
+}
 
-function applyEligibleDrawFilter(where: Record<string, unknown>): void {
-  where['draw'] = ELIGIBLE_DRAW_FILTER;
+function applyDrawFilterRule(where: Record<string, unknown>, rule: DrawFilterRule): void {
+  const drawFilter: Record<string, unknown> = {};
+
+  if (rule.requireFinalized) {
+    drawFilter['status'] = 'finalizado';
+  }
+  if (rule.requireWinnerDefined) {
+    drawFilter['winnerNumber'] = { not: null as string | null };
+  }
+
+  if (Object.keys(drawFilter).length > 0) {
+    where['draw'] = drawFilter;
+  }
 }
 
 function parseDateYmdToUtc(dateValue: string, endOfDay: boolean): Date | null {
@@ -192,7 +208,8 @@ router.get('/summary', authorizeAnyResource('/reports/sales-stats', '/dashboard'
   if (scopedSellerIds) {
     ticketWhere['sellerId'] = { in: Array.from(scopedSellerIds) };
   }
-  applyEligibleDrawFilter(ticketWhere);
+  const drawFilterRule = await getDrawFilterRule('reports.sales-stats.summary');
+  applyDrawFilterRule(ticketWhere, drawFilterRule);
 
   const activeTicketWhere: Record<string, unknown> = {
     ...ticketWhere,
@@ -273,8 +290,19 @@ router.get('/top-numbers', authorizeAnyResource('/reports/sales-stats', '/dashbo
   if (scopedSellerIds) {
     ticketWhere['sellerId'] = { in: Array.from(scopedSellerIds) };
   }
-  if (includeAllDraws !== 'true') {
-    applyEligibleDrawFilter(ticketWhere);
+  if (includeAllDraws === 'true') {
+    applyDrawFilterRule(ticketWhere, {
+      requireFinalized: false,
+      requireWinnerDefined: false,
+    });
+  } else if (includeAllDraws === 'false') {
+    applyDrawFilterRule(ticketWhere, {
+      requireFinalized: true,
+      requireWinnerDefined: true,
+    });
+  } else {
+    const drawFilterRule = await getDrawFilterRule('reports.sales-stats.top-numbers');
+    applyDrawFilterRule(ticketWhere, drawFilterRule);
   }
 
   // Get all ticket IDs matching filter
@@ -323,7 +351,8 @@ router.get('/hierarchy', authorizeResource('/reports/sales-stats'), async (req, 
   const ticketWhere: Record<string, unknown> = { canceledAt: null };
   if (drawId) ticketWhere['drawId'] = drawId;
   if (Object.keys(createdAtFilter).length > 0) ticketWhere['createdAt'] = createdAtFilter;
-  applyEligibleDrawFilter(ticketWhere);
+  const drawFilterRule = await getDrawFilterRule('reports.sales-stats.summary');
+  applyDrawFilterRule(ticketWhere, drawFilterRule);
 
   const aggregates = await prisma.ticket.groupBy({
     by: ['sellerId'],
@@ -410,7 +439,8 @@ router.get('/recent-tickets', authorizeAnyResource('/reports/sales-stats', '/das
   if (Object.keys(createdAtFilter).length > 0) where['createdAt'] = createdAtFilter;
   where['canceledAt'] = null;
   if (scopedSellerIds) where['sellerId'] = { in: Array.from(scopedSellerIds) };
-  applyEligibleDrawFilter(where);
+  const drawFilterRule = await getDrawFilterRule('reports.sales-stats.recent-tickets');
+  applyDrawFilterRule(where, drawFilterRule);
 
   const tickets = await prisma.ticket.findMany({
     where,
@@ -452,7 +482,8 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
   } else if (scopedSellerIds) {
     where['sellerId'] = { in: Array.from(scopedSellerIds) };
   }
-  applyEligibleDrawFilter(where);
+  const drawFilterRule = await getDrawFilterRule('reports.balance-breakdown');
+  applyDrawFilterRule(where, drawFilterRule);
 
   interface BreakdownTicket {
     createdAt: Date;
@@ -876,7 +907,8 @@ router.get('/sales-by-user', authorizeResource('/reports/sales-by-user'), async 
   } else if (scopedSellerIds) {
     where['sellerId'] = { in: Array.from(scopedSellerIds) };
   }
-  applyEligibleDrawFilter(where);
+  const drawFilterRule = await getDrawFilterRule('reports.sales-by-user');
+  applyDrawFilterRule(where, drawFilterRule);
 
   const tickets = await prisma.ticket.findMany({
     where,
@@ -1020,6 +1052,8 @@ router.get('/draw-lists', authorizeResource('/reports/draw-lists'), async (req, 
   } else if (scopedSellerIds) {
     where['sellerId'] = { in: Array.from(scopedSellerIds) };
   }
+  const drawFilterRule = await getDrawFilterRule('reports.draw-lists');
+  applyDrawFilterRule(where, drawFilterRule);
 
   const tickets = await prisma.ticket.findMany({
     where,
@@ -1086,7 +1120,8 @@ router.get('/commissions', authorizeResource('/reports/commissions'), async (req
   } else if (scopedSellerIds) {
     where['sellerId'] = { in: Array.from(scopedSellerIds) };
   }
-  applyEligibleDrawFilter(where);
+  const drawFilterRule = await getDrawFilterRule('reports.commissions');
+  applyDrawFilterRule(where, drawFilterRule);
 
   const defaultPlan = await prisma.plan.findFirst({
     orderBy: { createdAt: 'asc' },

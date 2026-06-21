@@ -21,6 +21,7 @@ import CommissionsPage from '@/pages/Reports/CommissionsPage';
 import CashMovementsPage from '@/pages/CashMovements/CashMovementsPage';
 import AnnouncementsPage from '@/pages/Announcements/AnnouncementsPage';
 import FrontendSettingsPage from '@/pages/FrontendSettings/FrontendSettingsPage';
+import ReportingFiltersSettingsPage from '@/pages/ReportingFiltersSettings/ReportingFiltersSettingsPage';
 import NumberRestrictionsPage from '@/pages/NumberRestrictions/NumberRestrictionsPage';
 import GlobalNumberRestrictionsPage from '@/pages/Restrictions/GlobalNumberRestrictionsPage';
 import UserGlobalRestrictionsPage from '@/pages/Restrictions/UserGlobalRestrictionsPage';
@@ -59,6 +60,10 @@ export default function App() {
             <Route path="/cash-movements" element={<ProtectedByPermission resourceKey="/cash-movements" element={<CashMovementsPage />} />} />
             <Route path="/announcements" element={<ProtectedByPermission resourceKey="/announcements" element={<AnnouncementsPage />} />} />
             <Route path="/frontend-settings" element={<ProtectedByPermission resourceKey="/roles:update" element={<FrontendSettingsPage />} />} />
+            <Route
+              path="/frontend-settings/reporting-filters"
+              element={<ProtectedByPermission resourceKey="/frontend-settings/reporting-filters" element={<ReportingFiltersSettingsPage />} />}
+            />
             <Route path="/reports" element={<ProtectedByPermission resourceKey="/reports" element={<Navigate to="/reports/sales-stats" replace />} />} />
             <Route path="/reports/sales-stats" element={<ProtectedByPermission resourceKey="/reports/sales-stats" element={<ReportsPage />} />} />
             <Route path="/reports/balance-breakdown" element={<ProtectedByPermission resourceKey="/reports/balance-breakdown" element={<BalanceBreakdownPage />} />} />

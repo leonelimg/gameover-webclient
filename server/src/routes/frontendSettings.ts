@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import type { Prisma } from '@prisma/client';
 import {
   DEFAULT_FRONTEND_TICKET_SETTINGS,
   FRONTEND_TICKET_CODE_FONT_SIZE_SETTING_KEY,
@@ -10,6 +11,13 @@ import {
   getFrontendTicketSettings,
   setFrontendTicketSettings,
 } from '../config/frontendTicketSettings.js';
+import {
+  REPORTING_FILTER_SECTION_KEYS,
+  REPORTING_FILTER_SETTINGS_KEY,
+  getReportingFilterSettings,
+  normalizeReportingFilterSettings,
+  setReportingFilterSettings,
+} from '../config/reportingFilterSettings.js';
 import { prisma } from '../config/prisma.js';
 import { authenticate, authorizeAnyResource, authorizeResource } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
@@ -23,6 +31,15 @@ const frontendTicketSettingsSchema = z.object({
   ticketCodeFontSize: z.number().int().min(18).max(64),
   defaultTicketWidth: z.union([z.literal(58), z.literal(80)]),
   sellerTicketWidths: z.record(z.string(), z.union([z.literal(58), z.literal(80)])),
+});
+
+const reportingFilterRuleSchema = z.object({
+  requireFinalized: z.boolean(),
+  requireWinnerDefined: z.boolean(),
+});
+
+const reportingFilterSettingsSchema = z.object({
+  sections: z.record(z.enum(REPORTING_FILTER_SECTION_KEYS), reportingFilterRuleSchema),
 });
 
 router.get(
@@ -90,6 +107,38 @@ router.patch(
             sellerTicketWidths: DEFAULT_FRONTEND_TICKET_SETTINGS.sellerTicketWidths,
           },
         },
+      },
+    });
+
+    res.json(settings);
+  }
+);
+
+router.get(
+  '/reporting-filters',
+  authorizeResource('/frontend-settings/reporting-filters'),
+  async (_req, res) => {
+    const settings = await getReportingFilterSettings();
+    res.json(settings);
+  }
+);
+
+router.patch(
+  '/reporting-filters',
+  authorizeResource('/frontend-settings/reporting-filters'),
+  validate(reportingFilterSettingsSchema),
+  async (req, res) => {
+    const body = req.body as z.infer<typeof reportingFilterSettingsSchema>;
+    const settings = await setReportingFilterSettings(normalizeReportingFilterSettings(body));
+    const settingsDetails = JSON.parse(JSON.stringify(settings)) as Prisma.InputJsonValue;
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'UPDATE_REPORTING_FILTER_SETTINGS',
+        entity: 'SystemSetting',
+        entityId: REPORTING_FILTER_SETTINGS_KEY,
+        userId: req.user!.sub,
+        details: settingsDetails,
       },
     });
 

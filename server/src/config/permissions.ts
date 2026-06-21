@@ -58,6 +58,7 @@ export const APP_RESOURCES: AppResource[] = [
   { key: '/announcements:create', label: 'Anuncios: crear' },
   { key: '/announcements:update', label: 'Anuncios: editar' },
   { key: '/announcements:delete', label: 'Anuncios: eliminar' },
+  { key: '/frontend-settings/reporting-filters', label: 'Configuracion: filtros de sorteos en reportes' },
 ];
 
 export const APP_RESOURCE_KEYS = new Set(APP_RESOURCES.map((resource) => resource.key));
@@ -115,6 +116,7 @@ const DEFAULT_RESOURCE_ACCESS: Record<string, AppRole[]> = {
   '/announcements:create': ['admin'],
   '/announcements:update': ['admin'],
   '/announcements:delete': ['admin'],
+  '/frontend-settings/reporting-filters': ['admin'],
 };
 
 export function isDefaultAllowed(resourceKey: string, role: AppRole): boolean {

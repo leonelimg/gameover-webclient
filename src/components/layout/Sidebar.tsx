@@ -150,6 +150,11 @@ const NAV_ITEMS: NavItem[] = [
         label: 'Config. tickets',
         permissionKey: '/roles:update',
       },
+      {
+        to: '/frontend-settings/reporting-filters',
+        label: 'Config. filtros reportes',
+        permissionKey: '/frontend-settings/reporting-filters',
+      },
     ],
   },
 ];

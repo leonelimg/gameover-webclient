@@ -207,6 +207,29 @@ export const numberRestrictionsApi = {
   },
 };
 
+export const REPORTING_FILTER_SECTION_KEYS = [
+  'reports.sales-stats.summary',
+  'reports.sales-stats.top-numbers',
+  'reports.sales-stats.recent-tickets',
+  'reports.balance-breakdown',
+  'reports.sales-by-user',
+  'reports.commissions',
+  'reports.draw-lists',
+  'cash-movements.balance',
+  'cash-movements.summary-by-event',
+] as const;
+
+export type ReportingFilterSectionKey = (typeof REPORTING_FILTER_SECTION_KEYS)[number];
+
+export interface ReportingFilterRule {
+  requireFinalized: boolean;
+  requireWinnerDefined: boolean;
+}
+
+export interface ReportingFilterSettings {
+  sections: Record<ReportingFilterSectionKey, ReportingFilterRule>;
+}
+
 export const frontendSettingsApi = {
   getTicketAppearance: async (): Promise<FrontendTicketSettings> => {
     const res = await api.get<FrontendTicketSettings>('/api/frontend-settings/ticket-appearance');
@@ -218,6 +241,14 @@ export const frontendSettingsApi = {
   },
   getTicketVendorWidths: async (): Promise<FrontendTicketVendorWidthsResponse> => {
     const res = await api.get<FrontendTicketVendorWidthsResponse>('/api/frontend-settings/ticket-vendor-widths');
+    return res.data;
+  },
+  getReportingFilters: async (): Promise<ReportingFilterSettings> => {
+    const res = await api.get<ReportingFilterSettings>('/api/frontend-settings/reporting-filters');
+    return res.data;
+  },
+  updateReportingFilters: async (settings: ReportingFilterSettings): Promise<ReportingFilterSettings> => {
+    const res = await api.patch<ReportingFilterSettings>('/api/frontend-settings/reporting-filters', settings);
     return res.data;
   },
 };
