@@ -9,7 +9,7 @@ import { FilteredTicketsCard } from '@/components/tickets/FilteredTicketsCard';
 import { generateId, formatCurrency, formatDateTime, formatDrawLabel, isDrawOpen } from '@/utils/helpers';
 import { Draw, GlobalNumberRestrictionItem, PrintJob, PrintJobStatus, Ticket, User } from '@/types';
 import { useAuth } from '@/context/AuthContext';
-import { drawsApi, ticketsApi, reportsApi, numberRestrictionsApi, CreateTicketPayload, TopNumber, usersApi } from '@/services/api';
+import { drawsApi, ticketsApi, numberRestrictionsApi, CreateTicketPayload, usersApi } from '@/services/api';
 import { mapSaleTicketToPrintBridge, printBridgeApi } from '@/services/printBridge';
 import { useTicketActions } from '@/hooks/useTicketActions';
 import { printSaleTicket } from '@/utils/ticketPrint';
@@ -119,7 +119,6 @@ export default function SalesPage() {
 
   const [draws, setDraws] = useState<Draw[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [topNumbers, setTopNumbers] = useState<TopNumber[]>([]);
   const [drawTickets, setDrawTickets] = useState<Ticket[]>([]);
   const [globalNumberLimit, setGlobalNumberLimit] = useState<number | null>(null);
   const [globalNumberRestrictions, setGlobalNumberRestrictions] = useState<GlobalNumberRestrictionItem[]>([]);
@@ -153,17 +152,6 @@ export default function SalesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [showNumbersSoldModal, setShowNumbersSoldModal] = useState(false);
 
-  const refreshDrawData = useCallback((drawId: string) => {
-    if (!drawId) {
-      setTopNumbers([]);
-      setDrawTickets([]);
-      return;
-    }
-
-    reportsApi.topNumbers(drawId, 10, undefined, undefined, true).then(setTopNumbers).catch(() => {});
-    ticketsApi.list({ drawId }).then(setDrawTickets).catch(() => {});
-  }, []);
-
   useEffect(() => {
     drawsApi.list().then((list) => {
       setDraws(list);
@@ -192,8 +180,34 @@ export default function SalesPage() {
   }, []);
 
   useEffect(() => {
-    refreshDrawData(selectedDrawId);
-  }, [selectedDrawId, refreshDrawData]);
+    let cancelled = false;
+
+    const loadDrawTickets = async () => {
+      if (!selectedDrawId || !user?.id) {
+        if (!cancelled) {
+          setDrawTickets([]);
+        }
+        return;
+      }
+
+      try {
+        const tickets = await ticketsApi.list({ drawId: selectedDrawId, sellerId: user.id, includeCanceled: false });
+        if (!cancelled) {
+          setDrawTickets(tickets);
+        }
+      } catch {
+        if (!cancelled) {
+          setDrawTickets([]);
+        }
+      }
+    };
+
+    void loadDrawTickets();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDrawId, user]);
 
   useEffect(() => {
     sessionStorage.setItem('go_sales_selected_draw', selectedDrawId);
@@ -224,7 +238,6 @@ export default function SalesPage() {
       return;
     }
     if (lastTicket.sellerId !== user.id) {
-      setLastTicket(null);
       sessionStorage.removeItem('go_last_ticket');
     }
   }, [lastTicket, user]);
@@ -243,8 +256,6 @@ export default function SalesPage() {
 
   useEffect(() => {
     if (!nativePrintJobId) {
-      setNativePrintJob(null);
-      setNativePrintStatusError('');
       return;
     }
 
@@ -289,6 +300,17 @@ export default function SalesPage() {
     [draws, selectedDrawId],
   );
 
+  const visibleLastTicket = useMemo(() => {
+    if (!lastTicket || (user && lastTicket.sellerId !== user.id)) {
+      return null;
+    }
+
+    return lastTicket;
+  }, [lastTicket, user]);
+
+  const visibleNativePrintJob = nativePrintJobId ? nativePrintJob : null;
+  const visibleNativePrintStatusError = nativePrintJobId ? nativePrintStatusError : '';
+
   const usersById = useMemo(
     () => new Map(users.map((u) => [u.id, u])),
     [users],
@@ -312,15 +334,24 @@ export default function SalesPage() {
     [drawTickets],
   );
 
-  const mySoldTotalInDraw = useMemo(() => {
-    if (!user?.id) {
-      return 0;
+  const topNumbers = useMemo(() => {
+    const soldMap = new Map<string, number>();
+
+    for (const ticket of activeDrawTickets) {
+      for (const line of ticket.lines) {
+        soldMap.set(line.number, (soldMap.get(line.number) ?? 0) + line.amount);
+      }
     }
 
-    return activeDrawTickets
-      .filter((ticket) => ticket.sellerId === user.id)
-      .reduce((sum, ticket) => sum + ticket.total, 0);
-  }, [activeDrawTickets, user?.id]);
+    return Array.from(soldMap.entries())
+      .map(([number, total]) => ({ number, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10);
+  }, [activeDrawTickets]);
+
+  const mySoldTotalInDraw = useMemo(() => {
+    return activeDrawTickets.reduce((sum, ticket) => sum + ticket.total, 0);
+  }, [activeDrawTickets]);
 
   const soldByNumber = useMemo(() => {
     const soldMap = new Map<string, number>();
@@ -331,25 +362,6 @@ export default function SalesPage() {
     }
     return soldMap;
   }, [activeDrawTickets]);
-
-  const mySoldByNumber = useMemo(() => {
-    const soldMap = new Map<string, number>();
-    if (!user?.id) {
-      return soldMap;
-    }
-
-    for (const ticket of activeDrawTickets) {
-      if (ticket.sellerId !== user.id) {
-        continue;
-      }
-
-      for (const line of ticket.lines) {
-        soldMap.set(line.number, (soldMap.get(line.number) ?? 0) + line.amount);
-      }
-    }
-
-    return soldMap;
-  }, [activeDrawTickets, user?.id]);
 
   const numbersSoldSummary = useMemo(() => {
     const individualByNumber = new Map(
@@ -364,7 +376,6 @@ export default function SalesPage() {
     }[] = [];
     for (const [number, sold] of soldByNumber.entries()) {
       const individualLimit = individualByNumber.get(number) ?? null;
-      const userSold = mySoldByNumber.get(number) ?? 0;
       const effectiveLimit = individualLimit ?? userGlobalNumberLimit ?? globalNumberLimit;
       const limitType = individualLimit !== null
         ? 'global-numero'
@@ -373,17 +384,16 @@ export default function SalesPage() {
           : globalNumberLimit !== null
             ? 'global'
             : null;
-      const soldForRule = limitType === 'global-usuario' ? userSold : sold;
       entries.push({
         number,
-        sold: soldForRule,
+        sold,
         limit: effectiveLimit,
         limitType,
-        remaining: effectiveLimit !== null ? Math.max(0, effectiveLimit - soldForRule) : null,
+        remaining: effectiveLimit !== null ? Math.max(0, effectiveLimit - sold) : null,
       });
     }
     return entries.sort((a, b) => b.sold - a.sold);
-  }, [soldByNumber, globalNumberRestrictions, userGlobalNumberLimit, globalNumberLimit, mySoldByNumber]);
+  }, [soldByNumber, globalNumberRestrictions, userGlobalNumberLimit, globalNumberLimit]);
 
   const restrictedSummary = useMemo(() => {
     if (globalNumberRestrictions.length === 0) return [];
@@ -406,9 +416,23 @@ export default function SalesPage() {
     [lines, activeSpecialMultiplier],
   );
 
+  const loadCurrentDrawTickets = useCallback(async () => {
+    if (!selectedDrawId || !user?.id) {
+      setDrawTickets([]);
+      return;
+    }
+
+    try {
+      const tickets = await ticketsApi.list({ drawId: selectedDrawId, sellerId: user.id, includeCanceled: false });
+      setDrawTickets(tickets);
+    } catch {
+      setDrawTickets([]);
+    }
+  }, [selectedDrawId, user]);
+
   const refreshCurrentDraw = useCallback(() => {
-    refreshDrawData(selectedDrawId);
-  }, [refreshDrawData, selectedDrawId]);
+    void loadCurrentDrawTickets();
+  }, [loadCurrentDrawTickets]);
 
   const {
     actionError,
@@ -589,7 +613,7 @@ export default function SalesPage() {
 
       setCustomerName('');
       setLines([{ id: generateId(), number: '', amount: '', specialAmount: '' }]);
-      refreshDrawData(selectedDrawId);
+      void refreshCurrentDraw();
     } catch (err: unknown) {
       const responseData = (err as { response?: { data?: { message?: string; error?: string } } })?.response?.data;
       const msg = responseData?.message ?? responseData?.error;
@@ -666,8 +690,8 @@ export default function SalesPage() {
     }
   }, [nativePrintJobId]);
 
-  if (printMode && lastTicket) {
-    const draw = draws.find((d) => d.id === lastTicket.drawId);
+  if (printMode && visibleLastTicket) {
+    const draw = draws.find((d) => d.id === visibleLastTicket.drawId);
     return (
       <div>
         <div className="print:hidden mb-4">
@@ -675,10 +699,10 @@ export default function SalesPage() {
             ← Volver
           </Button>
         </div>
-        <TicketPrintView ticket={lastTicket} draw={draw} sellerName={user?.fullName ?? ''} />
+        <TicketPrintView ticket={visibleLastTicket} draw={draw} sellerName={user?.fullName ?? ''} />
         <div className="print:hidden mt-4 flex flex-wrap gap-3">
           <NativePrintControls
-            ticket={lastTicket}
+            ticket={visibleLastTicket}
             draw={draw}
             user={user}
             showBrowserButton
@@ -785,7 +809,7 @@ export default function SalesPage() {
                   restrictionScope = 'global-numero';
                 } else if (userGlobalNumberLimit !== null) {
                   effectiveLimit = userGlobalNumberLimit;
-                  soldForRule = mySoldByNumber.get(normalizedNumber) ?? 0;
+                  soldForRule = soldByNumber.get(normalizedNumber) ?? 0;
                   restrictionScope = 'global-usuario';
                 } else if (globalNumberLimit !== null) {
                   effectiveLimit = globalNumberLimit;
@@ -904,13 +928,13 @@ export default function SalesPage() {
           </div>
 
           {/* Last ticket confirmation */}
-          {lastTicket && (
+          {visibleLastTicket && (
             <Card className="border-green-200 bg-green-50">
               <CardBody>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-green-800 font-semibold">✓ Ticket registrado</p>
-                    <p className="text-green-700 text-sm font-mono mt-1">{lastTicket.code}</p>
+                    <p className="text-green-700 text-sm font-mono mt-1">{visibleLastTicket.code}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
@@ -922,8 +946,8 @@ export default function SalesPage() {
                       Ver / Imprimir
                     </Button>
                     <NativePrintControls
-                      ticket={lastTicket}
-                      draw={draws.find((d) => d.id === lastTicket.drawId)}
+                      ticket={visibleLastTicket}
+                      draw={draws.find((d) => d.id === visibleLastTicket.drawId)}
                       user={user}
                       buttonVariant="secondary"
                       buttonSize="sm"
@@ -937,13 +961,13 @@ export default function SalesPage() {
             </Card>
           )}
 
-          {lastTicket && nativePrintMsg && (
+          {visibleLastTicket && nativePrintMsg && (
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
               {nativePrintMsg}
             </div>
           )}
 
-          {lastTicket && nativePrintJobId && (
+          {visibleLastTicket && nativePrintJobId && (
             <Card>
               <CardBody className="space-y-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -951,37 +975,37 @@ export default function SalesPage() {
                     <p className="text-sm font-semibold text-slate-800">Estado de la ultima impresion nativa</p>
                     <p className="mt-1 font-mono text-xs text-slate-500">Job: {nativePrintJobId}</p>
                   </div>
-                  {nativePrintJob ? (
-                    <Badge variant={NATIVE_PRINT_STATUS_BADGE[nativePrintJob.status]} className="gap-1.5">
-                      <NativePrintStatusIcon status={nativePrintJob.status} />
-                      {NATIVE_PRINT_STATUS_LABEL[nativePrintJob.status]}
+                  {visibleNativePrintJob ? (
+                    <Badge variant={NATIVE_PRINT_STATUS_BADGE[visibleNativePrintJob.status]} className="gap-1.5">
+                      <NativePrintStatusIcon status={visibleNativePrintJob.status} />
+                      {NATIVE_PRINT_STATUS_LABEL[visibleNativePrintJob.status]}
                     </Badge>
                   ) : (
                     <Badge variant="secondary">Consultando...</Badge>
                   )}
                 </div>
 
-                {nativePrintJob && (
+                {visibleNativePrintJob && (
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-                    <span>Intentos: {nativePrintJob.attempts}/{nativePrintJob.maxAttempts}</span>
-                    <span>Actualizado: {formatDateTime(nativePrintJob.updatedAt)}</span>
-                    {nativePrintJob.finishedAt && <span>Finalizado: {formatDateTime(nativePrintJob.finishedAt)}</span>}
+                    <span>Intentos: {visibleNativePrintJob.attempts}/{visibleNativePrintJob.maxAttempts}</span>
+                    <span>Actualizado: {formatDateTime(visibleNativePrintJob.updatedAt)}</span>
+                    {visibleNativePrintJob.finishedAt && <span>Finalizado: {formatDateTime(visibleNativePrintJob.finishedAt)}</span>}
                   </div>
                 )}
 
-                {nativePrintJob?.lastError && (
+                {visibleNativePrintJob?.lastError && (
                   <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                    {nativePrintJob.lastError}
+                    {visibleNativePrintJob.lastError}
                   </div>
                 )}
 
-                {nativePrintStatusError && (
+                {visibleNativePrintStatusError && (
                   <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                    {nativePrintStatusError}
+                    {visibleNativePrintStatusError}
                   </div>
                 )}
 
-                {nativePrintJob?.status === 'failed' && (
+                {visibleNativePrintJob?.status === 'failed' && (
                   <div className="flex justify-end">
                     <Button
                       variant="secondary"

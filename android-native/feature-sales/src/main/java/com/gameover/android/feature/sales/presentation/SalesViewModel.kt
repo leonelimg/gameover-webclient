@@ -393,11 +393,11 @@ class SalesViewModel @Inject constructor(
                             specialAmount = (line.specialAmount ?: 0.0).toString()
                         )
                     }
-                    
-                    val selectedDrawId = if (state.draws.any { it.id == ticket.drawId }) ticket.drawId else state.selectedDrawId
-                    if (selectedDrawId != state.selectedDrawId) {
+                    //val selectedDrawId = if (state.draws.any { it.id == ticket.drawId }) ticket.drawId else state.selectedDrawId
+                    val selectedDrawId = if (state.draws.any { it.id == state.selectedDrawId }) state.selectedDrawId else state.selectedDrawId
+                    /*if (selectedDrawId != state.selectedDrawId) {
                         loadDrawSummary(selectedDrawId)
-                    }
+                    }*/
 
                     state.copy(
                         lines = saleLines,

@@ -295,29 +295,21 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
   const globalRestrictions = await listGlobalNumberRestrictions();
   const globalRestrictionByNumber = new Map(globalRestrictions.map((item) => [item.number, item.limit]));
 
-  const soldGlobalByNumber = new Map<string, number>();
   const soldByUserNumber = new Map<string, number>();
   await Promise.all(
     Array.from(requestedByNumber.keys()).map(async (number) => {
-      const [globalAgg, userAgg] = await Promise.all([
-        prisma.ticketLine.aggregate({
-          where: { number, ticket: { drawId: body.drawId, canceledAt: null } },
-          _sum: { amount: true },
-        }),
-        prisma.ticketLine.aggregate({
-          where: {
-            number,
-            ticket: {
-              drawId: body.drawId,
-              sellerId: req.user!.sub,
-              canceledAt: null,
-            },
+      const userAgg = await prisma.ticketLine.aggregate({
+        where: {
+          number,
+          ticket: {
+            drawId: body.drawId,
+            sellerId: req.user!.sub,
+            canceledAt: null,
           },
-          _sum: { amount: true },
-        }),
-      ]);
+        },
+        _sum: { amount: true },
+      });
 
-      soldGlobalByNumber.set(number, globalAgg._sum.amount ?? 0);
       soldByUserNumber.set(number, userAgg._sum.amount ?? 0);
     })
   );
@@ -334,11 +326,7 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
       continue;
     }
 
-    const sold = globalByNumberLimit !== null
-      ? soldGlobalByNumber.get(number) ?? 0
-      : userGlobalNumberLimit !== null
-        ? soldByUserNumber.get(number) ?? 0
-        : soldGlobalByNumber.get(number) ?? 0;
+    const sold = soldByUserNumber.get(number) ?? 0;
 
     if (sold + requestedAmount > effectiveLimit) {
       const available = Math.max(0, effectiveLimit - sold).toFixed(2);

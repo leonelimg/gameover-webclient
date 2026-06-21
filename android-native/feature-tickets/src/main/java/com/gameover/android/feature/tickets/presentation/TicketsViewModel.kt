@@ -80,7 +80,12 @@ class TicketsViewModel @Inject constructor(
         val today = LocalDate.now()
         return when (range) {
             DashboardRange.TODAY -> today.toString() to today.toString()
-            DashboardRange.WEEK -> today.minusDays((today.dayOfWeek.value % 7).toLong()).toString() to today.toString()
+            //DashboardRange.WEEK -> today.minusDays((today.dayOfWeek.value % 7).toLong()).toString() to today.toString()
+            DashboardRange.WEEK -> {
+                val monday = today.minusDays((today.dayOfWeek.value - 1).toLong())
+                val sunday = monday.plusDays(6)
+                monday.toString() to sunday.toString()
+            }
             DashboardRange.MONTH -> today.withDayOfMonth(1).toString() to today.toString()
             else -> today.toString() to today.toString()
         }
