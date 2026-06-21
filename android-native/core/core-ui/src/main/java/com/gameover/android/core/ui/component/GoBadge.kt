@@ -32,7 +32,7 @@ fun GoBadge(text: String, variant: BadgeVariant = BadgeVariant.NEUTRAL, modifier
         modifier = modifier
             .clip(RoundedCornerShape(4.dp))
             .background(bg)
-            .padding(horizontal = 8.dp, vertical = 3.dp),
+            .padding(horizontal = 4.dp, vertical = 1.dp),
     )
 }
 

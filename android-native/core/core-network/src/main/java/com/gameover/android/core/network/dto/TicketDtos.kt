@@ -34,7 +34,18 @@ data class DrawSummaryDto(
     val specialMultiplier: SpecialMultiplierDto? = null,
 )
 
-data class UserSummaryDto(val id: String, val fullName: String, val username: String)
+data class UserPlanSummaryDto(
+    val id: String,
+    val name: String,
+    val multiplier: Double,
+)
+
+data class UserSummaryDto(
+    val id: String,
+    val fullName: String,
+    val username: String,
+    val plan: UserPlanSummaryDto? = null,
+)
 
 data class CreateTicketRequest(
     val drawId: String,

@@ -15,3 +15,12 @@ data class DrawDto(
 data class RestrictedNumberDto(val number: String, val limit: Double)
 
 data class SpecialMultiplierDto(val id: String, val name: String, val value: Int)
+
+// Response DTO for /draws/search endpoint with pagination
+data class DrawSearchResponseDto(
+    val items: List<DrawDto>,
+    val total: Int,
+    val page: Int,
+    val pageSize: Int,
+    val totalPages: Int,
+)

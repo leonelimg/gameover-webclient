@@ -1,11 +1,14 @@
 package com.gameover.android.feature.auth.presentation
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -14,9 +17,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -25,6 +28,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.gameover.android.core.ui.R
 import com.gameover.android.core.ui.component.GoButton
 import com.gameover.android.core.ui.component.GoTextField
 import com.gameover.android.core.ui.theme.GoBlue
@@ -44,33 +48,14 @@ fun LoginScreen(
 
     var passwordVisible by remember { mutableStateOf(false) }
 
-    val backgroundGradient = if (isDarkTheme) {
-        listOf(
-            Color(0xFF05070B),
-            Color(0xFF182030),
-        )
-    } else {
-        listOf(
-            GoBlue.copy(alpha = 0.95f),
-            GoBlueDark.copy(alpha = 0.85f),
-        )
-    }
-
-    val loginFieldColors = if (isDarkTheme) {
-        OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
-            unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-            disabledBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
-            focusedLabelColor = MaterialTheme.colorScheme.primary,
-        )
-    } else {
-        OutlinedTextFieldDefaults.colors(
-            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
-        )
-    }
+    val loginFieldColors = OutlinedTextFieldDefaults.colors(
+        focusedBorderColor = MaterialTheme.colorScheme.primary,
+        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+        focusedLabelColor = MaterialTheme.colorScheme.primary,
+        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        focusedContainerColor = Color.Transparent,
+        unfocusedContainerColor = Color.Transparent,
+    )
 
     LaunchedEffect(uiState) {
         when (uiState) {
@@ -87,12 +72,10 @@ fun LoginScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        backgroundGradient
-                    )
-                )
-                .padding(padding),
+                .background(Color(0xFF1D293D))
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .imePadding(),
             contentAlignment = Alignment.Center,
         ) {
             Card(
@@ -113,20 +96,27 @@ fun LoginScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     // Logo / Title with better hierarchy
-                    Text(
-                        text = "GameOver",
-                        fontSize = 36.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = GoBlue,
-                        modifier = Modifier.padding(top = 8.dp)
+                    Image(
+                        painter = painterResource(id = R.drawable.pmcomercial),
+                        contentDescription = "Logo P&M Comercial",
+                        modifier = Modifier
+                            .size(100.dp)
+                            .padding(bottom = 8.dp)
                     )
                     Text(
-                        text = "Sistema de Gestión de Lotería",
+                        text = "Sistema de Venta de Tickets",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(4.dp))/*Text(
+                        text = "PM Comercial",
+                        fontSize = 36.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = GoBlue,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )*/
+
 
                     // Username field with better styling
                     GoTextField(

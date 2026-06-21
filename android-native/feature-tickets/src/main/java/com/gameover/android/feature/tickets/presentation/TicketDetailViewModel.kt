@@ -144,10 +144,11 @@ class TicketDetailViewModel @Inject constructor(
             ?: "Caja"
         val appearanceSettings = runCatching { frontendSettingsRepository.getTicketAppearance() }.getOrNull()
         val hasSpecialAmounts = ticket.lines.any { (it.specialAmount ?: 0.0) > 0 }
+        val regularMultiplier = ticket.seller?.planMultiplier
         val specialMultiplier = draw?.specialMultiplier?.value ?: ticket.draw?.specialMultiplier?.value
         val drawUsesSpecial = specialMultiplier?.let { it > 0 } ?: hasSpecialAmounts
         val showSpecialColumn = drawUsesSpecial && hasSpecialAmounts
-        val effectiveMultiplier = if (showSpecialColumn && specialMultiplier != null) specialMultiplier else null
+        val effectiveMultiplier = if (showSpecialColumn && specialMultiplier != null) specialMultiplier else regularMultiplier
         
         return TicketFormatter.format(
             ticket = ticket,
@@ -169,10 +170,11 @@ class TicketDetailViewModel @Inject constructor(
             ?: "Caja"
         val appearanceSettings = runCatching { frontendSettingsRepository.getTicketAppearance() }.getOrNull()
         val hasSpecialAmounts = ticket.lines.any { (it.specialAmount ?: 0.0) > 0 }
+        val regularMultiplier = ticket.seller?.planMultiplier
         val specialMultiplier = draw?.specialMultiplier?.value ?: ticket.draw?.specialMultiplier?.value
         val drawUsesSpecial = specialMultiplier?.let { it > 0 } ?: hasSpecialAmounts
         val showSpecialColumn = drawUsesSpecial && hasSpecialAmounts
-        val effectiveMultiplier = if (showSpecialColumn && specialMultiplier != null) specialMultiplier else null
+        val effectiveMultiplier = if (showSpecialColumn && specialMultiplier != null) specialMultiplier else regularMultiplier
 
         return TicketFormatter.getTicketLines(
             ticket = ticket,

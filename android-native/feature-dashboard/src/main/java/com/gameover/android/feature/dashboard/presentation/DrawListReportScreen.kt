@@ -17,7 +17,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gameover.android.core.domain.model.Draw
+import com.gameover.android.core.domain.model.DashboardRange
 import com.gameover.android.core.domain.util.CurrencyFormatter
+import com.gameover.android.core.domain.util.DateFormatter
 import com.gameover.android.core.ui.component.ErrorBanner
 import com.gameover.android.core.ui.theme.GoBlue
 import com.gameover.android.core.ui.theme.GoNeutral
@@ -156,7 +158,7 @@ private fun DrawSelector(
                         Column {
                             Text(draw.name, fontWeight = FontWeight.Bold)
                             Text(
-                                text = "${draw.status} - ${draw.closeTime.take(16).replace('T', ' ')}",
+                                text = "${draw.status} - ${DateFormatter.format(draw.closeTime)}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = GoNeutral
                             )

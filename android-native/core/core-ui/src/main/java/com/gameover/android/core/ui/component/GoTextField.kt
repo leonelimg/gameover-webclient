@@ -28,6 +28,7 @@ fun GoTextField(
     trailingIcon: (@Composable () -> Unit)? = null,
     singleLine: Boolean = true,
     maxLines: Int = 1,
+    readOnly: Boolean = false,
     colors: TextFieldColors = OutlinedTextFieldDefaults.colors(),
 ) {
 
@@ -38,6 +39,7 @@ fun GoTextField(
         placeholder = if (placeholder.isNotEmpty()) ({ Text(placeholder) }) else null,
         modifier = modifier.fillMaxWidth(),
         enabled = enabled,
+        readOnly = readOnly,
         isError = isError,
         supportingText = (errorMessage ?: supportingText)?.let { { Text(it) } },
         keyboardOptions = keyboardOptions,

@@ -3,7 +3,7 @@ package com.gameover.android.core.domain.repository
 import com.gameover.android.core.domain.model.Ticket
 
 interface TicketsRepository {
-    suspend fun getTickets(drawId: String? = null, includeCanceled: Boolean = false): List<Ticket>
+    suspend fun getTickets(drawId: String? = null, includeCanceled: Boolean = false, fromDate: String? = null, toDate: String? = null): List<Ticket>
     suspend fun getTicket(id: String): Ticket
     suspend fun createTicket(drawId: String, customerName: String, lines: List<CreateTicketLine>): Ticket
     suspend fun markPrinted(id: String): Ticket

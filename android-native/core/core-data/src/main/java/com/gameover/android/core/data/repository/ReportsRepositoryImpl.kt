@@ -1,5 +1,6 @@
 package com.gameover.android.core.data.repository
 
+import com.gameover.android.core.domain.model.DrawListEntry
 import com.gameover.android.core.domain.model.ReportSummary
 import com.gameover.android.core.domain.model.Ticket
 import com.gameover.android.core.domain.model.TopNumber
@@ -31,5 +32,11 @@ class ReportsRepositoryImpl @Inject constructor(
         val response = ticketsApi.getTickets()
         if (!response.isSuccessful) throw Exception("Error al cargar tickets recientes: ${response.code()}")
         (response.body() ?: emptyList()).take(limit).map { it.toDomain() }
+    }
+
+    override suspend fun getDrawLists(drawId: String): List<DrawListEntry> = withContext(Dispatchers.IO) {
+        val response = reportsApi.getDrawLists(drawId)
+        if (!response.isSuccessful) throw Exception("Error al cargar lista de sorteo: ${response.code()}")
+        response.body()?.toDomain() ?: emptyList()
     }
 }

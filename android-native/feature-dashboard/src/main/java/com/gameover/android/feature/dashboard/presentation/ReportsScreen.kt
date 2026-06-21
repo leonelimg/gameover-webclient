@@ -18,11 +18,23 @@ import com.gameover.android.core.ui.component.GoCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReportsScreen() {
+fun ReportsScreen(
+    onReportClick: () -> Unit
+) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Reportes") }
+                title = {
+                    Text(
+                        "Reportes",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                ),
             )
         }
     ) { padding ->
@@ -48,7 +60,7 @@ fun ReportsScreen() {
                     ReportCard(
                         title = "Lista de Sorteo",
                         icon = Icons.Default.Assignment,
-                        onClick = { /* TODO: Implementar posterior */ }
+                        onClick = onReportClick
                     )
                 }
             }

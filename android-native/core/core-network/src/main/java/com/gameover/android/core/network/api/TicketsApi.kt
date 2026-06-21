@@ -10,6 +10,8 @@ interface TicketsApi {
         @Query("drawId") drawId: String? = null,
         @Query("sellerId") sellerId: String? = null,
         @Query("includeCanceled") includeCanceled: Boolean? = null,
+        @Query("fromDate") fromDate: String? = null,
+        @Query("toDate") toDate: String? = null,
     ): Response<List<TicketDto>>
 
     @GET("api/tickets/{id}")

@@ -4,5 +4,5 @@ import com.gameover.android.core.domain.model.Announcement
 
 interface AnnouncementRepository {
     suspend fun getActiveAnnouncements(): List<Announcement>
-    suspend fun dismissAnnouncement(id: Int)
+    suspend fun dismissAnnouncement(id: String)
 }

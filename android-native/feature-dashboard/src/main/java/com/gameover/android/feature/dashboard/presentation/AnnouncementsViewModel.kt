@@ -35,7 +35,7 @@ class AnnouncementsViewModel @Inject constructor(
         }
     }
 
-    fun dismissAnnouncement(id: Int) {
+    fun dismissAnnouncement(id: String) {
         viewModelScope.launch {
             try {
                 announcementRepository.dismissAnnouncement(id)

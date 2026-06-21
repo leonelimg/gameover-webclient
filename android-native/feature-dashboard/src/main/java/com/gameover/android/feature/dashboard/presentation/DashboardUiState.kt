@@ -3,8 +3,7 @@ package com.gameover.android.feature.dashboard.presentation
 import com.gameover.android.core.domain.model.ReportSummary
 import com.gameover.android.core.domain.model.Ticket
 import com.gameover.android.core.domain.model.TopNumber
-
-enum class DashboardRange { TODAY, LAST7, WEEK, MONTH, CUSTOM }
+import com.gameover.android.core.domain.model.DashboardRange
 
 data class DashboardUiState(
     val isLoading: Boolean = false,
@@ -16,4 +15,5 @@ data class DashboardUiState(
     val customToDate: String = "",
     val error: String? = null,
     val isOnline: Boolean = true,
+    val announcementCount: Int = 0,
 )

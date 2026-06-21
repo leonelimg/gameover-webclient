@@ -78,6 +78,11 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    fun provideAnnouncementsApi(@Named("main") retrofit: Retrofit): AnnouncementsApi =
+        retrofit.create(AnnouncementsApi::class.java)
+
+    @Provides
+    @Singleton
     fun provideFrontendSettingsApi(@Named("main") retrofit: Retrofit): FrontendSettingsApi =
         retrofit.create(FrontendSettingsApi::class.java)
 }

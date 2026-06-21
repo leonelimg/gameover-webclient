@@ -23,7 +23,7 @@ object TicketImageGenerator {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "image/png"
             putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_TEXT, "Ticket de GameOver")
+            putExtra(Intent.EXTRA_TEXT, "Ticket de PM Tickets")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             setPackage("com.whatsapp")
         }

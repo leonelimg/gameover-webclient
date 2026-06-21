@@ -125,7 +125,8 @@ export async function printSaleTicket(ticket: Ticket): Promise<void> {
           <div class="title">${escapeHtml(ticketSettings.ticketTitle)}</div>
           <div class="code">${ticket.code}</div>
           <p class="line">${drawLabel}</p>
-          <p class="line">Fecha sorteo: ${drawDate}</p>
+          <p class="line">F.Sorteo:${drawDate}</p>
+          <p class="line">F.Ticket:${formatDateTime(ticket.createdAt)}</p>
           <p class="line">Cliente: ${customerName}</p>
           <p class="line">Puesto: ${puesto}</p>
           ${typeof regularMultiplier === 'number' ? `<p class="line">Multiplicador regular: x${regularMultiplier}</p>` : ''}

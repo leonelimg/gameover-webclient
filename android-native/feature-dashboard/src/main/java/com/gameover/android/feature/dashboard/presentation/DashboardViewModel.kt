@@ -6,7 +6,9 @@ import com.gameover.android.core.domain.repository.DataRefreshNotifier
 import com.gameover.android.core.domain.repository.DrawsRepository
 import com.gameover.android.core.domain.repository.ReportsRepository
 import com.gameover.android.core.domain.repository.TicketsRepository
+import com.gameover.android.core.domain.repository.AnnouncementRepository
 import com.gameover.android.core.ui.util.NetworkMonitor
+import com.gameover.android.core.domain.model.DashboardRange
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -25,6 +27,7 @@ class DashboardViewModel @Inject constructor(
     private val reportsRepository: ReportsRepository,
     private val ticketsRepository: TicketsRepository,
     private val drawsRepository: DrawsRepository,
+    private val announcementRepository: AnnouncementRepository,
     private val networkMonitor: NetworkMonitor,
     private val dataRefreshNotifier: DataRefreshNotifier,
 ) : ViewModel() {
@@ -70,13 +73,18 @@ class DashboardViewModel @Inject constructor(
                 coroutineScope {
                     val summaryDeferred = async { reportsRepository.getSummary(fromDate = from, toDate = to) }
                     val recentDeferred = async { ticketsRepository.getTickets() }
+                    val announcementsDeferred = async { announcementRepository.getActiveAnnouncements() }
+                    
                     val summary = summaryDeferred.await()
                     val recent = recentDeferred.await().take(5)
+                    val announcements = try { announcementsDeferred.await() } catch (e: Exception) { emptyList() }
+                    
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             summary = summary,
                             recentTickets = recent,
+                            announcementCount = announcements.size,
                             error = null,
                         )
                     }

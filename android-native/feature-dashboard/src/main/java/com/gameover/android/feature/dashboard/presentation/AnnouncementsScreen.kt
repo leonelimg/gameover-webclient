@@ -77,7 +77,7 @@ fun AnnouncementsScreen(
 @Composable
 fun AnnouncementItem(
     announcement: Announcement,
-    onDismiss: (Int) -> Unit
+    onDismiss: (String) -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -109,10 +109,11 @@ fun AnnouncementItem(
                 }
             }
 
-            if (!announcement.message.isNullOrBlank()) {
+            val message = announcement.message
+            if (!message.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = announcement.message,
+                    text = message,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -125,8 +126,8 @@ fun AnnouncementItem(
                     contentDescription = null,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 200.dp),
-                    contentScale = ContentScale.Fit
+                        .heightIn(max = 400.dp),
+                    contentScale = ContentScale.FillWidth
                 )
             }
         }

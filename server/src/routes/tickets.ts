@@ -11,6 +11,36 @@ router.use(authenticate);
 
 type AuthUser = { sub: string; role: 'admin' | 'asociado' | 'vendedor' };
 
+const TICKETS_TIMEZONE_OFFSET = '-06:00';
+
+function parseDateYmdToUtc(dateValue: string, endOfDay: boolean): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  const overflowCheck = new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
+  if (
+    overflowCheck.getUTCFullYear() !== year ||
+    overflowCheck.getUTCMonth() !== month - 1 ||
+    overflowCheck.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  const boundaryTime = endOfDay ? '23:59:59.999' : '00:00:00.000';
+  const parsed = new Date(`${dateValue}T${boundaryTime}${TICKETS_TIMEZONE_OFFSET}`);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+}
+
 function drawCancellationLocked(draw: { closeTime: Date; minutosPreviosCierre: number; winnerNumber: string | null }): boolean {
   if (draw.winnerNumber?.trim()) {
     return true;
@@ -110,7 +140,11 @@ router.get('/', authorizeAnyResource('/sales', '/reports/sales-by-user'), async 
     associateId,
     code,
     includeCanceled,
-  } = req.query as Record<string, string | undefined>;
+   } = req.query as Record<string, string | undefined>;
+   const {
+     fromDate,
+     toDate,
+   } = req.query as Record<string, string | undefined>;
   const scopeWhere = await buildTicketScopeWhere(req.user as AuthUser);
   const where: Record<string, unknown> = { ...scopeWhere };
   if (drawId) where['drawId'] = drawId;
@@ -118,6 +152,34 @@ router.get('/', authorizeAnyResource('/sales', '/reports/sales-by-user'), async 
   if (associateId) where['associateId'] = associateId;
   if (code) where['code'] = code.trim().toUpperCase();
   if (includeCanceled === 'false') where['canceledAt'] = null;
+
+   // Optional date filtering
+   if (fromDate || toDate) {
+     if (fromDate && toDate && fromDate > toDate) {
+       res.status(400).json({ message: 'El rango de fechas es inválido.' });
+       return;
+     }
+
+     where['createdAt'] = {};
+
+     if (fromDate) {
+       const parsed = parseDateYmdToUtc(fromDate, false);
+       if (!parsed) {
+         res.status(400).json({ message: 'fromDate inválida. Use formato YYYY-MM-DD.' });
+         return;
+       }
+       (where['createdAt'] as Record<string, Date>)['gte'] = parsed;
+     }
+
+     if (toDate) {
+       const parsed = parseDateYmdToUtc(toDate, true);
+       if (!parsed) {
+         res.status(400).json({ message: 'toDate inválida. Use formato YYYY-MM-DD.' });
+         return;
+       }
+       (where['createdAt'] as Record<string, Date>)['lte'] = parsed;
+     }
+   }
 
   const tickets = await prisma.ticket.findMany({
     where,

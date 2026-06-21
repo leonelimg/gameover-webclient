@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gameover.android.core.domain.model.Ticket
 import com.gameover.android.core.domain.util.CurrencyFormatter
+import com.gameover.android.core.domain.util.DateFormatter
+import com.gameover.android.core.domain.model.DashboardRange
 import com.gameover.android.core.ui.component.*
 import com.gameover.android.core.ui.theme.*
 
@@ -99,17 +101,43 @@ fun TicketsScreen(
 
                 // Filters with better styling
                 item {
-                    Row(
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        FilterChip(
-                            selected = uiState.includeCanceled,
-                            onClick = { viewModel.onIncludeCanceledChanged(!uiState.includeCanceled) },
-                            label = { Text("Incluir anulados", fontSize = 12.sp) },
-                            shape = MaterialTheme.shapes.small,
-                        )
+                        // Range selector (Hoy, Semana, Mes)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            val ranges = listOf(
+                                DashboardRange.TODAY to "Hoy",
+                                DashboardRange.WEEK to "Semana",
+                                DashboardRange.MONTH to "Mes"
+                            )
+                            ranges.forEach { (range, label) ->
+                                FilterChip(
+                                    selected = uiState.selectedRange == range,
+                                    onClick = { viewModel.onRangeSelected(range) },
+                                    label = { Text(label, fontSize = 12.sp) },
+                                    shape = MaterialTheme.shapes.small,
+                                )
+                            }
+                        }
+
+                        // Include canceled filter
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            FilterChip(
+                                selected = uiState.includeCanceled,
+                                onClick = { viewModel.onIncludeCanceledChanged(!uiState.includeCanceled) },
+                                label = { Text("Incluir anulados", fontSize = 12.sp) },
+                                shape = MaterialTheme.shapes.small,
+                            )
+                        }
                     }
                 }
 
@@ -173,16 +201,19 @@ fun TicketsScreen(
 
 @Composable
 private fun TicketListItem(ticket: Ticket, onClick: () -> Unit) {
-    val purchaseDate = ticket.createdAt.take(10)
-    val purchaseTime = ticket.createdAt.substringAfter('T', "").take(5).ifBlank { "--:--" }
+    val purchaseDate = DateFormatter.formatDate(ticket.createdAt)
+    val purchaseTime = DateFormatter.formatTime(ticket.createdAt)
     val drawName = ticket.draw?.name ?: "Sorteo"
+    val isCanceled = ticket.canceledAt != null
 
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        border = if (isCanceled) BorderStroke(1.dp, GoDanger.copy(alpha = 0.3f)) else null,
+        colors = CardDefaults.cardColors(
+            containerColor = if (isCanceled) GoDanger.copy(alpha = 0.05f) else MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isCanceled) 0.dp else 2.dp),
     ) {
         Row(
             modifier = Modifier
@@ -192,12 +223,18 @@ private fun TicketListItem(ticket: Ticket, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
-                Text(
-                    text = ticket.code,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp,
-                    style = MaterialTheme.typography.labelLarge
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = ticket.code,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (isCanceled) GoDanger else MaterialTheme.colorScheme.onSurface
+                    )
+                    if (isCanceled) {
+                        GoBadge(text = "ANULADO", variant = BadgeVariant.DANGER)
+                    }
+                }
                 if (ticket.customerName.isNotBlank()) {
                     Text(
                         text = ticket.customerName,
@@ -225,7 +262,8 @@ private fun TicketListItem(ticket: Ticket, onClick: () -> Unit) {
                     text = CurrencyFormatter.format(ticket.total),
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
-                    style = MaterialTheme.typography.labelLarge
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (isCanceled) GoDanger else MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = purchaseTime,

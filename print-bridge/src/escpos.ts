@@ -224,10 +224,10 @@ export const buildTicketPrint = (ticket: TicketPayload, columns: number) => {
     b.bold(true).text(ticket.drawLabel ?? ticket.title ?? "").bold(false);
   }
   if (drawDate) {
-    b.text(`Fecha sorteo: ${drawDate}`);
+    b.text(`F.Sorteo: ${drawDate}`);
   }
   if (ticketDate) {
-    b.text(`Fecha ticket: ${ticketDate}`);
+    b.text(`F.Ticket: ${ticketDate}`);
   }
   const customerName = (ticket.customerName ?? "").trim() || "Anonimo";
   b.text(`Cliente: ${customerName}`);

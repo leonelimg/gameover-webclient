@@ -23,6 +23,7 @@ data class SalesUiState(
     val lastTicket: Ticket? = null,
     val isPrintingTicket: Boolean = false,
     val printStatusMessage: String? = null,
+    val drawTotalSales: Double = 0.0,
 ) {
     val selectedDraw: Draw? get() = draws.find { it.id == selectedDrawId }
     val hasSpecialMultiplier: Boolean get() = selectedDraw?.specialMultiplier != null

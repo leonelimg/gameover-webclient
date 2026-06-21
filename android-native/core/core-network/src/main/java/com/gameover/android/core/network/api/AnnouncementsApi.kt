@@ -9,5 +9,5 @@ interface AnnouncementsApi {
     suspend fun getActiveAnnouncements(): Response<List<AnnouncementDto>>
 
     @POST("api/announcements/{id}/dismiss")
-    suspend fun dismissAnnouncement(@Path("id") id: Int): Response<Unit>
+    suspend fun dismissAnnouncement(@Path("id") id: String): Response<Unit>
 }

@@ -31,6 +31,9 @@ import com.gameover.android.core.domain.repository.AuthRepository
 import com.gameover.android.core.domain.util.PermissionChecker
 import com.gameover.android.feature.auth.presentation.LoginScreen
 import com.gameover.android.feature.dashboard.presentation.DashboardScreen
+import com.gameover.android.feature.dashboard.presentation.AnnouncementsScreen
+import com.gameover.android.feature.dashboard.presentation.ReportsScreen
+import com.gameover.android.feature.dashboard.presentation.DrawListReportScreen
 import com.gameover.android.feature.sales.presentation.SalesScreen
 import com.gameover.android.feature.settings.presentation.SettingsScreen
 import com.gameover.android.feature.tickets.presentation.TicketDetailScreen
@@ -42,8 +45,11 @@ object Routes {
     const val DASHBOARD = "dashboard"
     const val SALES = "sales"
     const val TICKETS = "tickets"
+    const val REPORTS = "reports"
+    const val DRAW_LIST_REPORT = "reports/draw-list"
     const val TICKET_DETAIL = "ticket/{ticketId}"
     const val SETTINGS = "settings"
+    const val ANNOUNCEMENTS = "announcements"
 
     fun ticketDetail(ticketId: String) = "ticket/$ticketId"
 }
@@ -97,6 +103,7 @@ fun AppNavGraph(
         BottomNavItem(Routes.DASHBOARD, "Dashboard", Icons.Default.Dashboard, Icons.Default.Dashboard),
         BottomNavItem(Routes.SALES, "Ventas", Icons.Default.ShoppingCart, Icons.Default.ShoppingCart),
         BottomNavItem(Routes.TICKETS, "Tickets", Icons.Default.List, Icons.Default.List),
+        BottomNavItem(Routes.REPORTS, "Reportes", Icons.Default.BarChart, Icons.Default.BarChart),
         BottomNavItem(Routes.SETTINGS, "Config", Icons.Default.Settings, Icons.Default.Settings),
     )
 
@@ -161,7 +168,15 @@ fun AppNavGraph(
             }
 
             composable(Routes.DASHBOARD) {
-                DashboardScreen()
+                DashboardScreen(
+                    onNotificationsClick = {
+                        navController.navigate(Routes.ANNOUNCEMENTS)
+                    }
+                )
+            }
+
+            composable(Routes.ANNOUNCEMENTS) {
+                AnnouncementsScreen(onBack = { navController.popBackStack() })
             }
 
             composable(Routes.SALES) {
@@ -178,6 +193,18 @@ fun AppNavGraph(
                         // Could be enhanced with CameraX in TicketsScreen itself
                     },
                 )
+            }
+
+            composable(Routes.REPORTS) {
+                ReportsScreen(
+                    onReportClick = {
+                        navController.navigate(Routes.DRAW_LIST_REPORT)
+                    }
+                )
+            }
+
+            composable(Routes.DRAW_LIST_REPORT) {
+                DrawListReportScreen(onBack = { navController.popBackStack() })
             }
 
             composable(

@@ -58,6 +58,9 @@ abstract class DataBindsModule {
     abstract fun bindReportsRepository(impl: ReportsRepositoryImpl): ReportsRepository
 
     @Binds
+    abstract fun bindAnnouncementRepository(impl: AnnouncementRepositoryImpl): AnnouncementRepository
+
+    @Binds
     abstract fun bindOfflineQueueRepository(impl: OfflineQueueRepositoryImpl): OfflineQueueRepository
 
     @Binds

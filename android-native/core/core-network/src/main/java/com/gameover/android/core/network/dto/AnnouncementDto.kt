@@ -1,12 +1,13 @@
 package com.gameover.android.core.network.dto
 
 import com.gameover.android.core.domain.model.Announcement
+import com.google.gson.annotations.SerializedName
 
 data class AnnouncementDto(
-    val id: Int,
+    val id: String,
     val name: String,
     val message: String?,
-    val image: String?,
+    @SerializedName("imageUrl") val image: String?,
     val startDate: String?,
     val endDate: String?,
 )

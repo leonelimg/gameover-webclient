@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gameover.android.core.domain.model.Ticket
 import com.gameover.android.core.domain.util.CurrencyFormatter
+import com.gameover.android.core.domain.util.DateFormatter
 import com.gameover.android.core.ui.component.*
 import com.gameover.android.core.ui.theme.GoNeutral
 import com.gameover.android.core.ui.theme.GoBlue
@@ -145,7 +146,7 @@ private fun TicketDetailContent(
                     Text(text = ticket.code, fontWeight = FontWeight.Bold, fontSize = 22.sp)
                     ticket.draw?.let { Text(text = it.name, fontSize = 14.sp, color = GoNeutral) }
                     ticket.seller?.let { Text(text = "Vendedor: ${it.fullName}", fontSize = 12.sp, color = GoNeutral) }
-                    Text(text = "Fecha: ${ticket.createdAt.take(10)}", fontSize = 12.sp, color = GoNeutral)
+                    Text(text = "Fecha: ${DateFormatter.format(ticket.createdAt)}", fontSize = 12.sp, color = GoNeutral)
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     PaymentStatusBadge(status = ticket.paymentStatus.name, isCanceled = ticket.canceledAt != null)

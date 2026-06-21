@@ -4,16 +4,19 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material3.*
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -26,16 +29,23 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gameover.android.core.domain.model.ReportSummary
+import com.gameover.android.core.domain.model.DashboardRange
 import com.gameover.android.core.domain.model.Ticket
 import com.gameover.android.core.domain.util.CurrencyFormatter
+import com.gameover.android.core.domain.util.DateFormatter
 import com.gameover.android.core.ui.component.*
 import com.gameover.android.core.ui.theme.*
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
+    onNotificationsClick: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -51,6 +61,19 @@ fun DashboardScreen(
                     )
                 },
                 actions = {
+                    IconButton(onClick = onNotificationsClick) {
+                        BadgedBox(
+                            badge = {
+                                if (uiState.announcementCount > 0) {
+                                    Badge {
+                                        Text(uiState.announcementCount.toString())
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.Notifications, contentDescription = "Anuncios")
+                        }
+                    }
                     IconButton(onClick = { viewModel.refresh() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Actualizar")
                     }
@@ -97,20 +120,58 @@ fun DashboardScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            GoTextField(
-                                value = uiState.customFromDate,
-                                onValueChange = { viewModel.onCustomDateChanged(it, uiState.customToDate) },
-                                label = "Desde",
-                                placeholder = "YYYY-MM-DD",
-                                modifier = Modifier.weight(1f),
-                            )
-                            GoTextField(
-                                value = uiState.customToDate,
-                                onValueChange = { viewModel.onCustomDateChanged(uiState.customFromDate, it) },
-                                label = "Hasta",
-                                placeholder = "YYYY-MM-DD",
-                                modifier = Modifier.weight(1f),
-                            )
+                            var showFromPicker by remember { mutableStateOf(false) }
+                            var showToPicker by remember { mutableStateOf(false) }
+
+                            if (showFromPicker) {
+                                GoDatePickerDialog(
+                                    initialDate = uiState.customFromDate,
+                                    onDateSelected = { viewModel.onCustomDateChanged(it, uiState.customToDate) },
+                                    onDismiss = { showFromPicker = false }
+                                )
+                            }
+
+                            if (showToPicker) {
+                                GoDatePickerDialog(
+                                    initialDate = uiState.customToDate,
+                                    onDateSelected = { viewModel.onCustomDateChanged(uiState.customFromDate, it) },
+                                    onDismiss = { showToPicker = false }
+                                )
+                            }
+
+                            Box(modifier = Modifier.weight(1f)) {
+                                GoTextField(
+                                    value = uiState.customFromDate,
+                                    onValueChange = { },
+                                    label = "Desde",
+                                    placeholder = "YYYY-MM-DD",
+                                    readOnly = true,
+                                    trailingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .clickable { showFromPicker = true }
+                                )
+                            }
+
+                            Box(modifier = Modifier.weight(1f)) {
+                                GoTextField(
+                                    value = uiState.customToDate,
+                                    onValueChange = { },
+                                    label = "Hasta",
+                                    placeholder = "YYYY-MM-DD",
+                                    readOnly = true,
+                                    trailingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .clickable { showToPicker = true }
+                                )
+                            }
                         }
                     }
                 }
@@ -195,13 +256,56 @@ fun DashboardScreen(
 }
 
 @Composable
+private fun GoDatePickerDialog(
+    initialDate: String,
+    onDateSelected: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val calendar = Calendar.getInstance()
+
+    if (initialDate.isNotBlank()) {
+        try {
+            val date = LocalDate.parse(initialDate)
+            calendar.set(date.year, date.monthValue - 1, date.dayOfMonth)
+        } catch (e: Exception) {
+            // Use current date if parsing fails
+        }
+    }
+
+    val year = calendar.get(Calendar.YEAR)
+    val month = calendar.get(Calendar.MONTH)
+    val day = calendar.get(Calendar.DAY_OF_MONTH)
+
+    DisposableEffect(Unit) {
+        val dialog = android.app.DatePickerDialog(
+            context,
+            { _, selectedYear, selectedMonth, selectedDayOfMonth ->
+                val date = LocalDate.of(selectedYear, selectedMonth + 1, selectedDayOfMonth)
+                onDateSelected(date.format(DateTimeFormatter.ISO_LOCAL_DATE))
+                onDismiss()
+            },
+            year,
+            month,
+            day
+        )
+        dialog.setOnDismissListener { onDismiss() }
+        dialog.show()
+
+        onDispose {
+            dialog.dismiss()
+        }
+    }
+}
+
+@Composable
 private fun RangeSelector(selected: DashboardRange, onSelect: (DashboardRange) -> Unit) {
     val ranges = listOf(
         DashboardRange.TODAY to "Hoy",
-        DashboardRange.LAST7 to "Últ. 7d",
+/*        DashboardRange.LAST7 to "Últ. 7d",*/
         DashboardRange.WEEK to "Semana",
         DashboardRange.MONTH to "Mes",
-        DashboardRange.CUSTOM to "Custom",
+        DashboardRange.CUSTOM to "Otra Fecha",
     )
     Row(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -301,8 +405,8 @@ private fun KpiCard(
 
 @Composable
 private fun RecentTicketRow(ticket: Ticket) {
-    val purchaseDate = ticket.createdAt.take(10)
-    val purchaseTime = ticket.createdAt.substringAfter('T', "").take(5).ifBlank { "--:--" }
+    val purchaseDate = DateFormatter.formatDate(ticket.createdAt)
+    val purchaseTime = DateFormatter.formatTime(ticket.createdAt)
     val drawName = ticket.draw?.name ?: "Sorteo"
 
     Card(

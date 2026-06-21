@@ -2,6 +2,7 @@ package com.gameover.android.feature.dashboard.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gameover.android.core.domain.model.DashboardRange
 import com.gameover.android.core.domain.model.Draw
 import com.gameover.android.core.domain.model.DrawListEntry
 import com.gameover.android.core.domain.repository.DrawsRepository

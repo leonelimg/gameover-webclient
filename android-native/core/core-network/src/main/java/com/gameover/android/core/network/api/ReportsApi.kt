@@ -22,4 +22,9 @@ interface ReportsApi {
     suspend fun getRecentTickets(
         @Query("limit") limit: Int = 5,
     ): Response<List<TicketDto>>
+
+    @GET("api/reports/draw-lists")
+    suspend fun getDrawLists(
+        @Query("drawId") drawId: String,
+    ): Response<DrawListResponseDto>
 }

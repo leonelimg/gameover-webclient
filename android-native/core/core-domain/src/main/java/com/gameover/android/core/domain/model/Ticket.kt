@@ -31,4 +31,9 @@ data class Ticket(
 
 data class DrawSummary(val id: String, val name: String, val specialMultiplier: SpecialMultiplierSummary? = null)
 data class SpecialMultiplierSummary(val id: String, val name: String, val value: Int)
-data class UserSummary(val id: String, val fullName: String, val username: String)
+data class UserSummary(
+    val id: String,
+    val fullName: String,
+    val username: String,
+    val planMultiplier: Double? = null,
+)

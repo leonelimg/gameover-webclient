@@ -8,6 +8,7 @@ import com.gameover.android.core.domain.repository.AuthRepository
 import com.gameover.android.core.domain.repository.DrawsRepository
 import com.gameover.android.core.domain.repository.FrontendSettingsRepository
 import com.gameover.android.core.domain.repository.OfflineQueueRepository
+import com.gameover.android.core.domain.repository.ReportsRepository
 import com.gameover.android.core.domain.repository.TicketsRepository
 import com.gameover.android.core.domain.usecase.CreateTicketUseCase
 import com.gameover.android.core.domain.usecase.EnqueueOfflineSaleUseCase
@@ -38,6 +39,7 @@ class SalesViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val frontendSettingsRepository: FrontendSettingsRepository,
     private val ticketsRepository: TicketsRepository,
+    private val reportsRepository: ReportsRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SalesUiState())
@@ -66,6 +68,9 @@ class SalesViewModel @Inject constructor(
                     val firstOpen = draws.firstOrNull { it.isOpen() }
                     val selectedId = if (draws.any { it.id == state.selectedDrawId }) state.selectedDrawId
                                      else firstOpen?.id ?: ""
+                    if (selectedId.isNotBlank()) {
+                        loadDrawSummary(selectedId)
+                    }
                     state.copy(draws = draws, selectedDrawId = selectedId, isLoadingDraws = false)
                 }
             } catch (e: Exception) {
@@ -76,6 +81,18 @@ class SalesViewModel @Inject constructor(
 
     fun onDrawSelected(drawId: String) {
         _uiState.update { it.copy(selectedDrawId = drawId) }
+        loadDrawSummary(drawId)
+    }
+
+    private fun loadDrawSummary(drawId: String) {
+        viewModelScope.launch {
+            try {
+                val summary = reportsRepository.getSummary(drawId = drawId)
+                _uiState.update { it.copy(drawTotalSales = summary.totalSales) }
+            } catch (e: Exception) {
+                // Silently fail for the top bar total
+            }
+        }
     }
 
     fun onCustomerNameChanged(name: String) {
@@ -155,10 +172,11 @@ class SalesViewModel @Inject constructor(
                 ?: "Caja"
             val appearanceSettings = runCatching { frontendSettingsRepository.getTicketAppearance() }.getOrNull()
             val hasSpecialAmounts = ticket.lines.any { (it.specialAmount ?: 0.0) > 0 }
+            val regularMultiplier = ticket.seller?.planMultiplier
             val specialMultiplier = draw?.specialMultiplier?.value ?: ticket.draw?.specialMultiplier?.value
             val drawUsesSpecial = specialMultiplier?.let { it > 0 } ?: hasSpecialAmounts
             val showSpecialColumn = drawUsesSpecial && hasSpecialAmounts
-            val effectiveMultiplier = if (showSpecialColumn && specialMultiplier != null) specialMultiplier else null
+            val effectiveMultiplier = if (showSpecialColumn && specialMultiplier != null) specialMultiplier else regularMultiplier
 
             val data = TicketFormatter.format(
                 ticket = ticket,
@@ -201,10 +219,11 @@ class SalesViewModel @Inject constructor(
             ?: "Caja"
         val appearanceSettings = runCatching { frontendSettingsRepository.getTicketAppearance() }.getOrNull()
         val hasSpecialAmounts = ticket.lines.any { (it.specialAmount ?: 0.0) > 0 }
+        val regularMultiplier = ticket.seller?.planMultiplier
         val specialMultiplier = draw?.specialMultiplier?.value ?: ticket.draw?.specialMultiplier?.value
         val drawUsesSpecial = specialMultiplier?.let { it > 0 } ?: hasSpecialAmounts
         val showSpecialColumn = drawUsesSpecial && hasSpecialAmounts
-        val effectiveMultiplier = if (showSpecialColumn && specialMultiplier != null) specialMultiplier else null
+        val effectiveMultiplier = if (showSpecialColumn && specialMultiplier != null) specialMultiplier else regularMultiplier
 
         return TicketFormatter.getTicketLines(
             ticket = ticket,
@@ -295,6 +314,7 @@ class SalesViewModel @Inject constructor(
                             lines = listOf(SaleLine()),
                         )
                     }
+                    loadDrawSummary(draw.id)
                 },
                 onFailure = { error ->
                     if (isNetworkError(error)) {

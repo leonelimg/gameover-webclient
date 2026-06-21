@@ -54,7 +54,14 @@ fun TicketDto.toDomain(): Ticket = Ticket(
             },
         )
     },
-    seller = seller?.let { UserSummary(it.id, it.fullName, it.username) },
+    seller = seller?.let {
+        UserSummary(
+            id = it.id,
+            fullName = it.fullName,
+            username = it.username,
+            planMultiplier = it.plan?.multiplier,
+        )
+    },
 )
 
 fun ReportSummaryDto.toDomain(): ReportSummary = ReportSummary(
@@ -67,3 +74,12 @@ fun ReportSummaryDto.toDomain(): ReportSummary = ReportSummary(
 )
 
 fun TopNumberDto.toDomain(): TopNumber = TopNumber(number, totalAmount, ticketCount)
+
+fun DrawListEntryDto.toDomain(): DrawListEntry = DrawListEntry(number, totalAmount)
+
+fun DrawListResponseDto.toDomain(): List<DrawListEntry> = numbers.map { numberDto ->
+    DrawListEntry(
+        number = numberDto.number,
+        totalAmount = numberDto.total
+    )
+}

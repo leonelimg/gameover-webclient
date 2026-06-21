@@ -2,6 +2,7 @@ package com.gameover.android.feature.bluetooth.escpos
 
 import com.gameover.android.core.domain.model.Ticket
 import com.gameover.android.core.domain.model.Draw
+import com.gameover.android.core.domain.util.DateFormatter
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -10,16 +11,6 @@ import java.util.Locale
 object TicketFormatter {
 
     private const val TICKET_WIDTH = 32 // chars for 58mm thermal printer
-    private val localeNi = Locale("es", "NI")
-    private val dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy, hh:mm a", localeNi).withZone(ZoneId.systemDefault())
-
-    private fun formatDate(value: String): String {
-        return try {
-            dateFormatter.format(Instant.parse(value)).lowercase(localeNi)
-        } catch (e: Exception) {
-            value.take(16).replace("T", " ")
-        }
-    }
 
     private fun stripDateFromDrawLabel(value: String): String {
         val normalized = value.trim().replace(Regex("\\s+"), " ")
@@ -137,8 +128,9 @@ object TicketFormatter {
                 TicketAlignment.RIGHT -> builder.alignRight()
             }
 
-            if (line.isBold) builder.boldOn() else builder.boldOff()
             if (line.isDoubleSize) builder.doubleSizeOn() else builder.normalSize()
+            // ESC ! (size) can clear emphasis on some printers, so apply bold last.
+            if (line.isBold) builder.boldOn() else builder.boldOff()
 
             if (line.text == "---DIVIDER---") {
                 builder.divider()
@@ -178,8 +170,8 @@ object TicketFormatter {
         val showSpecialColumn = drawHasSpecial && hasSpecial
         val rawDrawName = draw?.name ?: ticket.draw?.name ?: ticket.drawId
         val drawName = stripDateFromDrawLabel(rawDrawName)
-        val drawDateStr = draw?.closeTime?.let(::formatDate) ?: ""
-        val ticketDateStr = formatDate(ticket.createdAt)
+        val drawDateStr = draw?.closeTime?.let(DateFormatter::format) ?: ""
+        val ticketDateStr = DateFormatter.format(ticket.createdAt)
         val customerName = ticket.customerName.trim().ifBlank { "Anonimo" }
         val groupedLines = groupLines(ticket, showSpecialColumn)
         val footerLines = buildFooterLines(footerNote, effectiveMultiplier)
@@ -190,9 +182,9 @@ object TicketFormatter {
         result.add(TicketTextLine(ticket.code, isBold = true, alignment = TicketAlignment.CENTER, isDoubleSize = ticketCodeFontSize >= 30))
         result.add(TicketTextLine(drawName, isBold = true, alignment = TicketAlignment.LEFT))
         if (drawDateStr.isNotBlank()) {
-            result.add(TicketTextLine("Fecha sorteo: $drawDateStr"))
+            result.add(TicketTextLine("F.Sorteo:$drawDateStr"))
         }
-        result.add(TicketTextLine("Fecha ticket: $ticketDateStr"))
+        result.add(TicketTextLine("F.Ticket:$ticketDateStr"))
         result.add(TicketTextLine("Cliente: $customerName"))
         result.add(TicketTextLine("Puesto: $sellerName", isBold = true))
         result.add(TicketTextLine("---DIVIDER---"))
@@ -233,7 +225,8 @@ object TicketFormatter {
 
         if (footerLines.isNotEmpty()) {
             for (line in footerLines) {
-                result.add(TicketTextLine(line, alignment = TicketAlignment.CENTER))
+                val isMultiplier = line.startsWith("Multiplicador:", ignoreCase = true)
+                result.add(TicketTextLine(line, alignment = TicketAlignment.CENTER, isBold = isMultiplier))
             }
         }
 

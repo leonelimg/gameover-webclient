@@ -103,13 +103,19 @@ fun SalesScreen(
                     )
                 },
                 actions = {
-                    if (uiState.pendingCount > 0) {
-                        Badge(
-                            modifier = Modifier
-                                .align(Alignment.CenterVertically)
-                                .padding(end = 16.dp)
+                    if (uiState.selectedDrawId.isNotEmpty()) {
+                        Surface(
+                            color = GoSuccessDark,
+                            shape = MaterialTheme.shapes.small,
+                            modifier = Modifier.padding(end = 4.dp)
                         ) {
-                            Text(uiState.pendingCount.toString(), style = MaterialTheme.typography.labelSmall)
+                            Text(
+                                text = CurrencyFormatter.format(uiState.drawTotalSales),
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
                         }
                     }
                     IconButton(onClick = viewModel::loadDraws) {
