@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  Users,
-  Ticket,
   ShoppingCart,
   TrendingUp,
   DollarSign,
@@ -15,6 +13,7 @@ import { formatCurrency, formatDateTime } from '@/utils/helpers';
 import { useAuth } from '@/context/AuthContext';
 import { reportsApi, ReportSummary, TopNumber } from '@/services/api';
 import { Ticket as TicketType } from '@/types';
+import { ActiveAnnouncementsCard } from './ActiveAnnouncementsCard';
 
 type DashboardRange = 'today' | 'last7' | 'week' | 'month' | 'custom';
 const DASHBOARD_RANGE_STORAGE_KEY = 'go_dashboard_selected_range';
@@ -213,9 +212,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
-        <StatCard icon={<Users size={20} />} label="Usuarios" value={stats.userCount} color="blue" />
-        <StatCard icon={<Ticket size={20} />} label="Sorteos" value={stats.drawCount} color="purple" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={<ShoppingCart size={20} />} label="Tickets" value={stats.ticketCount} color="green" />
         <StatCard
           icon={<DollarSign size={20} />}
@@ -236,6 +233,9 @@ export default function DashboardPage() {
           color="indigo"
         />
       </div>
+
+      {/* Active announcements slide/card */}
+      <ActiveAnnouncementsCard />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent tickets */}
@@ -326,19 +326,52 @@ function StatCard({
   value: string | number;
   color: 'blue' | 'purple' | 'green' | 'orange' | 'red' | 'indigo';
 }) {
-  const colorMap = {
-    blue: 'bg-blue-50 text-blue-600',
-    purple: 'bg-purple-50 text-purple-600',
-    green: 'bg-green-50 text-green-600',
-    orange: 'bg-orange-50 text-orange-600',
-    red: 'bg-red-50 text-red-600',
-    indigo: 'bg-indigo-50 text-indigo-600',
+  const styleMap = {
+    blue: {
+      card: 'bg-gradient-to-br from-blue-50/60 to-white border-blue-100 hover:border-blue-200',
+      icon: 'bg-blue-100 text-blue-600',
+      value: 'text-blue-950',
+      label: 'text-blue-700/85',
+    },
+    purple: {
+      card: 'bg-gradient-to-br from-purple-50/60 to-white border-purple-100 hover:border-purple-200',
+      icon: 'bg-purple-100 text-purple-600',
+      value: 'text-purple-950',
+      label: 'text-purple-700/85',
+    },
+    green: {
+      card: 'bg-gradient-to-br from-emerald-50/60 to-white border-emerald-100 hover:border-emerald-200',
+      icon: 'bg-emerald-100 text-emerald-600',
+      value: 'text-emerald-950',
+      label: 'text-emerald-700/85',
+    },
+    orange: {
+      card: 'bg-gradient-to-br from-amber-50/60 to-white border-amber-100 hover:border-amber-200',
+      icon: 'bg-amber-100 text-amber-600',
+      value: 'text-amber-950',
+      label: 'text-amber-700/85',
+    },
+    red: {
+      card: 'bg-gradient-to-br from-rose-50/60 to-white border-rose-100 hover:border-rose-200',
+      icon: 'bg-rose-100 text-rose-600',
+      value: 'text-rose-950',
+      label: 'text-rose-700/85',
+    },
+    indigo: {
+      card: 'bg-gradient-to-br from-indigo-50/60 to-white border-indigo-100 hover:border-indigo-200',
+      icon: 'bg-indigo-100 text-indigo-600',
+      value: 'text-indigo-950',
+      label: 'text-indigo-700/85',
+    },
   };
+
+  const styles = styleMap[color];
+
   return (
-    <Card className="p-4">
-      <div className={`inline-flex p-2 rounded-lg ${colorMap[color]} mb-3`}>{icon}</div>
-      <p className="text-2xl font-bold text-slate-900">{value}</p>
-      <p className="text-sm text-slate-500 mt-0.5">{label}</p>
-    </Card>
+    <div className={`p-4 rounded-xl border shadow-sm transition-all duration-300 ${styles.card}`}>
+      <div className={`inline-flex p-2 rounded-lg ${styles.icon} mb-3`}>{icon}</div>
+      <p className={`text-2xl font-bold ${styles.value}`}>{value}</p>
+      <p className={`text-sm font-medium ${styles.label} mt-0.5`}>{label}</p>
+    </div>
   );
 }
