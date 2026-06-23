@@ -1,5 +1,6 @@
 package com.gameover.android.feature.auth.presentation
 
+import android.view.autofill.AutofillManager
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -16,10 +17,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentType
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -39,6 +44,9 @@ fun LoginScreen(
     onLoginSuccess: () -> Unit,
     viewModel: AuthViewModel = hiltViewModel(),
 ) {
+    val context = LocalContext.current
+    val autofillManager = remember { context.getSystemService(AutofillManager::class.java) }
+
     val uiState by viewModel.uiState.collectAsState()
     val username by viewModel.username.collectAsState()
     val password by viewModel.password.collectAsState()
@@ -59,7 +67,10 @@ fun LoginScreen(
 
     LaunchedEffect(uiState) {
         when (uiState) {
-            is LoginUiState.Success -> onLoginSuccess()
+            is LoginUiState.Success -> {
+                autofillManager?.commit()
+                onLoginSuccess()
+            }
             is LoginUiState.Error -> {
                 snackbarHostState.showSnackbar((uiState as LoginUiState.Error).message)
                 viewModel.clearError()
@@ -125,6 +136,9 @@ fun LoginScreen(
                         label = "Usuario",
                         placeholder = "",
                         enabled = uiState !is LoginUiState.Loading,
+                        modifier = Modifier.semantics {
+                            contentType = ContentType.Username
+                        },
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Text,
                             imeAction = ImeAction.Next,
@@ -142,6 +156,9 @@ fun LoginScreen(
                         label = "Contraseña",
                         placeholder = "",
                         enabled = uiState !is LoginUiState.Loading,
+                        modifier = Modifier.semantics {
+                            contentType = ContentType.Password
+                        },
                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Password,

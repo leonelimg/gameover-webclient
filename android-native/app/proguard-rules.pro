@@ -9,6 +9,12 @@
 
 # Add any project specific keep rules here:
 
+# Prevent obfuscation of network DTOs (used for JSON serialization/deserialization)
+-keep class com.gameover.android.core.network.dto.** { *; }
+
+# Prevent obfuscation of Retrofit API service interfaces
+-keep interface com.gameover.android.core.network.api.** { *; }
+
 # If your project uses WebView with JS, uncomment the following
 # and specify the fully qualified class name to the JavaScript interface
 # class:
@@ -23,3 +29,4 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+

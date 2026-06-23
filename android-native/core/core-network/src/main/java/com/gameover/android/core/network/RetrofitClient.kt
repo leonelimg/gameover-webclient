@@ -33,6 +33,7 @@ object RetrofitClientFactory {
             .addInterceptor(AuthInterceptor(accessTokenProvider))
             .authenticator(
                 TokenAuthenticator(
+                    accessTokenProvider = accessTokenProvider,
                     refreshTokenProvider = refreshTokenProvider,
                     onTokenRefreshed = onTokenRefreshed,
                     onRefreshFailed = onRefreshFailed,

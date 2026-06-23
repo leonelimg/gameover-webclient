@@ -1,5 +1,6 @@
 package com.gameover.android.app.navigation
 
+import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
@@ -34,6 +35,8 @@ import com.gameover.android.feature.dashboard.presentation.DashboardScreen
 import com.gameover.android.feature.dashboard.presentation.AnnouncementsScreen
 import com.gameover.android.feature.dashboard.presentation.ReportsScreen
 import com.gameover.android.feature.dashboard.presentation.DrawListReportScreen
+import com.gameover.android.feature.dashboard.presentation.DepositsWithdrawalsReportScreen
+import com.gameover.android.feature.dashboard.presentation.BalanceBreakdownReportScreen
 import com.gameover.android.feature.sales.presentation.SalesScreen
 import com.gameover.android.feature.settings.presentation.SettingsScreen
 import com.gameover.android.feature.tickets.presentation.TicketDetailScreen
@@ -47,11 +50,15 @@ object Routes {
     const val TICKETS = "tickets"
     const val REPORTS = "reports"
     const val DRAW_LIST_REPORT = "reports/draw-list"
+    const val DEPOSITS_WITHDRAWALS_REPORT = "reports/deposits-withdrawals"
+    const val BALANCE_BREAKDOWN_REPORT = "reports/balance-breakdown"
     const val TICKET_DETAIL = "ticket/{ticketId}"
     const val SETTINGS = "settings"
     const val ANNOUNCEMENTS = "announcements"
 
     fun ticketDetail(ticketId: String) = "ticket/$ticketId"
+
+    val tabs = listOf(DASHBOARD, SALES, TICKETS, REPORTS, SETTINGS)
 }
 
 data class BottomNavItem(
@@ -154,8 +161,114 @@ fun AppNavGraph(
             navController = navController,
             startDestination = if (isAuthenticated == true) Routes.DASHBOARD else Routes.LOGIN,
             modifier = Modifier.padding(paddingValues),
-            enterTransition = { fadeIn(animationSpec = tween(300)) },
-            exitTransition = { fadeOut(animationSpec = tween(300)) },
+            enterTransition = {
+                val initialRoute = initialState.destination.route
+                val targetRoute = targetState.destination.route
+                if (initialRoute in Routes.tabs && targetRoute in Routes.tabs) {
+                    val initialIndex = Routes.tabs.indexOf(initialRoute)
+                    val targetIndex = Routes.tabs.indexOf(targetRoute)
+                    if (targetIndex > initialIndex) {
+                        slideIntoContainer(
+                            towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                            animationSpec = tween(300)
+                        ) + fadeIn(animationSpec = tween(300))
+                    } else {
+                        slideIntoContainer(
+                            towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                            animationSpec = tween(300)
+                        ) + fadeIn(animationSpec = tween(300))
+                    }
+                } else if (targetRoute != Routes.LOGIN && targetRoute != null && targetRoute !in Routes.tabs) {
+                    // Push of sub-screen
+                    slideIntoContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                        animationSpec = tween(300)
+                    ) + fadeIn(animationSpec = tween(300))
+                } else {
+                    fadeIn(animationSpec = tween(300))
+                }
+            },
+            exitTransition = {
+                val initialRoute = initialState.destination.route
+                val targetRoute = targetState.destination.route
+                if (initialRoute in Routes.tabs && targetRoute in Routes.tabs) {
+                    val initialIndex = Routes.tabs.indexOf(initialRoute)
+                    val targetIndex = Routes.tabs.indexOf(targetRoute)
+                    if (targetIndex > initialIndex) {
+                        slideOutOfContainer(
+                            towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                            animationSpec = tween(300)
+                        ) + fadeOut(animationSpec = tween(300))
+                    } else {
+                        slideOutOfContainer(
+                            towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                            animationSpec = tween(300)
+                        ) + fadeOut(animationSpec = tween(300))
+                    }
+                } else if (targetRoute != Routes.LOGIN && targetRoute != null && targetRoute !in Routes.tabs) {
+                    // Exit to sub-screen
+                    slideOutOfContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                        animationSpec = tween(300)
+                    ) + fadeOut(animationSpec = tween(300))
+                } else {
+                    fadeOut(animationSpec = tween(300))
+                }
+            },
+            popEnterTransition = {
+                val initialRoute = initialState.destination.route
+                val targetRoute = targetState.destination.route
+                if (initialRoute in Routes.tabs && targetRoute in Routes.tabs) {
+                    val initialIndex = Routes.tabs.indexOf(initialRoute)
+                    val targetIndex = Routes.tabs.indexOf(targetRoute)
+                    if (targetIndex > initialIndex) {
+                        slideIntoContainer(
+                            towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                            animationSpec = tween(300)
+                        ) + fadeIn(animationSpec = tween(300))
+                    } else {
+                        slideIntoContainer(
+                            towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                            animationSpec = tween(300)
+                        ) + fadeIn(animationSpec = tween(300))
+                    }
+                } else if (initialRoute != Routes.LOGIN && initialRoute != null && initialRoute !in Routes.tabs) {
+                    // Returning to parent screen
+                    slideIntoContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                        animationSpec = tween(300)
+                    ) + fadeIn(animationSpec = tween(300))
+                } else {
+                    fadeIn(animationSpec = tween(300))
+                }
+            },
+            popExitTransition = {
+                val initialRoute = initialState.destination.route
+                val targetRoute = targetState.destination.route
+                if (initialRoute in Routes.tabs && targetRoute in Routes.tabs) {
+                    val initialIndex = Routes.tabs.indexOf(initialRoute)
+                    val targetIndex = Routes.tabs.indexOf(targetRoute)
+                    if (targetIndex > initialIndex) {
+                        slideOutOfContainer(
+                            towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                            animationSpec = tween(300)
+                        ) + fadeOut(animationSpec = tween(300))
+                    } else {
+                        slideOutOfContainer(
+                            towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                            animationSpec = tween(300)
+                        ) + fadeOut(animationSpec = tween(300))
+                    }
+                } else if (initialRoute != Routes.LOGIN && initialRoute != null && initialRoute !in Routes.tabs) {
+                    // Popping out of sub-screen
+                    slideOutOfContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                        animationSpec = tween(300)
+                    ) + fadeOut(animationSpec = tween(300))
+                } else {
+                    fadeOut(animationSpec = tween(300))
+                }
+            }
         ) {
             composable(Routes.LOGIN) {
                 LoginScreen(
@@ -197,14 +310,28 @@ fun AppNavGraph(
 
             composable(Routes.REPORTS) {
                 ReportsScreen(
-                    onReportClick = {
+                    onDrawListReportClick = {
                         navController.navigate(Routes.DRAW_LIST_REPORT)
+                    },
+                    onDepositsWithdrawalsReportClick = {
+                        navController.navigate(Routes.DEPOSITS_WITHDRAWALS_REPORT)
+                    },
+                    onBalanceBreakdownReportClick = {
+                        navController.navigate(Routes.BALANCE_BREAKDOWN_REPORT)
                     }
                 )
             }
 
             composable(Routes.DRAW_LIST_REPORT) {
                 DrawListReportScreen(onBack = { navController.popBackStack() })
+            }
+
+            composable(Routes.DEPOSITS_WITHDRAWALS_REPORT) {
+                DepositsWithdrawalsReportScreen(onBack = { navController.popBackStack() })
+            }
+
+            composable(Routes.BALANCE_BREAKDOWN_REPORT) {
+                BalanceBreakdownReportScreen(onBack = { navController.popBackStack() })
             }
 
             composable(

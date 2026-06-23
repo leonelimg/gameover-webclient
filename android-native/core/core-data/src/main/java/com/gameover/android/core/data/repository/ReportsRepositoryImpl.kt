@@ -4,6 +4,8 @@ import com.gameover.android.core.domain.model.DrawListEntry
 import com.gameover.android.core.domain.model.ReportSummary
 import com.gameover.android.core.domain.model.Ticket
 import com.gameover.android.core.domain.model.TopNumber
+import com.gameover.android.core.domain.model.BalanceBreakdownResponse
+import com.gameover.android.core.domain.model.User
 import com.gameover.android.core.domain.repository.ReportsRepository
 import com.gameover.android.core.network.api.ReportsApi
 import com.gameover.android.core.network.api.TicketsApi
@@ -39,4 +41,22 @@ class ReportsRepositoryImpl @Inject constructor(
         if (!response.isSuccessful) throw Exception("Error al cargar lista de sorteo: ${response.code()}")
         response.body()?.toDomain() ?: emptyList()
     }
+
+    override suspend fun getBalanceBreakdown(
+        drawId: String?,
+        userId: String?,
+        fromDate: String?,
+        toDate: String?
+    ): BalanceBreakdownResponse = withContext(Dispatchers.IO) {
+        val response = reportsApi.getBalanceBreakdown(drawId, userId, fromDate, toDate)
+        if (!response.isSuccessful) throw Exception("Error al cargar desglose de balance: ${response.code()}")
+        response.body()?.toDomain() ?: throw Exception("Cuerpo de desglose vacío")
+    }
+
+    override suspend fun getUsers(): List<User> = withContext(Dispatchers.IO) {
+        val response = reportsApi.getUsers()
+        if (!response.isSuccessful) throw Exception("Error al cargar usuarios: ${response.code()}")
+        response.body()?.map { it.toDomain() } ?: emptyList()
+    }
 }
+

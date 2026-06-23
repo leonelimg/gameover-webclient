@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.Wallet
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material3.*
 import androidx.compose.foundation.horizontalScroll
@@ -184,21 +185,15 @@ fun DashboardScreen(
                 // KPI Summary
                 uiState.summary?.let { summary ->
                     item {
-                        AnimatedVisibility(
-                            visible = !uiState.isLoading,
-                            enter = fadeIn(),
-                            exit = fadeOut()
-                        ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                                KpiSection(summary = summary)
-                                if (uiState.recentTickets.isNotEmpty()) {
-                                    Text(
-                                        "Tickets Recientes",
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 16.sp,
-                                        style = MaterialTheme.typography.titleMedium
-                                    )
-                                }
+                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            KpiSection(summary = summary, finalBalance = uiState.finalBalance)
+                            if (uiState.recentTickets.isNotEmpty()) {
+                                Text(
+                                    "Tickets Recientes",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 16.sp,
+                                    style = MaterialTheme.typography.titleMedium
+                                )
                             }
                         }
                     }
@@ -246,7 +241,10 @@ fun DashboardScreen(
                             )
                         }
                     }
-                    itemsIndexed(uiState.recentTickets) { _, ticket ->
+                    itemsIndexed(
+                        items = uiState.recentTickets,
+                        key = { _, ticket -> ticket.id }
+                    ) { _, ticket ->
                         RecentTicketRow(ticket = ticket)
                     }
                 }
@@ -326,9 +324,9 @@ private fun RangeSelector(selected: DashboardRange, onSelect: (DashboardRange) -
 }
 
 @Composable
-private fun KpiSection(summary: ReportSummary) {
+private fun KpiSection(summary: ReportSummary, finalBalance: Double?) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // Row 1: Sales & Tickets
+        // Row 1: Sales & Final Balance
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -340,11 +338,13 @@ private fun KpiSection(summary: ReportSummary) {
                 color = GoGold,
                 modifier = Modifier.weight(1f),
             )
+            val balanceColor = if (finalBalance == null || finalBalance >= 0.0) GoSuccess else GoRed
+            val balanceValue = finalBalance?.let { CurrencyFormatter.format(it) } ?: "No disponible"
             KpiCard(
-                label = "Tickets",
-                value = summary.ticketCount.toString(),
-                icon = Icons.AutoMirrored.Filled.List,
-                color = GoBlue,
+                label = "Balance Final",
+                value = balanceValue,
+                icon = Icons.Default.Wallet,
+                color = balanceColor,
                 modifier = Modifier.weight(1f),
             )
         }

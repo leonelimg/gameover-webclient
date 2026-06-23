@@ -83,3 +83,117 @@ fun DrawListResponseDto.toDomain(): List<DrawListEntry> = numbers.map { numberDt
         totalAmount = numberDto.total
     )
 }
+
+fun CashMovementBalanceResponseDto.toDomain(): CashMovementBalance = CashMovementBalance(
+    totals = totals.toDomain()
+)
+
+fun CashMovementBalanceTotalsDto.toDomain(): CashMovementBalanceTotals = CashMovementBalanceTotals(
+    openingBalance = openingBalance,
+    totalDeposits = totalDeposits,
+    totalWithdrawals = totalWithdrawals,
+    totalSales = totalSales,
+    totalPrizes = totalPrizes,
+    ticketCount = ticketCount,
+    balance = balance
+)
+
+fun CashMovementTargetDto.toDomain(): CashMovementTarget = CashMovementTarget(
+    id = id,
+    fullName = fullName,
+    username = username,
+    role = role,
+    status = status,
+    canOperate = canOperate
+)
+
+fun CashMovementActorDto.toDomain(): CashMovementActor = CashMovementActor(
+    id = id,
+    fullName = fullName,
+    username = username,
+    role = role
+)
+
+fun CashMovementHistoryItemDto.toDomain(): CashMovementHistoryItem = CashMovementHistoryItem(
+    id = id,
+    targetUserId = targetUserId,
+    createdById = createdById,
+    type = type,
+    amount = amount,
+    note = note,
+    createdAt = createdAt,
+    canceledAt = canceledAt,
+    canceledById = canceledById,
+    createdBy = createdBy.toDomain(),
+    targetUser = targetUser.toDomain(),
+    source = source,
+    referenceCode = referenceCode,
+    balanceAfterTransaction = balanceAfterTransaction
+)
+
+fun CashMovementEventSummaryTotalsDto.toDomain(): CashMovementEventSummaryTotals = CashMovementEventSummaryTotals(
+    openingBalance = openingBalance,
+    ticketCount = ticketCount,
+    totalSales = totalSales,
+    totalPrizes = totalPrizes,
+    totalCommissions = totalCommissions,
+    balance = balance
+)
+
+fun CashMovementEventSummaryRowDto.toDomain(): CashMovementEventSummaryRow = CashMovementEventSummaryRow(
+    eventId = eventId,
+    eventName = eventName,
+    eventDate = eventDate,
+    ticketCount = ticketCount,
+    totalSales = totalSales,
+    totalPrizes = totalPrizes,
+    totalCommissions = totalCommissions,
+    balance = balance,
+    balanceAfterTransaction = balanceAfterTransaction
+)
+
+fun CashMovementEventSummaryResponseDto.toDomain(): CashMovementEventSummaryResponse = CashMovementEventSummaryResponse(
+    targetUser = targetUser.toDomain(),
+    totals = totals.toDomain(),
+    rows = rows.map { it.toDomain() }
+)
+
+fun BalanceBreakdownTotalsDto.toDomain(): BalanceBreakdownTotals = BalanceBreakdownTotals(
+    ticketCount = ticketCount,
+    totalSales = totalSales,
+    totalPrizes = totalPrizes,
+    totalCommissions = totalCommissions,
+    balance = balance
+)
+
+fun AssociateDrawBreakdownRowDto.toDomain(): AssociateDrawBreakdownRow = AssociateDrawBreakdownRow(
+    drawId = drawId,
+    drawName = drawName,
+    drawCloseTime = drawCloseTime,
+    lastTicketCreatedAt = lastTicketCreatedAt,
+    ticketCount = ticketCount,
+    totalSales = totalSales,
+    totalPrizes = totalPrizes,
+    totalCommissions = totalCommissions,
+    balance = balance
+)
+
+fun AssociateBreakdownRowDto.toDomain(): AssociateBreakdownRow = AssociateBreakdownRow(
+    associateId = associateId,
+    associateName = associateName,
+    parentId = parentId,
+    ticketCount = ticketCount,
+    totalSales = totalSales,
+    totalPrizes = totalPrizes,
+    totalCommissions = totalCommissions,
+    balance = balance,
+    draws = draws.map { it.toDomain() }
+)
+
+fun BalanceBreakdownResponseDto.toDomain(): BalanceBreakdownResponse = BalanceBreakdownResponse(
+    totals = byAssociate.totals.toDomain(),
+    rows = byAssociate.rows.map { it.toDomain() }
+)
+
+
+

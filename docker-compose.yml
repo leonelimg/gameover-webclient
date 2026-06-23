@@ -38,6 +38,8 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
     ports:
       - "4000:4000"
+    volumes:
+      - ./server/public:/app/public
     depends_on:
       postgres:
         condition: service_healthy

@@ -8,6 +8,7 @@ import com.gameover.android.core.domain.model.DashboardRange
 data class DashboardUiState(
     val isLoading: Boolean = false,
     val summary: ReportSummary? = null,
+    val finalBalance: Double? = null,
     val recentTickets: List<Ticket> = emptyList(),
     val topNumbers: List<TopNumber> = emptyList(),
     val selectedRange: DashboardRange = DashboardRange.TODAY,

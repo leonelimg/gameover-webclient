@@ -22,6 +22,8 @@ data class DrawListReportUiState(
     val selectedDrawId: String? = null,
     val reportEntries: List<DrawListEntry> = emptyList(),
     val selectedRange: DashboardRange = DashboardRange.TODAY,
+    val customFromDate: String = "",
+    val customToDate: String = "",
     val error: String? = null
 )
 
@@ -40,7 +42,16 @@ class DrawListReportViewModel @Inject constructor(
 
     fun onRangeSelected(range: DashboardRange) {
         _uiState.update { it.copy(selectedRange = range, selectedDrawId = null, reportEntries = emptyList()) }
-        loadDraws()
+        if (range != DashboardRange.CUSTOM) {
+            loadDraws()
+        }
+    }
+
+    fun onCustomDateChanged(from: String, to: String) {
+        _uiState.update { it.copy(customFromDate = from, customToDate = to) }
+        if (from.isNotBlank() && to.isNotBlank()) {
+            loadDraws()
+        }
     }
 
     fun onDrawSelected(drawId: String) {
@@ -49,6 +60,10 @@ class DrawListReportViewModel @Inject constructor(
     }
 
     fun refresh() {
+        if (_uiState.value.selectedRange == DashboardRange.CUSTOM && 
+            (_uiState.value.customFromDate.isBlank() || _uiState.value.customToDate.isBlank())) {
+            return
+        }
         val currentDrawId = _uiState.value.selectedDrawId
         if (currentDrawId != null) {
             loadReport(currentDrawId)
@@ -58,10 +73,15 @@ class DrawListReportViewModel @Inject constructor(
     }
 
     private fun loadDraws() {
+        val state = _uiState.value
+        if (state.selectedRange == DashboardRange.CUSTOM && 
+            (state.customFromDate.isBlank() || state.customToDate.isBlank())) {
+            return
+        }
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
-                val (from, to) = getDatesForRange(_uiState.value.selectedRange)
+                val (from, to) = getDatesForRange(state.selectedRange)
                 val draws = drawsRepository.getDraws(from, to)
                 _uiState.update { it.copy(draws = draws, isLoading = false) }
             } catch (e: Exception) {
@@ -93,6 +113,7 @@ class DrawListReportViewModel @Inject constructor(
                 monday.toString() to sunday.toString()
             }
             DashboardRange.MONTH -> today.withDayOfMonth(1).toString() to today.toString()
+            DashboardRange.CUSTOM -> _uiState.value.customFromDate to _uiState.value.customToDate
             else -> today.toString() to today.toString()
         }
     }

@@ -68,4 +68,7 @@ abstract class DataBindsModule {
 
     @Binds
     abstract fun bindFrontendSettingsRepository(impl: FrontendSettingsRepositoryImpl): FrontendSettingsRepository
+
+    @Binds
+    abstract fun bindCashMovementsRepository(impl: CashMovementsRepositoryImpl): CashMovementsRepository
 }

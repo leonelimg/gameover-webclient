@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.gameover.android",
+      "sha256_cert_fingerprints": [
+        "88:AF:95:68:86:B3:1B:65:12:90:02:61:23:87:51:0F:B2:66:53:36:F2:07:29:71:7F:A8:D8:07:31:01:36:AD",
+        "9C:0E:F5:9B:28:6E:37:3F:C6:9F:95:62:1F:83:F6:DB:0D:82:B6:0A:D5:2A:01:1E:1F:44:2B:CA:E6:A5:D7:2C"
+      ]
+    }
+  }
+]

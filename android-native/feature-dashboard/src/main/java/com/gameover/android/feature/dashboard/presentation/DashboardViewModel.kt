@@ -2,6 +2,8 @@ package com.gameover.android.feature.dashboard.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gameover.android.core.domain.repository.AuthRepository
+import com.gameover.android.core.domain.repository.CashMovementsRepository
 import com.gameover.android.core.domain.repository.DataRefreshNotifier
 import com.gameover.android.core.domain.repository.DrawsRepository
 import com.gameover.android.core.domain.repository.ReportsRepository
@@ -16,6 +18,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -30,6 +33,8 @@ class DashboardViewModel @Inject constructor(
     private val announcementRepository: AnnouncementRepository,
     private val networkMonitor: NetworkMonitor,
     private val dataRefreshNotifier: DataRefreshNotifier,
+    private val authRepository: AuthRepository,
+    private val cashMovementsRepository: CashMovementsRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardUiState())
@@ -70,12 +75,15 @@ class DashboardViewModel @Inject constructor(
         _uiState.update { it.copy(isLoading = true, error = null) }
         viewModelScope.launch {
             try {
+                val userId = authRepository.getStoredUser().first()?.id
                 coroutineScope {
                     val summaryDeferred = async { reportsRepository.getSummary(fromDate = from, toDate = to) }
+                    val balanceDeferred = async { cashMovementsRepository.getBalance(targetUserId = userId, fromDate = from, toDate = to) }
                     val recentDeferred = async { ticketsRepository.getTickets() }
                     val announcementsDeferred = async { announcementRepository.getActiveAnnouncements() }
                     
                     val summary = summaryDeferred.await()
+                    val balance = try { balanceDeferred.await() } catch (e: Exception) { null }
                     val recent = recentDeferred.await().take(5)
                     val announcements = try { announcementsDeferred.await() } catch (e: Exception) { emptyList() }
                     
@@ -83,6 +91,7 @@ class DashboardViewModel @Inject constructor(
                         it.copy(
                             isLoading = false,
                             summary = summary,
+                            finalBalance = balance?.totals?.balance,
                             recentTickets = recent,
                             announcementCount = announcements.size,
                             error = null,

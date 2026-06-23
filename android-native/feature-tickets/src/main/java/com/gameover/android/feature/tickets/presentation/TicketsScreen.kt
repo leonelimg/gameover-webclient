@@ -5,7 +5,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -101,43 +103,33 @@ fun TicketsScreen(
 
                 // Filters with better styling
                 item {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        // Range selector (Hoy, Semana, Mes)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            val ranges = listOf(
-                                DashboardRange.TODAY to "Hoy",
-                                DashboardRange.WEEK to "Semana",
-                                DashboardRange.MONTH to "Mes"
-                            )
-                            ranges.forEach { (range, label) ->
-                                FilterChip(
-                                    selected = uiState.selectedRange == range,
-                                    onClick = { viewModel.onRangeSelected(range) },
-                                    label = { Text(label, fontSize = 12.sp) },
-                                    shape = MaterialTheme.shapes.small,
-                                )
-                            }
-                        }
-
-                        // Include canceled filter
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
+                        val ranges = listOf(
+                            DashboardRange.TODAY to "Hoy",
+                            DashboardRange.WEEK to "Semana",
+                            DashboardRange.MONTH to "Mes"
+                        )
+                        ranges.forEach { (range, label) ->
                             FilterChip(
-                                selected = uiState.includeCanceled,
-                                onClick = { viewModel.onIncludeCanceledChanged(!uiState.includeCanceled) },
-                                label = { Text("Incluir anulados", fontSize = 12.sp) },
+                                selected = uiState.selectedRange == range,
+                                onClick = { viewModel.onRangeSelected(range) },
+                                label = { Text(label, fontSize = 12.sp) },
                                 shape = MaterialTheme.shapes.small,
                             )
                         }
+
+                        FilterChip(
+                            selected = uiState.includeCanceled,
+                            onClick = { viewModel.onIncludeCanceledChanged(!uiState.includeCanceled) },
+                            label = { Text("Incluir anulados", fontSize = 12.sp) },
+                            shape = MaterialTheme.shapes.small,
+                        )
                     }
                 }
 

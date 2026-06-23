@@ -20,7 +20,7 @@ object TokenAuthenticatorModule {
         tokenDataStore: TokenDataStore,
         authApi: AuthApi,
     ): TokenAuthenticator = TokenAuthenticator(
-        // Use cached token (non-blocking) for the refresh token provider
+        accessTokenProvider = { tokenDataStore.getCachedAccessToken() },
         refreshTokenProvider = { tokenDataStore.getCachedRefreshToken() },
         onTokenRefreshed = { access, refresh -> runBlocking { tokenDataStore.saveTokens(access, refresh) } },
         onRefreshFailed = { runBlocking { tokenDataStore.clearSession() } },

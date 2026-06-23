@@ -5,6 +5,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.filled.CompareArrows
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -19,7 +21,9 @@ import com.gameover.android.core.ui.component.GoCard
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportsScreen(
-    onReportClick: () -> Unit
+    onDrawListReportClick: () -> Unit,
+    onDepositsWithdrawalsReportClick: () -> Unit,
+    onBalanceBreakdownReportClick: () -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -37,11 +41,11 @@ fun ReportsScreen(
                 ),
             )
         }
-    ) { padding ->
+    ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(paddingValues)
                 .padding(16.dp)
         ) {
             Text(
@@ -53,6 +57,7 @@ fun ReportsScreen(
 
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
+                contentPadding = PaddingValues(bottom = 24.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -60,7 +65,21 @@ fun ReportsScreen(
                     ReportCard(
                         title = "Lista de Sorteo",
                         icon = Icons.Default.Assignment,
-                        onClick = onReportClick
+                        onClick = onDrawListReportClick
+                    )
+                }
+                item {
+                    ReportCard(
+                        title = "Depósitos y Retiros",
+                        icon = Icons.Default.CompareArrows,
+                        onClick = onDepositsWithdrawalsReportClick
+                    )
+                }
+                item {
+                    ReportCard(
+                        title = "Desglose de Balance",
+                        icon = Icons.Default.TrendingUp,
+                        onClick = onBalanceBreakdownReportClick
                     )
                 }
             }

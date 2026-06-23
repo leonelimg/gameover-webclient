@@ -27,4 +27,16 @@ interface ReportsApi {
     suspend fun getDrawLists(
         @Query("drawId") drawId: String,
     ): Response<DrawListResponseDto>
+
+    @GET("api/reports/balance-breakdown")
+    suspend fun getBalanceBreakdown(
+        @Query("drawId") drawId: String?,
+        @Query("userId") userId: String?,
+        @Query("fromDate") fromDate: String?,
+        @Query("toDate") toDate: String?
+    ): Response<BalanceBreakdownResponseDto>
+
+    @GET("api/users")
+    suspend fun getUsers(): Response<List<UserDto>>
 }
+
