@@ -111,7 +111,7 @@ export default function ReportsPage() {
 
   // Load draws once
   useEffect(() => {
-    drawsApi.list().then(setDraws).catch(() => {});
+    drawsApi.list().then(setDraws).catch(() => { });
   }, []);
 
   const filteredDraws = useMemo(() => {
@@ -188,7 +188,7 @@ export default function ReportsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Reportes</h1>
-        <p className="text-sm text-slate-500">Estadisctica de ventas</p>
+        <p className="text-sm text-slate-500">Estadistica de ventas</p>
       </div>
 
       {/* Date range filter */}
@@ -229,22 +229,22 @@ export default function ReportsPage() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-4">
-          <p className="text-sm text-slate-500 mb-1">Total Ventas</p>
-          <p className="text-2xl font-bold text-green-700">{formatCurrency(summary.totalSales)}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-slate-500 mb-1">Tickets Emitidos</p>
-          <p className="text-2xl font-bold text-slate-900">{summary.ticketCount}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-slate-500 mb-1">Sorteos</p>
-          <p className="text-2xl font-bold text-slate-900">{summary.drawCount}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-slate-500 mb-1">Usuarios activos</p>
-          <p className="text-2xl font-bold text-slate-900">{summary.userCount}</p>
-        </Card>
+        <div className="p-4 rounded-xl border bg-slate-900 border-slate-800 border-t-4 border-t-blue-500 text-white shadow-sm hover:border-slate-700 transition-all duration-300">
+          <p className="text-sm text-slate-400 mb-1 font-medium">Total Ventas</p>
+          <p className="text-2xl font-bold text-white">{formatCurrency(summary.totalSales)}</p>
+        </div>
+        <div className="p-4 rounded-xl border bg-slate-900 border-slate-800 border-t-4 border-t-emerald-500 text-white shadow-sm hover:border-slate-700 transition-all duration-300">
+          <p className="text-sm text-slate-400 mb-1 font-medium">Tickets Emitidos</p>
+          <p className="text-2xl font-bold text-white">{summary.ticketCount}</p>
+        </div>
+        <div className="p-4 rounded-xl border bg-slate-900 border-slate-800 border-t-4 border-t-orange-500 text-white shadow-sm hover:border-slate-700 transition-all duration-300">
+          <p className="text-sm text-slate-400 mb-1 font-medium">Sorteos</p>
+          <p className="text-2xl font-bold text-white">{summary.drawCount}</p>
+        </div>
+        <div className="p-4 rounded-xl border bg-slate-900 border-slate-800 border-t-4 border-t-violet-500 text-white shadow-sm hover:border-slate-700 transition-all duration-300">
+          <p className="text-sm text-slate-400 mb-1 font-medium">Usuarios activos</p>
+          <p className="text-2xl font-bold text-white">{summary.userCount}</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -330,16 +330,16 @@ export default function ReportsPage() {
               ) : (
                 <div className="divide-y divide-slate-100">
                   {tickets.map((t) => (
-                      <div key={t.id} className="px-4 py-3">
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono text-xs font-medium">{t.code}</span>
-                          <span className="text-xs font-bold text-green-700">
-                            {formatCurrency(t.total)}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 mt-0.5">{t.customerName}</p>
+                    <div key={t.id} className="px-4 py-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-xs font-medium">{t.code}</span>
+                        <span className="text-xs font-bold text-green-700">
+                          {formatCurrency(t.total)}
+                        </span>
                       </div>
-                    ))}
+                      <p className="text-xs text-slate-500 mt-0.5">{t.customerName}</p>
+                    </div>
+                  ))}
                 </div>
               )}
             </CardBody>

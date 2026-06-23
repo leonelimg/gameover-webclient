@@ -242,22 +242,22 @@ export default function SalesByUserPage() {
       </Card>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-4">
-          <p className="text-sm text-slate-500 mb-1">Tickets</p>
-          <p className="text-2xl font-bold text-slate-900">{report.totals.ticketCount}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-slate-500 mb-1">Activos</p>
-          <p className="text-2xl font-bold text-emerald-700">{report.totals.activeTicketCount}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-slate-500 mb-1">Anulados</p>
-          <p className="text-2xl font-bold text-red-700">{report.totals.canceledTicketCount}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-slate-500 mb-1">Ventas vigentes</p>
-          <p className="text-2xl font-bold text-blue-700">{formatCurrency(report.totals.totalSales)}</p>
-        </Card>
+        <div className="p-4 rounded-xl border bg-slate-900 border-slate-800 border-t-4 border-t-emerald-500 text-white shadow-sm hover:border-slate-700 transition-all duration-300">
+          <p className="text-sm text-slate-400 mb-1 font-medium">Tickets</p>
+          <p className="text-2xl font-bold text-white">{report.totals.ticketCount}</p>
+        </div>
+        <div className="p-4 rounded-xl border bg-slate-900 border-slate-800 border-t-4 border-t-indigo-500 text-white shadow-sm hover:border-slate-700 transition-all duration-300">
+          <p className="text-sm text-slate-400 mb-1 font-medium">Activos</p>
+          <p className="text-2xl font-bold text-white">{report.totals.activeTicketCount}</p>
+        </div>
+        <div className="p-4 rounded-xl border bg-slate-900 border-slate-800 border-t-4 border-t-red-500 text-white shadow-sm hover:border-slate-700 transition-all duration-300">
+          <p className="text-sm text-slate-400 mb-1 font-medium">Anulados</p>
+          <p className="text-2xl font-bold text-white">{report.totals.canceledTicketCount}</p>
+        </div>
+        <div className="p-4 rounded-xl border bg-slate-900 border-slate-800 border-t-4 border-t-blue-500 text-white shadow-sm hover:border-slate-700 transition-all duration-300">
+          <p className="text-sm text-slate-400 mb-1 font-medium">Ventas vigentes</p>
+          <p className="text-2xl font-bold text-white">{formatCurrency(report.totals.totalSales)}</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

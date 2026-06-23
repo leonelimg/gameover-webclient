@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { Card, CardBody, CardHeader } from '@/components/ui/Card';
+import { Card, CardBody } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { DateRangeSegmentedControl } from '@/components/ui/DateRangeSegmentedControl';
@@ -208,9 +208,6 @@ export default function CommissionsPage() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <h2 className="font-semibold text-slate-800">Listado de comisiones</h2>
-        </CardHeader>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">

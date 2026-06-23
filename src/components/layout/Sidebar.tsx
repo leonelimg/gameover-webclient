@@ -87,7 +87,7 @@ const NAV_ITEMS: NavItem[] = [
     children: [
       {
         to: '/reports/sales-stats',
-        label: 'Estadisctica de ventas',
+        label: 'Estadistica de ventas',
       },
       {
         to: '/reports/balance-breakdown',
@@ -266,13 +266,12 @@ export function Sidebar() {
             Balance final
           </div>
           <p
-            className={`mt-2 text-lg font-semibold ${
-              finalBalance === null
+            className={`mt-2 text-lg font-semibold ${finalBalance === null
                 ? 'text-slate-300'
                 : finalBalance >= 0
                   ? 'text-emerald-300'
                   : 'text-rose-300'
-            }`}
+              }`}
           >
             {balanceLoading ? 'Cargando...' : finalBalance !== null ? formatCurrency(finalBalance) : 'No disponible'}
           </p>
@@ -304,11 +303,10 @@ export function Sidebar() {
                 <button
                   type="button"
                   onClick={() => setGroupOpen((prev) => ({ ...prev, [item.label]: !isOpen }))}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    isParentActive
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isParentActive
                       ? 'bg-blue-600 text-white'
                       : 'text-slate-400 hover:bg-slate-700 hover:text-white'
-                  }`}
+                    }`}
                 >
                   {item.icon}
                   <span className="flex-1 text-left">{item.label}</span>
@@ -331,30 +329,27 @@ export function Sidebar() {
                                 [`${item.label}-${child.label}`]: !(prev[`${item.label}-${child.label}`] ?? false),
                               }))
                             }
-                            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-                              child.children.some((nestedChild) => location.pathname.startsWith(nestedChild.to))
+                            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${child.children.some((nestedChild) => location.pathname.startsWith(nestedChild.to))
                                 ? 'bg-slate-700 text-white'
                                 : 'text-slate-400 hover:bg-slate-700 hover:text-white'
-                            }`}
+                              }`}
                           >
                             <span className="flex-1 text-left">{child.label}</span>
                             <ChevronRight
                               size={14}
-                              className={`transition-transform duration-200 ${
-                                groupOpen[`${item.label}-${child.label}`] ??
-                                child.children.some((nestedChild) => location.pathname.startsWith(nestedChild.to))
+                              className={`transition-transform duration-200 ${groupOpen[`${item.label}-${child.label}`] ??
+                                  child.children.some((nestedChild) => location.pathname.startsWith(nestedChild.to))
                                   ? 'rotate-90'
                                   : 'rotate-0'
-                              }`}
+                                }`}
                             />
                           </button>
                           <div
-                            className={`sidebar-submenu ${
-                              (groupOpen[`${item.label}-${child.label}`] ??
+                            className={`sidebar-submenu ${(groupOpen[`${item.label}-${child.label}`] ??
                                 child.children.some((nestedChild) => location.pathname.startsWith(nestedChild.to)))
                                 ? 'is-open'
                                 : ''
-                            }`}
+                              }`}
                           >
                             <div className="sidebar-submenu-content pl-4 space-y-1">
                               {child.children
@@ -365,10 +360,9 @@ export function Sidebar() {
                                     to={nestedChild.to}
                                     onClick={() => setOpen(false)}
                                     className={({ isActive }) =>
-                                      `flex items-center px-3 py-2 rounded-lg text-sm transition-colors ${
-                                        isActive
-                                          ? 'bg-slate-700 text-white'
-                                          : 'text-slate-400 hover:bg-slate-700 hover:text-white'
+                                      `flex items-center px-3 py-2 rounded-lg text-sm transition-colors ${isActive
+                                        ? 'bg-slate-700 text-white'
+                                        : 'text-slate-400 hover:bg-slate-700 hover:text-white'
                                       }`
                                     }
                                   >
@@ -384,10 +378,9 @@ export function Sidebar() {
                           to={child.to}
                           onClick={() => setOpen(false)}
                           className={({ isActive }) =>
-                            `flex items-center px-3 py-2 rounded-lg text-sm transition-colors ${
-                              isActive
-                                ? 'bg-slate-700 text-white'
-                                : 'text-slate-400 hover:bg-slate-700 hover:text-white'
+                            `flex items-center px-3 py-2 rounded-lg text-sm transition-colors ${isActive
+                              ? 'bg-slate-700 text-white'
+                              : 'text-slate-400 hover:bg-slate-700 hover:text-white'
                             }`
                           }
                         >
@@ -407,10 +400,9 @@ export function Sidebar() {
               to={item.to!}
               onClick={() => setOpen(false)}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-400 hover:bg-slate-700 hover:text-white'
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-400 hover:bg-slate-700 hover:text-white'
                 }`
               }
             >
@@ -468,9 +460,8 @@ export function Sidebar() {
 
       {/* Sidebar mobile */}
       <aside
-        className={`flex flex-col w-60 bg-slate-800 fixed left-0 top-0 bottom-0 z-50 transform transition-transform lg:hidden ${
-          open ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`flex flex-col w-60 bg-slate-800 fixed left-0 top-0 bottom-0 z-50 transform transition-transform lg:hidden ${open ? 'translate-x-0' : '-translate-x-full'
+          }`}
       >
         {renderSidebarContent()}
       </aside>
