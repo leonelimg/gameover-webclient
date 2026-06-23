@@ -90,6 +90,27 @@ export default function DrawListsPage() {
     localStorage.setItem(DRAW_LISTS_CUSTOM_TO_KEY, customToDate);
   }, [customToDate]);
 
+  const filteredDraws = useMemo(() => {
+    const isCustomRange = selectedRange === 'custom';
+    if (isCustomRange && (!customFromDate || !customToDate || customFromDate > customToDate)) {
+      return [];
+    }
+    const { fromDate, toDate } = isCustomRange
+      ? { fromDate: customFromDate, toDate: customToDate }
+      : getDateRange(selectedRange);
+
+    return draws.filter((d) => {
+      const drawDate = toISODateLocal(new Date(d.closeTime));
+      return drawDate >= fromDate && drawDate <= toDate;
+    });
+  }, [draws, selectedRange, customFromDate, customToDate]);
+
+  useEffect(() => {
+    if (selectedDrawId && !filteredDraws.some((d) => d.id === selectedDrawId)) {
+      setSelectedDrawId('');
+    }
+  }, [filteredDraws, selectedDrawId]);
+
   useEffect(() => {
     setLoading(true);
     setError('');
@@ -105,6 +126,10 @@ export default function DrawListsPage() {
       ? { fromDate: customFromDate, toDate: customToDate }
       : getDateRange(selectedRange);
 
+    if (selectedDrawId && !filteredDraws.some((d) => d.id === selectedDrawId)) {
+      return;
+    }
+
     reportsApi.drawLists({
       drawId: selectedDrawId || undefined,
       userId: selectedUserId || undefined,
@@ -118,7 +143,7 @@ export default function DrawListsPage() {
         setReport(buildEmptyReport());
       })
       .finally(() => setLoading(false));
-  }, [selectedDrawId, selectedUserId, selectedRange, customFromDate, customToDate]);
+  }, [selectedDrawId, selectedUserId, selectedRange, customFromDate, customToDate, filteredDraws]);
 
   const columnCount = useMemo(() => {
     const parsed = Number.parseInt(columnsToShow, 10);
@@ -200,7 +225,7 @@ export default function DrawListsPage() {
               onChange={(e) => setSelectedDrawId(e.target.value)}
               options={[
                 { value: '', label: 'Todos los sorteos' },
-                ...draws.map((d) => ({ value: d.id, label: formatDrawLabel(d) })),
+                ...filteredDraws.map((d) => ({ value: d.id, label: formatDrawLabel(d) })),
               ]}
             />
             <Select

@@ -268,6 +268,7 @@ export interface CreateUserPayload {
 
 export interface UpdateUserPayload {
   fullName?: string;
+  username?: string;
   email?: string;
   phone?: string;
   role?: string;
@@ -469,6 +470,7 @@ export interface CashMovementHistoryItem {
   targetUser: CashMovementActor;
   source: 'cash-movement' | 'ticket-sale';
   referenceCode?: string;
+  balanceAfterTransaction?: number;
 }
 
 export interface CashMovementBalanceResponse {
@@ -762,6 +764,7 @@ export interface AssociateDrawBreakdownRow {
 export interface AssociateBreakdownRow {
   associateId: string;
   associateName: string;
+  parentId?: string | null;
   ticketCount: number;
   totalSales: number;
   totalPrizes: number;
@@ -860,6 +863,7 @@ export interface CommissionsSellerGroup {
   sellerId: string;
   sellerName: string;
   sellerUsername: string;
+  parentId?: string | null;
   totalSales: number;
   subtotal: number;
   rows: CommissionsReportRow[];

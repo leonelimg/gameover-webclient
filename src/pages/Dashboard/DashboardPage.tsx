@@ -218,19 +218,19 @@ export default function DashboardPage() {
           icon={<DollarSign size={20} />}
           label="Ventas Totales"
           value={formatCurrency(stats.totalSales)}
-          color="orange"
+          color="blue"
         />
         <StatCard
           icon={<Award size={20} />}
           label="Premios"
           value={formatCurrency(stats.totalPrizes)}
-          color="red"
+          color="orange"
         />
         <StatCard
           icon={<HandCoins size={20} />}
           label="Comisiones"
           value={formatCurrency(stats.totalCommissions)}
-          color="indigo"
+          color="purple"
         />
       </div>
 
@@ -328,40 +328,40 @@ function StatCard({
 }) {
   const styleMap = {
     blue: {
-      card: 'bg-gradient-to-br from-blue-50/60 to-white border-blue-100 hover:border-blue-200',
-      icon: 'bg-blue-100 text-blue-600',
-      value: 'text-blue-950',
-      label: 'text-blue-700/85',
+      card: 'bg-slate-900 border-slate-800 border-t-4 border-t-blue-500 text-white shadow-sm hover:border-slate-700',
+      icon: 'bg-slate-950 text-blue-400',
+      value: 'text-white font-bold',
+      label: 'text-slate-400',
     },
     purple: {
-      card: 'bg-gradient-to-br from-purple-50/60 to-white border-purple-100 hover:border-purple-200',
-      icon: 'bg-purple-100 text-purple-600',
-      value: 'text-purple-950',
-      label: 'text-purple-700/85',
+      card: 'bg-slate-900 border-slate-800 border-t-4 border-t-violet-500 text-white shadow-sm hover:border-slate-700',
+      icon: 'bg-slate-950 text-violet-400',
+      value: 'text-white font-bold',
+      label: 'text-slate-400',
     },
     green: {
-      card: 'bg-gradient-to-br from-emerald-50/60 to-white border-emerald-100 hover:border-emerald-200',
-      icon: 'bg-emerald-100 text-emerald-600',
-      value: 'text-emerald-950',
-      label: 'text-emerald-700/85',
+      card: 'bg-slate-900 border-slate-800 border-t-4 border-t-emerald-500 text-white shadow-sm hover:border-slate-700',
+      icon: 'bg-slate-950 text-emerald-400',
+      value: 'text-white font-bold',
+      label: 'text-slate-400',
     },
     orange: {
-      card: 'bg-gradient-to-br from-amber-50/60 to-white border-amber-100 hover:border-amber-200',
-      icon: 'bg-amber-100 text-amber-600',
-      value: 'text-amber-950',
-      label: 'text-amber-700/85',
+      card: 'bg-slate-900 border-slate-800 border-t-4 border-t-orange-500 text-white shadow-sm hover:border-slate-700',
+      icon: 'bg-slate-950 text-orange-400',
+      value: 'text-white font-bold',
+      label: 'text-slate-400',
     },
     red: {
-      card: 'bg-gradient-to-br from-rose-50/60 to-white border-rose-100 hover:border-rose-200',
-      icon: 'bg-rose-100 text-rose-600',
-      value: 'text-rose-950',
-      label: 'text-rose-700/85',
+      card: 'bg-slate-900 border-slate-800 border-t-4 border-t-red-500 text-white shadow-sm hover:border-slate-700',
+      icon: 'bg-slate-950 text-red-400',
+      value: 'text-white font-bold',
+      label: 'text-slate-400',
     },
     indigo: {
-      card: 'bg-gradient-to-br from-indigo-50/60 to-white border-indigo-100 hover:border-indigo-200',
-      icon: 'bg-indigo-100 text-indigo-600',
-      value: 'text-indigo-950',
-      label: 'text-indigo-700/85',
+      card: 'bg-slate-900 border-slate-800 border-t-4 border-t-indigo-500 text-white shadow-sm hover:border-slate-700',
+      icon: 'bg-slate-950 text-indigo-400',
+      value: 'text-white font-bold',
+      label: 'text-slate-400',
     },
   };
 

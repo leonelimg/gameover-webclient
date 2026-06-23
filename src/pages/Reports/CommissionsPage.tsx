@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -26,6 +27,13 @@ const EMPTY_REPORT: CommissionsReportResponse = {
   bySeller: [],
 };
 
+const isRowVisible = (row: any, rows: any[], expandedUsers: Set<string>): boolean => {
+  if (!row.parentId) return true;
+  const parentRow = rows.find((r) => r.sellerId === row.parentId);
+  if (!parentRow) return true;
+  return expandedUsers.has(row.parentId) && isRowVisible(parentRow, rows, expandedUsers);
+};
+
 export default function CommissionsPage() {
   const [draws, setDraws] = useState<Draw[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -47,6 +55,7 @@ export default function CommissionsPage() {
     }
     return 'today';
   });
+  const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -69,6 +78,27 @@ export default function CommissionsPage() {
     localStorage.setItem(COMMISSIONS_CUSTOM_TO_KEY, customToDate);
   }, [customToDate]);
 
+  const filteredDraws = useMemo(() => {
+    const isCustomRange = selectedRange === 'custom';
+    if (isCustomRange && (!customFromDate || !customToDate || customFromDate > customToDate)) {
+      return [];
+    }
+    const { fromDate, toDate } = isCustomRange
+      ? { fromDate: customFromDate, toDate: customToDate }
+      : getDateRange(selectedRange);
+
+    return draws.filter((d) => {
+      const drawDate = toISODateLocal(new Date(d.closeTime));
+      return drawDate >= fromDate && drawDate <= toDate;
+    });
+  }, [draws, selectedRange, customFromDate, customToDate]);
+
+  useEffect(() => {
+    if (selectedDrawId && !filteredDraws.some((d) => d.id === selectedDrawId)) {
+      setSelectedDrawId('');
+    }
+  }, [filteredDraws, selectedDrawId]);
+
   useEffect(() => {
     setLoading(true);
     setError('');
@@ -84,20 +114,27 @@ export default function CommissionsPage() {
       ? { fromDate: customFromDate, toDate: customToDate }
       : getDateRange(selectedRange);
 
+    if (selectedDrawId && !filteredDraws.some((d) => d.id === selectedDrawId)) {
+      return;
+    }
+
     reportsApi.commissions({
       drawId: selectedDrawId || undefined,
       userId: selectedUserId || undefined,
       fromDate: fromDate || undefined,
       toDate: toDate || undefined,
     })
-      .then(setReport)
+      .then((data) => {
+        setReport(data);
+        setExpandedUsers(new Set());
+      })
       .catch((err: unknown) => {
         const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
         setError(msg ?? 'No fue posible cargar el reporte de comisiones.');
         setReport(EMPTY_REPORT);
       })
       .finally(() => setLoading(false));
-  }, [selectedDrawId, selectedUserId, selectedRange, customFromDate, customToDate]);
+  }, [selectedDrawId, selectedUserId, selectedRange, customFromDate, customToDate, filteredDraws]);
 
   const userOptions = useMemo(
     () => [
@@ -111,6 +148,18 @@ export default function CommissionsPage() {
     setSelectedDrawId('');
     setSelectedUserId('');
     setSelectedRange('today');
+  };
+
+  const toggleUserExpand = (userId: string) => {
+    setExpandedUsers((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(userId)) {
+        newSet.delete(userId);
+      } else {
+        newSet.add(userId);
+      }
+      return newSet;
+    });
   };
 
   return (
@@ -138,7 +187,7 @@ export default function CommissionsPage() {
               onChange={(e) => setSelectedDrawId(e.target.value)}
               options={[
                 { value: '', label: 'Todos los sorteos' },
-                ...draws.map((d) => ({ value: d.id, label: formatDrawLabel(d) })),
+                ...filteredDraws.map((d) => ({ value: d.id, label: formatDrawLabel(d) })),
               ]}
             />
             <Select
@@ -173,8 +222,7 @@ export default function CommissionsPage() {
                 <th className="text-right px-4 py-3 text-slate-600 font-medium">Comisión</th>
               </tr>
             </thead>
-            <tbody>
-              {loading ? (
+            <tbody>              {loading ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
                     Cargando reporte...
@@ -188,40 +236,54 @@ export default function CommissionsPage() {
                 </tr>
               ) : (
                 <>
-                  {report.bySeller.map((seller) => (
-                    <Fragment key={seller.sellerId}>
-                      {/* Seller header */}
-                      <tr key={`${seller.sellerId}-header`} className="bg-blue-50 border-t-2 border-blue-200">
-                        <td colSpan={5} className="px-4 py-2 text-sm font-bold text-blue-900">
-                          {seller.sellerName} / {seller.sellerUsername}
-                        </td>
-                      </tr>
-
-                      {/* Detail rows for each draw */}
-                      {seller.rows.map((row, idx) => (
-                        <tr key={`${seller.sellerId}-${idx}`} className="border-t border-slate-100 hover:bg-slate-50">
-                          <td className="px-4 py-3 text-slate-600"></td>
-                          <td className="px-4 py-3 text-slate-700">{formatDateTime(row.drawCloseTime)}</td>
-                          <td className="px-4 py-3 text-slate-700">{row.drawName}</td>
-                          <td className="px-4 py-3 text-right text-slate-700 font-medium">{formatCurrency(row.totalSales)}</td>
-                          <td className="px-4 py-3 text-right text-blue-700 font-semibold">{formatCurrency(row.commission)}</td>
+                  {report.bySeller
+                    .filter((seller) => isRowVisible(seller, report.bySeller, expandedUsers))
+                    .map((seller) => (
+                      <Fragment key={seller.sellerId}>
+                        {/* Seller header as clickable group row */}
+                        <tr
+                          key={`${seller.sellerId}-header`}
+                          className="bg-blue-100 border-blue-200 hover:bg-blue-200 cursor-pointer font-semibold text-slate-900 border-t"
+                          onClick={() => toggleUserExpand(seller.sellerId)}
+                        >
+                          <td className="px-4 py-3 text-blue-950">
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-400 flex-shrink-0">
+                                {expandedUsers.has(seller.sellerId) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                              </span>
+                              <span>{seller.sellerName}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3"></td>
+                          <td className="px-4 py-3"></td>
+                          <td className="px-4 py-3 text-right text-green-800">
+                            {formatCurrency(seller.totalSales)}
+                          </td>
+                          <td className="px-4 py-3 text-right text-blue-800 font-semibold">
+                            {formatCurrency(seller.subtotal)}
+                          </td>
                         </tr>
-                      ))}
 
-                      {/* Seller subtotal */}
-                      <tr key={`${seller.sellerId}-subtotal`} className="bg-slate-100 border-t border-slate-200">
-                        <td colSpan={3} className="px-4 py-2 text-right font-semibold text-slate-700">
-                          Total vendedor:
-                        </td>
-                        <td className="px-4 py-2 text-right font-bold text-slate-900">
-                          {formatCurrency(seller.totalSales)}
-                        </td>
-                        <td className="px-4 py-2 text-right font-bold text-slate-900">
-                          {formatCurrency(seller.subtotal)}
-                        </td>
-                      </tr>
-                    </Fragment>
-                  ))}
+                        {/* Detail rows for each draw */}
+                        {expandedUsers.has(seller.sellerId) &&
+                          seller.rows.map((row, idx) => (
+                            <tr
+                              key={`${seller.sellerId}-${idx}`}
+                              className="border-t border-slate-100 hover:bg-slate-50 font-medium text-slate-800 bg-white"
+                            >
+                              <td className="px-4 py-3 text-slate-600"></td>
+                              <td className="px-4 py-3 text-slate-700">{formatDateTime(row.drawCloseTime)}</td>
+                              <td className="px-4 py-3 text-slate-700">{row.drawName}</td>
+                              <td className="px-4 py-3 text-right text-slate-700 font-medium">
+                                {formatCurrency(row.totalSales)}
+                              </td>
+                              <td className="px-4 py-3 text-right text-blue-700 font-semibold">
+                                {formatCurrency(row.commission)}
+                              </td>
+                            </tr>
+                          ))}
+                      </Fragment>
+                    ))}
 
                   {/* Grand total */}
                   <tr className="bg-slate-800 border-t-2 border-slate-800">

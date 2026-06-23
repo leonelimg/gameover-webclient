@@ -373,34 +373,30 @@ export default function CashMovementsPage() {
           </div>
         </CardHeader>
         <CardBody>
-          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-xs text-slate-500">Saldo anterior</p>
-              <p className={`text-lg font-semibold ${balance.totals.openingBalance >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                {formatCurrency(balance.totals.openingBalance)}
-              </p>
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 text-white">
+            <div className={`rounded-xl border border-slate-800 border-t-4 p-4 shadow-sm bg-slate-900 ${balance.totals.openingBalance >= 0 ? 'border-t-emerald-500' : 'border-t-red-500'}`}>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Saldo anterior</p>
+              <p className="mt-2 text-lg font-bold text-white">{formatCurrency(balance.totals.openingBalance)}</p>
             </div>
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-xs text-slate-500">Depositos</p>
-              <p className="text-lg font-semibold text-emerald-700">{formatCurrency(balance.totals.totalDeposits)}</p>
+            <div className="rounded-xl border border-slate-800 border-t-4 border-t-emerald-500 bg-slate-900 p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Depositos</p>
+              <p className="mt-2 text-lg font-bold text-white">{formatCurrency(balance.totals.totalDeposits)}</p>
             </div>
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-xs text-slate-500">Retiros</p>
-              <p className="text-lg font-semibold text-rose-700">{formatCurrency(balance.totals.totalWithdrawals)}</p>
+            <div className="rounded-xl border border-slate-800 border-t-4 border-t-red-500 bg-slate-900 p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Retiros</p>
+              <p className="mt-2 text-lg font-bold text-white">{formatCurrency(balance.totals.totalWithdrawals)}</p>
             </div>
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-xs text-slate-500">Ventas</p>
-              <p className="text-lg font-semibold text-blue-700">{formatCurrency(balance.totals.totalSales)}</p>
+            <div className="rounded-xl border border-slate-800 border-t-4 border-t-blue-500 bg-slate-900 p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Ventas</p>
+              <p className="mt-2 text-lg font-bold text-white">{formatCurrency(balance.totals.totalSales)}</p>
             </div>
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-xs text-slate-500">Premios</p>
-              <p className="text-lg font-semibold text-amber-700">{formatCurrency(balance.totals.totalPrizes)}</p>
+            <div className="rounded-xl border border-slate-800 border-t-4 border-t-orange-500 bg-slate-900 p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Premios</p>
+              <p className="mt-2 text-lg font-bold text-white">{formatCurrency(balance.totals.totalPrizes)}</p>
             </div>
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-xs text-slate-500">Balance final</p>
-              <p className={`text-lg font-bold ${balance.totals.balance >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                {formatCurrency(balance.totals.balance)}
-              </p>
+            <div className={`rounded-xl border border-slate-800 border-t-4 p-4 shadow-sm bg-slate-900 ${balance.totals.balance >= 0 ? 'border-t-emerald-500' : 'border-t-red-500'}`}>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Balance final</p>
+              <p className="mt-2 text-lg font-bold text-white">{formatCurrency(balance.totals.balance)}</p>
             </div>
           </div>
           <p className="mt-3 text-xs text-slate-500">
@@ -462,7 +458,7 @@ export default function CashMovementsPage() {
               <CircleDollarSign size={18} className="text-slate-700" />
               <div>
                 <h2 className="font-semibold text-slate-900">
-                  {activeTab === 'history' ? 'Historial de movimientos' : 'Resumen por evento'}
+                  {activeTab === 'history' ? 'MOVIMIENTOS' : 'POR EVENTO'}
                 </h2>
                 <p className="text-xs text-slate-500 mt-1">
                   {activeTab === 'history'
@@ -478,26 +474,24 @@ export default function CashMovementsPage() {
                 role="tab"
                 aria-selected={activeTab === 'history'}
                 onClick={() => setActiveTab('history')}
-                className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                  activeTab === 'history'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'history'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+                  }`}
               >
-                Historial de movimientos
+                MOVIMIENTOS
               </button>
               <button
                 type="button"
                 role="tab"
                 aria-selected={activeTab === 'by-event'}
                 onClick={() => setActiveTab('by-event')}
-                className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                  activeTab === 'by-event'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'by-event'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+                  }`}
               >
-                Por evento
+                POR EVENTO
               </button>
             </div>
           </div>
@@ -508,35 +502,39 @@ export default function CashMovementsPage() {
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <th className="text-left px-4 py-3 text-slate-600 font-medium">Fecha</th>
-                  <th className="text-left px-4 py-3 text-slate-600 font-medium">Tipo</th>
-                  <th className="text-right px-4 py-3 text-slate-600 font-medium">Monto</th>
-                  <th className="text-left px-4 py-3 text-slate-600 font-medium">Registrado por</th>
-                  <th className="text-left px-4 py-3 text-slate-600 font-medium">Nota</th>
-                  <th className="text-left px-4 py-3 text-slate-600 font-medium">Acciones</th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">TIPO</th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">DESCRIPCIÓN</th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">FECHA</th>
+                  <th className="text-right px-4 py-3 text-slate-600 font-medium">MONTO</th>
+                  <th className="text-right px-4 py-3 text-slate-600 font-medium">SALDO POST-TRANSACCION</th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">REGISTRADO POR</th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">ACCIONES</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                    <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                       {loading ? 'Cargando movimientos...' : 'No hay movimientos para este usuario.'}
                     </td>
                   </tr>
                 ) : (
                   rows.map((row) => (
                     <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50">
-                      <td className="px-4 py-3 text-slate-700">{formatDateTime(row.createdAt)}</td>
                       <td className="px-4 py-3">
-                        <Badge variant={getMovementBadgeVariant(row.type)} className="capitalize">
-                          {row.type}
+                        <Badge variant={getMovementBadgeVariant(row.type)} className="uppercase">
+                          {row.type.toUpperCase()}
                         </Badge>
                       </td>
+                      <td className="px-4 py-3 text-slate-600">{row.note || '-'}</td>
+                      <td className="px-4 py-3 text-slate-700">{formatDateTime(row.createdAt)}</td>
                       <td className="px-4 py-3 text-right font-semibold text-slate-900">
                         {(row.type === 'retiro' || row.amount < 0 ? '-' : '') + formatCurrency(Math.abs(row.amount))}
                       </td>
+                      <td className={`px-4 py-3 text-right font-semibold ${(row.balanceAfterTransaction ?? 0) >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                        {row.balanceAfterTransaction !== undefined ? formatCurrency(row.balanceAfterTransaction) : '-'}
+                      </td>
                       <td className="px-4 py-3 text-slate-700">{row.createdBy.fullName}</td>
-                      <td className="px-4 py-3 text-slate-600">{row.note || '-'}</td>
                       <td className="px-4 py-3">
                         {canCancelMovement(row) ? (
                           <Button
@@ -566,22 +564,22 @@ export default function CashMovementsPage() {
           </div>
         ) : (
           <div className="px-6 py-5 space-y-5">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Ventas</p>
-                <p className="mt-2 text-lg font-bold text-slate-900">{formatCurrency(eventSummary.totals.totalSales)}</p>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-white">
+              <div className="rounded-xl border border-slate-800 border-t-4 border-t-blue-500 bg-slate-900 p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Ventas</p>
+                <p className="mt-2 text-lg font-bold text-white">{formatCurrency(eventSummary.totals.totalSales)}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Premios</p>
-                <p className="mt-2 text-lg font-bold text-slate-900">{formatCurrency(eventSummary.totals.totalPrizes)}</p>
+              <div className="rounded-xl border border-slate-800 border-t-4 border-t-orange-500 bg-slate-900 p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Premios</p>
+                <p className="mt-2 text-lg font-bold text-white">{formatCurrency(eventSummary.totals.totalPrizes)}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Comision</p>
-                <p className="mt-2 text-lg font-bold text-slate-900">{formatCurrency(eventSummary.totals.totalCommissions)}</p>
+              <div className="rounded-xl border border-slate-800 border-t-4 border-t-violet-500 bg-slate-900 p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Comision</p>
+                <p className="mt-2 text-lg font-bold text-white">{formatCurrency(eventSummary.totals.totalCommissions)}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-900 p-4 text-white">
-                <p className="text-xs uppercase tracking-wide text-slate-300">Balance</p>
-                <p className="mt-2 text-lg font-bold">{formatCurrency(eventSummary.totals.balance)}</p>
+              <div className={`rounded-xl border border-slate-800 border-t-4 p-4 shadow-sm bg-slate-900 ${eventSummary.totals.balance >= 0 ? 'border-t-emerald-500' : 'border-t-red-500'}`}>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Balance</p>
+                <p className="mt-2 text-lg font-bold text-white">{formatCurrency(eventSummary.totals.balance)}</p>
               </div>
             </div>
 
@@ -613,8 +611,8 @@ export default function CashMovementsPage() {
                         <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(row.totalSales)}</td>
                         <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(row.totalPrizes)}</td>
                         <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(row.totalCommissions)}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(row.balance)}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(row.balanceAfterTransaction)}</td>
+                        <td className={`px-4 py-3 text-right font-semibold ${row.balance >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{formatCurrency(row.balance)}</td>
+                        <td className={`px-4 py-3 text-right font-semibold ${row.balanceAfterTransaction >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{formatCurrency(row.balanceAfterTransaction)}</td>
                       </tr>
                     ))
                   )}

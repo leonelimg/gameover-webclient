@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ChevronDown, ChevronRight, BarChart3 } from 'lucide-react';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Input';
@@ -114,6 +114,27 @@ export default function ReportsPage() {
     drawsApi.list().then(setDraws).catch(() => {});
   }, []);
 
+  const filteredDraws = useMemo(() => {
+    const isCustomRange = selectedRange === 'custom';
+    if (isCustomRange && (!customFromDate || !customToDate || customFromDate > customToDate)) {
+      return [];
+    }
+    const { fromDate, toDate } = isCustomRange
+      ? { fromDate: customFromDate, toDate: customToDate }
+      : getDateRange(selectedRange);
+
+    return draws.filter((d) => {
+      const drawDate = toISODateLocal(new Date(d.closeTime));
+      return drawDate >= fromDate && drawDate <= toDate;
+    });
+  }, [draws, selectedRange, customFromDate, customToDate]);
+
+  useEffect(() => {
+    if (selectedDrawId && !filteredDraws.some((d) => d.id === selectedDrawId)) {
+      setSelectedDrawId('');
+    }
+  }, [filteredDraws, selectedDrawId]);
+
   // Reload report data whenever the selected draw or date range changes
   useEffect(() => {
     const drawId = selectedDrawId || undefined;
@@ -125,6 +146,10 @@ export default function ReportsPage() {
     const { fromDate, toDate } = isCustomRange
       ? { fromDate: customFromDate, toDate: customToDate }
       : getDateRange(selectedRange);
+
+    if (selectedDrawId && !filteredDraws.some((d) => d.id === selectedDrawId)) {
+      return;
+    }
 
     let isMounted = true;
 
@@ -152,7 +177,7 @@ export default function ReportsPage() {
     return () => {
       isMounted = false;
     };
-  }, [selectedDrawId, selectedRange, customFromDate, customToDate]);
+  }, [selectedDrawId, selectedRange, customFromDate, customToDate, filteredDraws]);
 
   const resetFilters = () => {
     setSelectedDrawId('');
@@ -185,7 +210,7 @@ export default function ReportsPage() {
               onChange={(e) => setSelectedDrawId(e.target.value)}
               options={[
                 { value: '', label: 'Todos los sorteos' },
-                ...draws.map((d) => ({
+                ...filteredDraws.map((d) => ({
                   value: d.id,
                   label: formatDrawLabel(d),
                 })),

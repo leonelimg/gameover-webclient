@@ -1,6 +1,6 @@
-import { Fragment, useEffect, useState } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
-import { Card, CardBody, CardHeader } from '@/components/ui/Card';
+import { Fragment, useEffect, useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight, DollarSign, Award, HandCoins, TrendingUp } from 'lucide-react';
+import { Card, CardBody } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { DateRangeSegmentedControl } from '@/components/ui/DateRangeSegmentedControl';
@@ -56,7 +56,6 @@ function EventRow({
   event,
   totals,
   indented = false,
-  bold = false,
   variant = 'draw',
   expandable = false,
   isExpanded = false,
@@ -71,44 +70,84 @@ function EventRow({
   isExpanded?: boolean;
   onToggleExpand?: () => void;
 }) {
-  const textClass = bold ? 'font-semibold' : 'font-medium';
   const rowClass =
     variant === 'grand-total'
-      ? 'bg-emerald-50 border-emerald-200'
+      ? 'bg-emerald-100 border-emerald-300 hover:bg-emerald-200'
       : variant === 'associate-total'
-        ? 'bg-blue-50 border-blue-100'
-        : 'bg-white border-slate-100';
+        ? 'bg-blue-100 border-blue-200 hover:bg-blue-200'
+        : 'bg-white border-slate-100 hover:bg-slate-50';
+
+  const textClass =
+    variant === 'grand-total'
+      ? 'font-bold text-slate-950'
+      : variant === 'associate-total'
+        ? 'font-semibold text-slate-900'
+        : 'font-medium text-slate-800';
 
   const eventTextClass =
     variant === 'grand-total'
-      ? 'text-emerald-900'
+      ? 'text-emerald-950'
       : variant === 'associate-total'
-        ? 'text-blue-900'
-        : 'text-slate-800';
+        ? 'text-blue-950'
+        : 'text-slate-700';
+
+  const salesColorClass =
+    variant === 'grand-total'
+      ? 'text-green-900'
+      : variant === 'associate-total'
+        ? 'text-green-800'
+        : 'text-green-700';
+
+  const prizesColorClass =
+    variant === 'grand-total'
+      ? 'text-amber-900'
+      : variant === 'associate-total'
+        ? 'text-amber-800'
+        : 'text-amber-700';
+
+  const balanceColorClass =
+    totals.balance >= 0
+      ? variant === 'grand-total'
+        ? 'text-emerald-900'
+        : variant === 'associate-total'
+          ? 'text-emerald-800'
+          : 'text-emerald-700'
+      : variant === 'grand-total'
+        ? 'text-red-900'
+        : variant === 'associate-total'
+          ? 'text-red-800'
+          : 'text-red-700';
+
+  const commissionsColorClass =
+    variant === 'grand-total'
+      ? 'text-blue-900'
+      : variant === 'associate-total'
+        ? 'text-blue-800'
+        : 'text-blue-700';
 
   return (
-    <tr className={`border-t hover:bg-slate-50 ${rowClass} ${expandable && onToggleExpand ? 'cursor-pointer' : ''}`}>
+    <tr
+      className={`border-t ${rowClass} ${expandable && onToggleExpand ? 'cursor-pointer' : ''}`}
+      onClick={expandable && onToggleExpand ? onToggleExpand : undefined}
+    >
       <td className={`px-4 py-3 ${eventTextClass} ${textClass} ${indented ? 'pl-10' : ''}`}>
         <div className="flex items-center gap-2">
           {expandable && onToggleExpand && (
-            <button
-              onClick={onToggleExpand}
-              className="text-slate-400 hover:text-slate-700 flex-shrink-0"
-            >
+            <span className="text-slate-400 flex-shrink-0">
               {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-            </button>
+            </span>
           )}
           {expandable && !onToggleExpand && <span className="w-4 flex-shrink-0" />}
           <span>{event}</span>
         </div>
       </td>
-      <td className={`px-4 py-3 text-center text-slate-900 ${textClass}`}>{totals.ticketCount}</td>
-      <td className={`px-4 py-3 text-right text-green-700 ${textClass}`}>{formatCurrency(totals.totalSales)}</td>
-      <td className={`px-4 py-3 text-right text-amber-700 ${textClass}`}>{formatCurrency(totals.totalPrizes)}</td>
-      <td className={`px-4 py-3 text-right ${totals.balance >= 0 ? 'text-emerald-700' : 'text-red-700'} ${textClass}`}>
+      <td className={`px-4 py-3 text-center ${textClass}`}>{totals.ticketCount}</td>
+      <td className={`px-4 py-3 text-right ${salesColorClass} ${textClass}`}>{formatCurrency(totals.totalSales)}</td>
+      <td className={`px-4 py-3 text-right ${prizesColorClass} ${textClass}`}>{formatCurrency(totals.totalPrizes)}</td>
+      <td className={`px-4 py-3 text-right ${balanceColorClass} ${textClass}`}>
         {formatCurrency(totals.balance)}
       </td>
-      <td className={`px-4 py-3 text-right text-blue-700 ${textClass}`}>{formatCurrency(totals.totalCommissions)}</td>
+      <td className={`px-4 py-3 text-right ${commissionsColorClass} ${textClass}`}>{formatCurrency(totals.totalCommissions)}</td>
     </tr>
   );
 }
@@ -131,6 +170,69 @@ function mapDrawToTotals(row: AssociateDrawBreakdownRow): BalanceBreakdownTotals
     totalCommissions: row.totalCommissions,
     balance: row.balance,
   };
+}
+
+function StatCard({
+  icon,
+  label,
+  value,
+  color,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  color: 'blue' | 'purple' | 'green' | 'orange' | 'red' | 'indigo';
+}) {
+  const styleMap = {
+    blue: {
+      card: 'bg-slate-900 border-slate-800 border-t-4 border-t-blue-500 text-white shadow-sm hover:border-slate-700',
+      icon: 'bg-slate-950 text-blue-400',
+      value: 'text-white font-bold',
+      label: 'text-slate-400',
+    },
+    purple: {
+      card: 'bg-slate-900 border-slate-800 border-t-4 border-t-violet-500 text-white shadow-sm hover:border-slate-700',
+      icon: 'bg-slate-950 text-violet-400',
+      value: 'text-white font-bold',
+      label: 'text-slate-400',
+    },
+    green: {
+      card: 'bg-slate-900 border-slate-800 border-t-4 border-t-emerald-500 text-white shadow-sm hover:border-slate-700',
+      icon: 'bg-slate-950 text-emerald-400',
+      value: 'text-white font-bold',
+      label: 'text-slate-400',
+    },
+    orange: {
+      card: 'bg-slate-900 border-slate-800 border-t-4 border-t-orange-500 text-white shadow-sm hover:border-slate-700',
+      icon: 'bg-slate-950 text-orange-400',
+      value: 'text-white font-bold',
+      label: 'text-slate-400',
+    },
+    red: {
+      card: 'bg-slate-900 border-slate-800 border-t-4 border-t-red-500 text-white shadow-sm hover:border-slate-700',
+      icon: 'bg-slate-950 text-red-400',
+      value: 'text-white font-bold',
+      label: 'text-slate-400',
+    },
+    indigo: {
+      card: 'bg-slate-900 border-slate-800 border-t-4 border-t-indigo-500 text-white shadow-sm hover:border-slate-700',
+      icon: 'bg-slate-950 text-indigo-400',
+      value: 'text-white font-bold',
+      label: 'text-slate-400',
+    },
+  };
+
+  const styles = styleMap[color];
+
+  return (
+    <div className={`p-2.5 px-3 rounded-xl border shadow-sm transition-all duration-300 flex items-center gap-3 ${styles.card}`}>
+      <div className={`inline-flex p-1.5 rounded-lg ${styles.icon} flex-shrink-0`}>{icon}</div>
+      <div>
+        <p className={`text-xs font-medium ${styles.label} leading-none`}>{label}</p>
+        <p className={`text-xl font-bold ${styles.value} mt-1.5 leading-none`}>{value}</p>
+      </div>
+    </div>
+  );
 }
 
 export default function BalanceBreakdownPage() {
@@ -175,6 +277,27 @@ export default function BalanceBreakdownPage() {
     localStorage.setItem(BALANCE_CUSTOM_TO_KEY, customToDate);
   }, [customToDate]);
 
+  const filteredDraws = useMemo(() => {
+    const isCustomRange = selectedRange === 'custom';
+    if (isCustomRange && (!customFromDate || !customToDate || customFromDate > customToDate)) {
+      return [];
+    }
+    const { fromDate, toDate } = isCustomRange
+      ? { fromDate: customFromDate, toDate: customToDate }
+      : getDateRange(selectedRange);
+
+    return draws.filter((d) => {
+      const drawDate = toISODateLocal(new Date(d.closeTime));
+      return drawDate >= fromDate && drawDate <= toDate;
+    });
+  }, [draws, selectedRange, customFromDate, customToDate]);
+
+  useEffect(() => {
+    if (selectedDrawId && !filteredDraws.some((d) => d.id === selectedDrawId)) {
+      setSelectedDrawId('');
+    }
+  }, [filteredDraws, selectedDrawId]);
+
   useEffect(() => {
     setLoading(true);
     setError('');
@@ -190,6 +313,10 @@ export default function BalanceBreakdownPage() {
       ? { fromDate: customFromDate, toDate: customToDate }
       : getDateRange(selectedRange);
 
+    if (selectedDrawId && !filteredDraws.some((d) => d.id === selectedDrawId)) {
+      return;
+    }
+
     reportsApi.balanceBreakdown({
       drawId: selectedDrawId || undefined,
       userId: selectedUserId || undefined,
@@ -198,9 +325,8 @@ export default function BalanceBreakdownPage() {
     })
       .then((data) => {
         setReport(data); // Keeping this line for updated report with expand logic
-        // Expand all users by default
-        const userIds = new Set(data.byAssociate.rows.map((row) => row.associateId));
-        setExpandedUsers(userIds);
+        // Collapse all users by default when loading data or filtering
+        setExpandedUsers(new Set());
       })
       .catch((err: unknown) => {
         const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -210,7 +336,7 @@ export default function BalanceBreakdownPage() {
       .finally(() => {
         setLoading(false);
       });
-  }, [selectedDrawId, selectedUserId, selectedRange, customFromDate, customToDate]);
+  }, [selectedDrawId, selectedUserId, selectedRange, customFromDate, customToDate, filteredDraws]);
 
   const resetFilters = () => {
     setSelectedDrawId('');
@@ -228,6 +354,13 @@ export default function BalanceBreakdownPage() {
       }
       return newSet;
     });
+  };
+
+  const isRowVisible = (row: AssociateBreakdownRow, rows: AssociateBreakdownRow[]): boolean => {
+    if (!row.parentId) return true;
+    const parentRow = rows.find((r) => r.associateId === row.parentId);
+    if (!parentRow) return true;
+    return expandedUsers.has(row.parentId) && isRowVisible(parentRow, rows);
   };
 
   return (
@@ -257,7 +390,7 @@ export default function BalanceBreakdownPage() {
               onChange={(e) => setSelectedDrawId(e.target.value)}
               options={[
                 { value: '', label: 'Todos los sorteos' },
-                ...draws.map((d) => ({
+                ...filteredDraws.map((d) => ({
                   value: d.id,
                   label: formatDrawLabel(d),
                 })),
@@ -280,10 +413,35 @@ export default function BalanceBreakdownPage() {
         </CardBody>
       </Card>
 
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          icon={<DollarSign size={20} />}
+          label="Vendido"
+          value={formatCurrency(report.byAssociate.totals.totalSales)}
+          color="blue"
+        />
+        <StatCard
+          icon={<Award size={20} />}
+          label="Premios"
+          value={formatCurrency(report.byAssociate.totals.totalPrizes)}
+          color="orange"
+        />
+        <StatCard
+          icon={<HandCoins size={20} />}
+          label="Comisión"
+          value={formatCurrency(report.byAssociate.totals.totalCommissions)}
+          color="purple"
+        />
+        <StatCard
+          icon={<TrendingUp size={20} />}
+          label="Balance"
+          value={formatCurrency(report.byAssociate.totals.balance)}
+          color={report.byAssociate.totals.balance >= 0 ? 'green' : 'red'}
+        />
+      </div>
+
       <Card>
-        <CardHeader>
-          <h2 className="font-semibold text-slate-800">Formato de evento</h2>
-        </CardHeader>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
@@ -312,8 +470,10 @@ export default function BalanceBreakdownPage() {
               ) : (
                 <>
                   <EventRow event="Totales" totals={report.byAssociate.totals} bold variant="grand-total" />
-                  {report.byAssociate.rows.map((associate) => (
-                    <Fragment key={associate.associateId}>
+                  {report.byAssociate.rows
+                    .filter((row) => isRowVisible(row, report.byAssociate.rows))
+                    .map((associate) => (
+                      <Fragment key={associate.associateId}>
                       <EventRow
                         event={associate.associateName}
                         totals={mapAssociateToTotals(associate)}

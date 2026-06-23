@@ -25,6 +25,7 @@ const createUserSchema = z.object({
 
 const updateUserSchema = z.object({
   fullName: z.string().min(2).optional(),
+  username: z.string().min(3).max(30).optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
   role: z.enum(USER_ROLES).optional(),
@@ -111,10 +112,25 @@ router.patch('/:id', authorizeResource('/users:update'), validate(updateUserSche
     res.status(403).json({ message: 'Solo un administrador puede modificar usuarios administradores.' });
     return;
   }
+  if (body.username && body.username !== existing.username) {
+    const duplicate = await prisma.user.findUnique({ where: { username: body.username } });
+    if (duplicate) {
+      res.status(400).json({ message: 'El nombre de usuario ya está en uso.' });
+      return;
+    }
+  }
+  if (body.email && body.email !== existing.email) {
+    const duplicate = await prisma.user.findUnique({ where: { email: body.email } });
+    if (duplicate) {
+      res.status(400).json({ message: 'El correo electrónico ya está en uso.' });
+      return;
+    }
+  }
   const user = await prisma.user.update({
     where: { id },
     data: {
       ...(body.fullName !== undefined && { fullName: body.fullName }),
+      ...(body.username !== undefined && { username: body.username }),
       ...(body.email !== undefined && { email: body.email }),
       ...(body.phone !== undefined && { phone: body.phone }),
       ...(body.role !== undefined && { role: body.role }),

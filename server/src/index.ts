@@ -24,6 +24,9 @@ import numberRestrictionRoutes from './routes/numberRestrictions.js';
 
 const app = express();
 
+// Confiar en el proxy inverso (Nginx) para obtener la IP real del cliente en req.ip
+app.set('trust proxy', 1);
+
 // ── Security & utilities ──────────────────────────────────────────────────────
 app.use(helmet());
 app.use(

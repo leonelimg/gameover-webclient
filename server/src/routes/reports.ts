@@ -478,7 +478,8 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
   if (drawId) where['drawId'] = drawId;
   if (Object.keys(createdAtFilter).length > 0) where['createdAt'] = createdAtFilter;
   if (userId) {
-    where['sellerId'] = userId;
+    const descendantIds = getDescendantUserIds(users, userId);
+    where['sellerId'] = { in: Array.from(descendantIds) };
   } else if (scopedSellerIds) {
     where['sellerId'] = { in: Array.from(scopedSellerIds) };
   }
@@ -635,7 +636,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
         totalSales: row.totalSales,
         totalPrizes: row.totalPrizes,
         totalCommissions: row.totalCommissions,
-        balance: row.totalSales - row.totalPrizes - row.totalCommissions,
+        balance: row.totalSales - row.totalPrizes,
       };
     })
     .sort((a, b) => {
@@ -691,7 +692,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     current.totalSales += ticket.total;
     current.totalPrizes += prizeForTicket;
     current.totalCommissions += commissionForTicket;
-    current.balance = current.totalSales - current.totalPrizes - current.totalCommissions;
+    current.balance = current.totalSales - current.totalPrizes;
     byVendor.set(seller.id, current);
   }
 
@@ -739,7 +740,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     current.totalSales += ticket.total;
     current.totalPrizes += prizeForTicket;
     current.totalCommissions += commissionForTicket;
-    current.balance = current.totalSales - current.totalPrizes - current.totalCommissions;
+    current.balance = current.totalSales - current.totalPrizes;
     byDraw.set(ticket.draw.id, current);
   }
 
@@ -761,9 +762,60 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     }
   );
 
-  const byAssociate = new Map<string, {
-    associateId: string;
-    associateName: string;
+  let parentId: string | null = null;
+  if (userId) {
+    parentId = userId;
+  } else if (req.user!.role !== 'admin') {
+    parentId = req.user!.sub;
+  }
+
+  // Build children map for depth-first traversal
+  const childrenMap = new Map<string, ReportUser[]>();
+  for (const u of users) {
+    if (u.parentId) {
+      const list = childrenMap.get(u.parentId) ?? [];
+      list.push(u);
+      childrenMap.set(u.parentId, list);
+    }
+  }
+
+  const rootUsers: ReportUser[] = [];
+  if (parentId) {
+    const rootUser = userById.get(parentId);
+    if (rootUser) {
+      rootUsers.push(rootUser);
+    }
+  } else {
+    for (const u of users) {
+      if (!u.parentId || !userById.has(u.parentId)) {
+        rootUsers.push(u);
+      }
+    }
+    rootUsers.sort((a, b) => a.fullName.localeCompare(b.fullName));
+  }
+
+  interface OrderedUser {
+    user: ReportUser;
+    depth: number;
+  }
+  const orderedUsers: OrderedUser[] = [];
+
+  const visit = (u: ReportUser, depth: number) => {
+    orderedUsers.push({ user: u, depth });
+    const children = childrenMap.get(u.id) ?? [];
+    children.sort((a, b) => a.fullName.localeCompare(b.fullName));
+    for (const child of children) {
+      visit(child, depth + 1);
+    }
+  };
+
+  for (const root of rootUsers) {
+    visit(root, 0);
+  }
+
+  const byUser = new Map<string, {
+    userId: string;
+    userName: string;
     ticketCount: number;
     totalSales: number;
     totalPrizes: number;
@@ -784,9 +836,12 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
 
   for (const ticket of tickets) {
     const { prizeForTicket, commissionForTicket } = calculateTicketFinancials(ticket);
-    const associateCurrent = byAssociate.get(ticket.associateId) ?? {
-      associateId: ticket.associateId,
-      associateName: ticket.associate.fullName,
+    const sellerId = ticket.seller.id;
+    const sellerName = ticket.seller.fullName;
+
+    const current = byUser.get(sellerId) ?? {
+      userId: sellerId,
+      userName: sellerName,
       ticketCount: 0,
       totalSales: 0,
       totalPrizes: 0,
@@ -795,13 +850,13 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       draws: new Map(),
     };
 
-    associateCurrent.ticketCount += 1;
-    associateCurrent.totalSales += ticket.total;
-    associateCurrent.totalPrizes += prizeForTicket;
-    associateCurrent.totalCommissions += commissionForTicket;
-    associateCurrent.balance = associateCurrent.totalSales - associateCurrent.totalPrizes - associateCurrent.totalCommissions;
+    current.ticketCount += 1;
+    current.totalSales += ticket.total;
+    current.totalPrizes += prizeForTicket;
+    current.totalCommissions += commissionForTicket;
+    current.balance = current.totalSales - current.totalPrizes;
 
-    const drawCurrent = associateCurrent.draws.get(ticket.draw.id) ?? {
+    const drawCurrent = current.draws.get(ticket.draw.id) ?? {
       drawId: ticket.draw.id,
       drawName: ticket.draw.name,
       drawCloseTime: ticket.draw.closeTime.toISOString(),
@@ -817,44 +872,89 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     drawCurrent.totalSales += ticket.total;
     drawCurrent.totalPrizes += prizeForTicket;
     drawCurrent.totalCommissions += commissionForTicket;
-    drawCurrent.balance = drawCurrent.totalSales - drawCurrent.totalPrizes - drawCurrent.totalCommissions;
+    drawCurrent.balance = drawCurrent.totalSales - drawCurrent.totalPrizes;
     if (ticket.createdAt.toISOString() > drawCurrent.lastTicketCreatedAt) {
       drawCurrent.lastTicketCreatedAt = ticket.createdAt.toISOString();
     }
 
-    associateCurrent.draws.set(ticket.draw.id, drawCurrent);
-    byAssociate.set(ticket.associateId, associateCurrent);
+    current.draws.set(ticket.draw.id, drawCurrent);
+    byUser.set(sellerId, current);
   }
 
-  const associateRows = Array.from(byAssociate.values())
-    .map((associate) => ({
-      associateId: associate.associateId,
-      associateName: associate.associateName,
-      ticketCount: associate.ticketCount,
-      totalSales: associate.totalSales,
-      totalPrizes: associate.totalPrizes,
-      totalCommissions: associate.totalCommissions,
-      balance: associate.balance,
-      draws: Array.from(associate.draws.values()).sort((a, b) => b.lastTicketCreatedAt.localeCompare(a.lastTicketCreatedAt)),
-    }))
-    .sort((a, b) => b.totalSales - a.totalSales);
-
-  const associateTotals = associateRows.reduce(
-    (acc, row) => ({
-      ticketCount: acc.ticketCount + row.ticketCount,
-      totalSales: acc.totalSales + row.totalSales,
-      totalPrizes: acc.totalPrizes + row.totalPrizes,
-      totalCommissions: acc.totalCommissions + row.totalCommissions,
-      balance: acc.balance + row.balance,
-    }),
-    {
-      ticketCount: 0,
-      totalSales: 0,
-      totalPrizes: 0,
-      totalCommissions: 0,
-      balance: 0,
+  function hasSalesOrDescendantHasSales(userId: string): boolean {
+    if (byUser.has(userId)) return true;
+    const descendants = getDescendantUserIds(users, userId);
+    for (const dId of descendants) {
+      if (byUser.has(dId)) return true;
     }
-  );
+    return false;
+  }
+
+  const associateRows = [];
+  const rootUserIds = new Set(rootUsers.map((u) => u.id));
+
+  for (const { user, depth } of orderedUsers) {
+    if (!hasSalesOrDescendantHasSales(user.id)) continue;
+
+    const descendantIds = getDescendantUserIds(users, user.id);
+
+    let ticketCount = 0;
+    let totalSales = 0;
+    let totalPrizes = 0;
+    let totalCommissions = 0;
+    let balance = 0;
+
+    for (const dId of descendantIds) {
+      const data = byUser.get(dId);
+      if (!data) continue;
+
+      ticketCount += data.ticketCount;
+      totalSales += data.totalSales;
+      totalPrizes += data.totalPrizes;
+      totalCommissions += data.totalCommissions;
+      balance += data.balance;
+    }
+
+    const roleLabel = user.role === 'vendedor' ? 'Vendedor' : user.role === 'asociado' ? 'Asociado' : 'Admin';
+    const indent = '\u00A0'.repeat(depth * 4);
+    const formattedName = `${indent}${user.fullName} (${user.username}) [${roleLabel}]`;
+
+    const directData = byUser.get(user.id);
+    const drawsList = directData
+      ? Array.from(directData.draws.values()).sort((a, b) => b.lastTicketCreatedAt.localeCompare(a.lastTicketCreatedAt))
+      : [];
+
+    associateRows.push({
+      associateId: user.id,
+      associateName: formattedName,
+      parentId: user.parentId,
+      ticketCount,
+      totalSales,
+      totalPrizes,
+      totalCommissions,
+      balance,
+      draws: drawsList,
+    });
+  }
+
+  const associateTotals = associateRows
+    .filter((row) => rootUserIds.has(row.associateId))
+    .reduce(
+      (acc, row) => ({
+        ticketCount: acc.ticketCount + row.ticketCount,
+        totalSales: acc.totalSales + row.totalSales,
+        totalPrizes: acc.totalPrizes + row.totalPrizes,
+        totalCommissions: acc.totalCommissions + row.totalCommissions,
+        balance: acc.balance + row.balance,
+      }),
+      {
+        ticketCount: 0,
+        totalSales: 0,
+        totalPrizes: 0,
+        totalCommissions: 0,
+        balance: 0,
+      }
+    );
 
   res.json({
     filters: {
@@ -1116,7 +1216,8 @@ router.get('/commissions', authorizeResource('/reports/commissions'), async (req
   if (drawId) where['drawId'] = drawId;
   if (Object.keys(createdAtFilter).length > 0) where['createdAt'] = createdAtFilter;
   if (userId) {
-    where['sellerId'] = userId;
+    const descendantIds = getDescendantUserIds(users, userId);
+    where['sellerId'] = { in: Array.from(descendantIds) };
   } else if (scopedSellerIds) {
     where['sellerId'] = { in: Array.from(scopedSellerIds) };
   }
@@ -1199,16 +1300,113 @@ router.get('/commissions', authorizeResource('/reports/commissions'), async (req
     bySeller.set(ticket.seller.id, current);
   }
 
-  const sellerRows = Array.from(bySeller.values())
-    .map((seller) => ({
-      sellerId: seller.sellerId,
-      sellerName: seller.sellerName,
-      sellerUsername: seller.sellerUsername,
-      totalSales: seller.totalSales,
-      subtotal: seller.subtotal,
-      rows: Array.from(seller.rows.values()).sort((a, b) => b.drawCloseTime.localeCompare(a.drawCloseTime)),
-    }))
-    .sort((a, b) => a.sellerName.localeCompare(b.sellerName));
+  let parentId: string | null = null;
+  if (userId) {
+    parentId = userId;
+  } else if (req.user!.role !== 'admin') {
+    parentId = req.user!.sub;
+  }
+
+  // Build children map for depth-first traversal
+  const childrenMap = new Map<string, ReportUser[]>();
+  for (const u of users) {
+    if (u.parentId) {
+      const list = childrenMap.get(u.parentId) ?? [];
+      list.push(u);
+      childrenMap.set(u.parentId, list);
+    }
+  }
+
+  const userById = new Map(users.map((user): [string, ReportUser] => [user.id, user]));
+
+  const rootUsers: ReportUser[] = [];
+  if (parentId) {
+    const rootUser = userById.get(parentId);
+    if (rootUser) {
+      rootUsers.push(rootUser);
+    }
+  } else {
+    for (const u of users) {
+      if (!u.parentId || !userById.has(u.parentId)) {
+        rootUsers.push(u);
+      }
+    }
+    rootUsers.sort((a, b) => a.fullName.localeCompare(b.fullName));
+  }
+
+  interface OrderedUser {
+    user: ReportUser;
+    depth: number;
+  }
+  const orderedUsers: OrderedUser[] = [];
+
+  const visit = (u: ReportUser, depth: number) => {
+    orderedUsers.push({ user: u, depth });
+    const children = childrenMap.get(u.id) ?? [];
+    children.sort((a, b) => a.fullName.localeCompare(b.fullName));
+    for (const child of children) {
+      visit(child, depth + 1);
+    }
+  };
+
+  for (const root of rootUsers) {
+    visit(root, 0);
+  }
+
+  function hasSalesOrDescendantHasSales(uId: string): boolean {
+    if (bySeller.has(uId)) return true;
+    const descendants = getDescendantUserIds(users, uId);
+    for (const dId of descendants) {
+      if (bySeller.has(dId)) return true;
+    }
+    return false;
+  }
+
+  const sellerRows = [];
+  const rootUserIds = new Set(rootUsers.map((u) => u.id));
+
+  for (const { user, depth } of orderedUsers) {
+    if (!hasSalesOrDescendantHasSales(user.id)) continue;
+
+    const descendantIds = getDescendantUserIds(users, user.id);
+
+    let totalSales = 0;
+    let subtotal = 0;
+
+    for (const dId of descendantIds) {
+      const data = bySeller.get(dId);
+      if (!data) continue;
+
+      totalSales += data.totalSales;
+      subtotal += data.subtotal;
+    }
+
+    const roleLabel = user.role === 'vendedor' ? 'Vendedor' : user.role === 'asociado' ? 'Asociado' : 'Admin';
+    const indent = '\u00A0'.repeat(depth * 4);
+    const formattedName = `${indent}${user.fullName} (${user.username}) [${roleLabel}]`;
+
+    const directData = bySeller.get(user.id);
+    const drawsList = directData
+      ? Array.from(directData.rows.values()).sort((a, b) => b.drawCloseTime.localeCompare(a.drawCloseTime))
+      : [];
+
+    sellerRows.push({
+      sellerId: user.id,
+      sellerName: formattedName,
+      sellerUsername: user.username,
+      parentId: user.parentId,
+      totalSales,
+      subtotal,
+      rows: drawsList,
+    });
+  }
+
+  const rootSellerRows = sellerRows.filter((r) => rootUserIds.has(r.sellerId));
+
+  const totals = {
+    totalSales: rootSellerRows.reduce((sum, r) => sum + r.totalSales, 0),
+    totalCommissions: rootSellerRows.reduce((sum, r) => sum + r.subtotal, 0),
+  };
 
   res.json({
     filters: {
@@ -1217,13 +1415,7 @@ router.get('/commissions', authorizeResource('/reports/commissions'), async (req
       fromDate: fromDate || null,
       toDate: toDate || null,
     },
-    totals: {
-      totalSales: sellerRows.reduce(
-        (sum, seller) => sum + seller.rows.reduce((sellerSum, row) => sellerSum + row.totalSales, 0),
-        0
-      ),
-      totalCommissions: sellerRows.reduce((sum, seller) => sum + seller.subtotal, 0),
-    },
+    totals,
     bySeller: sellerRows,
   });
 });

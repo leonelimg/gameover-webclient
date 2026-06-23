@@ -26,11 +26,26 @@ export class QueueStorage {
   async read(): Promise<QueueState> {
     await this.ensure();
     const content = await fs.readFile(this.filePath, "utf8");
-    const parsed = JSON.parse(content) as QueueState;
-    if (!parsed.jobs || !Array.isArray(parsed.jobs)) {
+    try {
+      const parsed = JSON.parse(content) as QueueState;
+      if (!parsed.jobs || !Array.isArray(parsed.jobs)) {
+        return { jobs: [] };
+      }
+      return parsed;
+    } catch (error) {
+      console.error(`[storage] Failed to parse queue state JSON from ${this.filePath}:`, error);
+
+      try {
+        const backupPath = `${this.filePath}.corrupted`;
+        await fs.writeFile(backupPath, content, "utf8");
+        console.warn(`[storage] Backup of corrupted queue saved to ${backupPath}`);
+      } catch (backupError) {
+        console.error(`[storage] Failed to backup corrupted queue file:`, backupError);
+      }
+
+      await this.write(initialState);
       return { jobs: [] };
     }
-    return parsed;
   }
 
   async write(state: QueueState): Promise<void> {

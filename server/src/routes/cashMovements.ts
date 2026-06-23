@@ -66,6 +66,7 @@ type CashMovementHistoryRow = {
   targetUser: HistoryActor;
   source: 'cash-movement' | 'ticket-sale';
   referenceCode?: string;
+  balanceAfterTransaction?: number;
 };
 
 type CashMovementEventSummaryRow = {
@@ -271,6 +272,80 @@ function calculateTicketFinancials(
   };
 }
 
+async function getOpeningBalances(
+  userIds: string[],
+  cutoffDate: Date | null,
+  drawFilterRule: DrawFilterRule,
+  defaultPlan: { multiplier: number; commission: number } | null
+): Promise<Record<string, number>> {
+  const balances: Record<string, number> = {};
+  for (const id of userIds) {
+    balances[id] = 0;
+  }
+
+  if (!cutoffDate) {
+    return balances;
+  }
+
+  const movements = await prisma.cashMovement.groupBy({
+    by: ['targetUserId', 'type'],
+    where: {
+      targetUserId: { in: userIds },
+      canceledAt: null,
+      createdAt: { lt: cutoffDate },
+    },
+    _sum: { amount: true },
+  });
+
+  for (const m of movements) {
+    const userId = m.targetUserId;
+    const amount = m._sum.amount ?? 0;
+    if (m.type === 'deposito') {
+      balances[userId] = (balances[userId] ?? 0) + amount;
+    } else {
+      balances[userId] = (balances[userId] ?? 0) - amount;
+    }
+  }
+
+  const ticketWhere: Record<string, unknown> = {
+    sellerId: { in: userIds },
+    canceledAt: null,
+    createdAt: { lt: cutoffDate },
+  };
+  applyDrawFilterRule(ticketWhere, drawFilterRule);
+
+  const tickets = await prisma.ticket.findMany({
+    where: ticketWhere,
+    include: {
+      lines: { select: { number: true, amount: true, specialAmount: true } },
+      draw: {
+        select: {
+          winnerNumber: true,
+          specialMultiplier: { select: { value: true } },
+        },
+      },
+      seller: {
+        select: {
+          plan: { select: { multiplier: true, commission: true } },
+        },
+      },
+      associate: {
+        select: {
+          plan: { select: { multiplier: true, commission: true } },
+        },
+      },
+    },
+  });
+
+  for (const t of tickets) {
+    const userId = t.sellerId;
+    const prize = calculatePrizeForTicket(t as PrizeTicket, defaultPlan);
+    balances[userId] = (balances[userId] ?? 0) + t.total - prize;
+  }
+
+  return balances;
+}
+
 // GET /api/cash-movements/targets
 router.get('/targets', async (req, res) => {
   const authUser = req.user as AuthUser;
@@ -339,58 +414,130 @@ router.get('/', async (req, res) => {
     take: limit,
   });
 
-  const ticketWhere: Record<string, unknown> = { canceledAt: null };
-  if (Object.keys(createdAt).length > 0) ticketWhere['createdAt'] = createdAt;
+  const targetUserIds = finalTargetUserId ? [finalTargetUserId] : Array.from(scoped);
+  const openingBalanceCutoff = fromDate ? parseDateYmdToUtc(fromDate, false) : null;
+  const drawFilterRule = await getDrawFilterRule('cash-movements.balance');
 
-  if (finalTargetUserId) {
-    ticketWhere['sellerId'] = finalTargetUserId;
-  } else {
-    ticketWhere['sellerId'] = { in: Array.from(scoped) };
-  }
-
-  const ticketRows = await prisma.ticket.findMany({
-    where: ticketWhere,
-    include: {
-      seller: { select: { id: true, fullName: true, username: true, role: true } },
-      draw: { select: { name: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: limit,
+  const defaultPlan = await prisma.plan.findFirst({
+    orderBy: { createdAt: 'asc' },
+    select: { multiplier: true, commission: true },
   });
 
-  const rows: CashMovementHistoryRow[] = [
-    ...movementRows.map((row) => ({
-      id: row.id,
-      targetUserId: row.targetUserId,
-      createdById: row.createdById,
-      type: row.type,
-      amount: row.amount,
-      note: row.note ?? null,
-      createdAt: row.createdAt,
-      canceledAt: row.canceledAt,
-      canceledById: row.canceledById,
-      createdBy: row.createdBy,
-      targetUser: row.targetUser,
-      source: 'cash-movement' as const,
+  const openingBalances = await getOpeningBalances(
+    targetUserIds,
+    openingBalanceCutoff,
+    drawFilterRule,
+    defaultPlan
+  );
+
+  const rangeMovementWhere: Record<string, unknown> = {
+    targetUserId: { in: targetUserIds },
+    canceledAt: null,
+  };
+  if (Object.keys(createdAt).length > 0) {
+    rangeMovementWhere['createdAt'] = createdAt;
+  }
+
+  const rangeTicketWhere: Record<string, unknown> = {
+    sellerId: { in: targetUserIds },
+    canceledAt: null,
+  };
+  if (Object.keys(createdAt).length > 0) {
+    rangeTicketWhere['createdAt'] = createdAt;
+  }
+  applyDrawFilterRule(rangeTicketWhere, drawFilterRule);
+
+  const [allMovements, allTickets] = await Promise.all([
+    prisma.cashMovement.findMany({
+      where: rangeMovementWhere,
+      orderBy: { createdAt: 'asc' },
+    }),
+    prisma.ticket.findMany({
+      where: rangeTicketWhere,
+      include: {
+        lines: { select: { number: true, amount: true, specialAmount: true } },
+        draw: {
+          select: {
+            winnerNumber: true,
+            specialMultiplier: { select: { value: true } },
+          },
+        },
+        seller: {
+          select: {
+            plan: { select: { multiplier: true, commission: true } },
+          },
+        },
+        associate: {
+          select: {
+            plan: { select: { multiplier: true, commission: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    }),
+  ]);
+
+  const allEvents = [
+    ...allMovements.map(m => ({
+      id: m.id,
+      userId: m.targetUserId,
+      type: m.type,
+      amount: m.amount,
+      createdAt: m.createdAt,
+      isMovement: true,
     })),
-    ...ticketRows.map((ticket) => ({
-      id: ticket.id,
-      targetUserId: ticket.sellerId,
-      createdById: ticket.sellerId,
-      type: 'venta' as const,
-      amount: ticket.total,
-      note: `Ticket ${ticket.code}${ticket.draw?.name ? ` - ${ticket.draw.name}` : ''}`,
-      createdAt: ticket.createdAt,
-      canceledAt: ticket.canceledAt,
-      canceledById: ticket.canceledById,
-      createdBy: ticket.seller,
-      targetUser: ticket.seller,
-      source: 'ticket-sale' as const,
-      referenceCode: ticket.code,
-    })),
-  ]
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    .slice(0, limit);
+    ...allTickets.map(t => {
+      const prize = calculatePrizeForTicket(t as PrizeTicket, defaultPlan);
+      return {
+        id: t.id,
+        userId: t.sellerId,
+        type: 'ticket' as const,
+        amount: t.total - prize,
+        createdAt: t.createdAt,
+        isMovement: false,
+      };
+    })
+  ].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+  const currentBalances = { ...openingBalances };
+  const balanceMap = new Map<string, number>();
+
+  for (const event of allEvents) {
+    const userId = event.userId;
+    const currentBalance = currentBalances[userId] ?? 0;
+    let newBalance = currentBalance;
+
+    if (event.isMovement) {
+      if (event.type === 'deposito') {
+        newBalance += event.amount;
+      } else {
+        newBalance -= event.amount;
+      }
+      currentBalances[userId] = newBalance;
+      balanceMap.set(event.id, newBalance);
+    } else {
+      newBalance += event.amount;
+      currentBalances[userId] = newBalance;
+    }
+  }
+
+  movementRows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+  const rows: CashMovementHistoryRow[] = movementRows.map((row) => ({
+    id: row.id,
+    targetUserId: row.targetUserId,
+    createdById: row.createdById,
+    type: row.type,
+    amount: row.amount,
+    note: row.note ?? null,
+    createdAt: row.createdAt,
+    canceledAt: row.canceledAt,
+    canceledById: row.canceledById,
+    createdBy: row.createdBy,
+    targetUser: row.targetUser,
+    source: 'cash-movement' as const,
+    balanceAfterTransaction: balanceMap.get(row.id) ?? (openingBalances[row.targetUserId] ?? 0),
+  }));
 
   res.json(rows);
 });

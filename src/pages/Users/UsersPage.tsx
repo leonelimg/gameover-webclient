@@ -67,6 +67,34 @@ const emptyForm: UserFormData = {
   password: '',
 };
 
+const generateEmailFromName = (name: string, existingEmails: string[]): string => {
+  if (!name) return '';
+  const cleanName = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // remove accents
+    .trim()
+    .replace(/\s+/g, '.') // replace spaces with dots
+    .replace(/[^a-z0-9._-]/g, ''); // keep alphanumeric, dots, underscores, and hyphens
+
+  if (!cleanName) return '';
+
+  const baseEmail = `${cleanName}@pmcomercial.com`;
+  if (!existingEmails.includes(baseEmail)) {
+    return baseEmail;
+  }
+
+  let counter = 1;
+  while (true) {
+    const suffix = counter.toString().padStart(2, '0'); // '01', '02', etc.
+    const candidateEmail = `${cleanName}${suffix}@pmcomercial.com`;
+    if (!existingEmails.includes(candidateEmail)) {
+      return candidateEmail;
+    }
+    counter++;
+  }
+};
+
 export default function UsersPage() {
   const { user: currentUser, hasPermission } = useAuth();
   const { users, setUsers, reload } = useUsers();
@@ -168,6 +196,7 @@ export default function UsersPage() {
       if (editingUser) {
         const payload: UpdateUserPayload = {
           fullName: form.fullName,
+          username: form.username,
           email: form.email,
           phone: form.phone,
           role: form.role,
@@ -450,7 +479,20 @@ export default function UsersPage() {
           <Input
             label="Nombre completo"
             value={form.fullName}
-            onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+            onChange={(e) => {
+              const newFullName = e.target.value;
+              const existingEmails = users.map((u) => u.email.toLowerCase());
+              setForm((prev) => {
+                const oldGeneratedEmail = generateEmailFromName(prev.fullName, existingEmails);
+                const newGeneratedEmail = generateEmailFromName(newFullName, existingEmails);
+                const shouldAutoFill = !editingUser && (prev.email === '' || prev.email === oldGeneratedEmail);
+                return {
+                  ...prev,
+                  fullName: newFullName,
+                  email: shouldAutoFill ? newGeneratedEmail : prev.email
+                };
+              });
+            }}
             required
           />
           <div className="grid grid-cols-2 gap-4">
