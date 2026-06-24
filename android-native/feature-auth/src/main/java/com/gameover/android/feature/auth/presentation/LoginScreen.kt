@@ -19,9 +19,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.semantics.semantics
@@ -34,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gameover.android.core.ui.R
+import kotlinx.coroutines.delay
 import com.gameover.android.core.ui.component.GoButton
 import com.gameover.android.core.ui.component.GoTextField
 import com.gameover.android.core.ui.theme.GoBlue
@@ -46,6 +49,7 @@ fun LoginScreen(
 ) {
     val context = LocalContext.current
     val autofillManager = remember { context.getSystemService(AutofillManager::class.java) }
+    val view = LocalView.current
 
     val uiState by viewModel.uiState.collectAsState()
     val username by viewModel.username.collectAsState()
@@ -69,6 +73,7 @@ fun LoginScreen(
         when (uiState) {
             is LoginUiState.Success -> {
                 autofillManager?.commit()
+                delay(300)
                 onLoginSuccess()
             }
             is LoginUiState.Error -> {
@@ -136,9 +141,15 @@ fun LoginScreen(
                         label = "Usuario",
                         placeholder = "",
                         enabled = uiState !is LoginUiState.Loading,
-                        modifier = Modifier.semantics {
-                            contentType = ContentType.Username
-                        },
+                        modifier = Modifier
+                            .semantics {
+                                contentType = ContentType.Username
+                            }
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused) {
+                                    autofillManager?.requestAutofill(view)
+                                }
+                            },
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Text,
                             imeAction = ImeAction.Next,
@@ -156,9 +167,15 @@ fun LoginScreen(
                         label = "Contraseña",
                         placeholder = "",
                         enabled = uiState !is LoginUiState.Loading,
-                        modifier = Modifier.semantics {
-                            contentType = ContentType.Password
-                        },
+                        modifier = Modifier
+                            .semantics {
+                                contentType = ContentType.Password
+                            }
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused) {
+                                    autofillManager?.requestAutofill(view)
+                                }
+                            },
                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Password,

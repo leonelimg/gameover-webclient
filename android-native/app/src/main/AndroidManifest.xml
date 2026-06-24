@@ -69,6 +69,10 @@
                 tools:node="remove" />
         </provider>
 
+        <meta-data
+            android:name="asset_statements"
+            android:resource="@string/asset_statements" />
+
     </application>
 
 </manifest>

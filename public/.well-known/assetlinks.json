@@ -4,6 +4,15 @@
       "delegate_permission/common.get_login_creds"
     ],
     "target": {
+      "namespace": "web",
+      "site": "https://web.pmcomercial.com"
+    }
+  },
+  {
+    "relation": [
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
       "namespace": "android_app",
       "package_name": "com.gameover.android",
       "sha256_cert_fingerprints": [

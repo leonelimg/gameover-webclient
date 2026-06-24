@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">PM Tickets</string>
+    <string name="asset_statements" translatable="false">[{\"include\": \"https://web.pmcomercial.com/.well-known/assetlinks.json\"}]</string>
 </resources>
 
