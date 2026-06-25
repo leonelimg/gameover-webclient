@@ -173,6 +173,16 @@ export const printBridgeApi = {
     return parseResponse<{ jobId: string; status: string }>(res);
   },
 
+  printText: async (text: string) => {
+    const res = await bridgeFetch(`${bridgeUrl}/print-text`, {
+      method: 'POST',
+      headers: withBridgeHeaders(true),
+      body: JSON.stringify({ text }),
+    });
+
+    return parseResponse<{ jobId: string; status: string }>(res);
+  },
+
   testPrint: async (message: string) => {
     const res = await bridgeFetch(`${bridgeUrl}/test-print`, {
       method: 'POST',

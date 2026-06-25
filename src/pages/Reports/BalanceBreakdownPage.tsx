@@ -16,6 +16,7 @@ import {
 import { Draw, User } from '@/types';
 import { formatCurrency, formatDateTime, formatDrawLabel } from '@/utils/helpers';
 import { DateRange, getDateRange, isDateRange, toISODateLocal } from '@/utils/dateRanges';
+import { useAuth } from '@/context/AuthContext';
 
 const BALANCE_RANGE_KEY = 'go_balance_selected_range';
 const BALANCE_CUSTOM_FROM_KEY = 'go_balance_custom_from_date';
@@ -26,6 +27,7 @@ const EMPTY_TOTALS: BalanceBreakdownTotals = {
   totalSales: 0,
   totalPrizes: 0,
   totalCommissions: 0,
+  totalAssociateCommissions: 0,
   balance: 0,
 };
 
@@ -60,6 +62,7 @@ function EventRow({
   expandable = false,
   isExpanded = false,
   onToggleExpand,
+  showAssociateCommission = false,
 }: {
   event: string;
   totals: BalanceBreakdownTotals;
@@ -69,6 +72,7 @@ function EventRow({
   expandable?: boolean;
   isExpanded?: boolean;
   onToggleExpand?: () => void;
+  showAssociateCommission?: boolean;
 }) {
   const rowClass =
     variant === 'grand-total'
@@ -148,6 +152,11 @@ function EventRow({
         {formatCurrency(totals.balance)}
       </td>
       <td className={`px-4 py-3 text-right ${commissionsColorClass} ${textClass}`}>{formatCurrency(totals.totalCommissions)}</td>
+      {showAssociateCommission && (
+        <td className={`px-4 py-3 text-right ${commissionsColorClass} ${textClass}`}>
+          {formatCurrency(totals.totalAssociateCommissions ?? 0)}
+        </td>
+      )}
     </tr>
   );
 }
@@ -158,6 +167,7 @@ function mapAssociateToTotals(row: AssociateBreakdownRow): BalanceBreakdownTotal
     totalSales: row.totalSales,
     totalPrizes: row.totalPrizes,
     totalCommissions: row.totalCommissions,
+    totalAssociateCommissions: row.totalAssociateCommissions,
     balance: row.balance,
   };
 }
@@ -168,6 +178,7 @@ function mapDrawToTotals(row: AssociateDrawBreakdownRow): BalanceBreakdownTotals
     totalSales: row.totalSales,
     totalPrizes: row.totalPrizes,
     totalCommissions: row.totalCommissions,
+    totalAssociateCommissions: row.totalAssociateCommissions,
     balance: row.balance,
   };
 }
@@ -236,6 +247,9 @@ function StatCard({
 }
 
 export default function BalanceBreakdownPage() {
+  const { user } = useAuth();
+  const showAssociateCommission = user?.role === 'admin' || user?.role === 'asociado';
+
   const [draws, setDraws] = useState<Draw[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [selectedDrawId, setSelectedDrawId] = useState('');
@@ -414,7 +428,7 @@ export default function BalanceBreakdownPage() {
       </Card>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-2 ${showAssociateCommission ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
         <StatCard
           icon={<DollarSign size={20} />}
           label="Vendido"
@@ -427,6 +441,14 @@ export default function BalanceBreakdownPage() {
           value={formatCurrency(report.byAssociate.totals.totalPrizes)}
           color="orange"
         />
+        {showAssociateCommission && (
+          <StatCard
+            icon={<HandCoins size={20} />}
+            label="Comisión asociado"
+            value={formatCurrency(report.byAssociate.totals.totalAssociateCommissions ?? 0)}
+            color="indigo"
+          />
+        )}
         <StatCard
           icon={<HandCoins size={20} />}
           label="Comisión"
@@ -452,24 +474,27 @@ export default function BalanceBreakdownPage() {
                 <th className="text-right px-4 py-3 text-slate-600 font-medium">Premios</th>
                 <th className="text-right px-4 py-3 text-slate-600 font-medium">Balance</th>
                 <th className="text-right px-4 py-3 text-slate-600 font-medium">Comision</th>
+                {showAssociateCommission && (
+                  <th className="text-right px-4 py-3 text-slate-600 font-medium">Comision asociado</th>
+                )}
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={showAssociateCommission ? 7 : 6} className="px-4 py-8 text-center text-slate-500">
                     Cargando reporte...
                   </td>
                 </tr>
               ) : report.byAssociate.rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={showAssociateCommission ? 7 : 6} className="px-4 py-8 text-center text-slate-500">
                     No hay registros para los filtros seleccionados.
                   </td>
                 </tr>
               ) : (
                 <>
-                  <EventRow event="Totales" totals={report.byAssociate.totals} bold variant="grand-total" />
+                  <EventRow event="Totales" totals={report.byAssociate.totals} bold variant="grand-total" showAssociateCommission={showAssociateCommission} />
                   {report.byAssociate.rows
                     .filter((row) => isRowVisible(row, report.byAssociate.rows))
                     .map((associate) => (
@@ -482,6 +507,7 @@ export default function BalanceBreakdownPage() {
                         expandable
                         isExpanded={expandedUsers.has(associate.associateId)}
                         onToggleExpand={() => toggleUserExpand(associate.associateId)}
+                        showAssociateCommission={showAssociateCommission}
                       />
                       {expandedUsers.has(associate.associateId) &&
                         associate.draws.map((draw) => (
@@ -495,6 +521,7 @@ export default function BalanceBreakdownPage() {
                             totals={mapDrawToTotals(draw)}
                             indented
                             variant="draw"
+                            showAssociateCommission={showAssociateCommission}
                           />
                         ))}
                     </Fragment>

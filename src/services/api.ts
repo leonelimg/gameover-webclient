@@ -732,6 +732,7 @@ export interface BalanceBreakdownRow {
   totalSales: number;
   totalPrizes: number;
   totalCommissions: number;
+  totalAssociateCommissions?: number;
   balance: number;
 }
 
@@ -742,6 +743,7 @@ export interface VendorBreakdownRow {
   totalSales: number;
   totalPrizes: number;
   totalCommissions: number;
+  totalAssociateCommissions?: number;
   balance: number;
 }
 
@@ -752,6 +754,7 @@ export interface DrawBreakdownRow {
   totalSales: number;
   totalPrizes: number;
   totalCommissions: number;
+  totalAssociateCommissions?: number;
   balance: number;
 }
 
@@ -764,6 +767,7 @@ export interface AssociateDrawBreakdownRow {
   totalSales: number;
   totalPrizes: number;
   totalCommissions: number;
+  totalAssociateCommissions?: number;
   balance: number;
 }
 
@@ -775,6 +779,7 @@ export interface AssociateBreakdownRow {
   totalSales: number;
   totalPrizes: number;
   totalCommissions: number;
+  totalAssociateCommissions?: number;
   balance: number;
   draws: AssociateDrawBreakdownRow[];
 }
@@ -784,6 +789,7 @@ export interface BalanceBreakdownTotals {
   totalSales: number;
   totalPrizes: number;
   totalCommissions: number;
+  totalAssociateCommissions?: number;
   balance: number;
 }
 

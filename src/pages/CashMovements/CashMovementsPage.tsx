@@ -1,5 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { ArrowDownCircle, ArrowUpCircle, CircleDollarSign, RefreshCcw, Trash2 } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, CircleDollarSign, Printer, RefreshCcw, Trash2 } from 'lucide-react';
+import { printBridgeApi } from '@/services/printBridge';
+import { formatMovementTicketText } from '@/utils/cashMovementPrint';
 import {
   cashMovementsApi,
   CashMovementBalanceResponse,
@@ -284,6 +286,18 @@ export default function CashMovementsPage() {
     }
   };
 
+  const handlePrintMovement = async (row: CashMovementHistoryItem) => {
+    try {
+      setError(null);
+      setSuccess(null);
+      const printText = formatMovementTicketText(row);
+      await printBridgeApi.printText(printText);
+      setSuccess('Comprobante enviado a imprimir correctamente.');
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'No se pudo conectar al print bridge.'));
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -536,25 +550,37 @@ export default function CashMovementsPage() {
                       </td>
                       <td className="px-4 py-3 text-slate-700">{row.createdBy.fullName}</td>
                       <td className="px-4 py-3">
-                        {canCancelMovement(row) ? (
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            onClick={() => {
-                              setCancellingMovementId(row.id);
-                              setCancelReason('');
-                              setShowCancelModal(true);
-                            }}
-                            disabled={canceling}
-                          >
-                            <Trash2 size={14} />
-                            Cancelar
-                          </Button>
-                        ) : row.source === 'ticket-sale' ? (
-                          <Badge variant="info" className="text-xs">Venta</Badge>
-                        ) : row.canceledAt ? (
-                          <Badge variant="warning" className="text-xs">Cancelado</Badge>
-                        ) : null}
+                        <div className="flex items-center gap-2">
+                          {row.source === 'cash-movement' && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => handlePrintMovement(row)}
+                            >
+                              <Printer size={14} />
+                              Imprimir
+                            </Button>
+                          )}
+                          {canCancelMovement(row) ? (
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              onClick={() => {
+                                setCancellingMovementId(row.id);
+                                setCancelReason('');
+                                setShowCancelModal(true);
+                              }}
+                              disabled={canceling}
+                            >
+                              <Trash2 size={14} />
+                              Cancelar
+                            </Button>
+                          ) : row.source === 'ticket-sale' ? (
+                            <Badge variant="info" className="text-xs">Venta</Badge>
+                          ) : row.canceledAt ? (
+                            <Badge variant="warning" className="text-xs">Cancelado</Badge>
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                   ))

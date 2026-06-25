@@ -591,12 +591,16 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     totalSales: number;
     totalPrizes: number;
     totalCommissions: number;
+    totalAssociateCommissions: number;
   }
 
   const bySeller = new Map<string, BreakdownAccumulator>();
   for (const ticket of tickets) {
     const seller = ticket.seller;
     const { prizeForTicket, commissionForTicket } = calculateTicketFinancials(ticket);
+    const associatePlan = ticket.associate.plan ?? defaultPlan;
+    const associateCommissionRate = (associatePlan?.commission ?? 0) / 100;
+    const associateCommissionForTicket = ticket.total * associateCommissionRate;
 
     const current = bySeller.get(seller.id) ?? {
       userId: seller.id,
@@ -608,12 +612,14 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       totalSales: 0,
       totalPrizes: 0,
       totalCommissions: 0,
+      totalAssociateCommissions: 0,
     };
 
     current.ticketCount += 1;
     current.totalSales += ticket.total;
     current.totalPrizes += prizeForTicket;
     current.totalCommissions += commissionForTicket;
+    current.totalAssociateCommissions += associateCommissionForTicket;
     bySeller.set(seller.id, current);
   }
 
@@ -636,6 +642,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
         totalSales: row.totalSales,
         totalPrizes: row.totalPrizes,
         totalCommissions: row.totalCommissions,
+        totalAssociateCommissions: row.totalAssociateCommissions,
         balance: row.totalSales - row.totalPrizes,
       };
     })
@@ -652,6 +659,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       totalSales: acc.totalSales + row.totalSales,
       totalPrizes: acc.totalPrizes + row.totalPrizes,
       totalCommissions: acc.totalCommissions + row.totalCommissions,
+      totalAssociateCommissions: acc.totalAssociateCommissions + row.totalAssociateCommissions,
       balance: acc.balance + row.balance,
     }),
     {
@@ -659,6 +667,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       totalSales: 0,
       totalPrizes: 0,
       totalCommissions: 0,
+      totalAssociateCommissions: 0,
       balance: 0,
     }
   );
@@ -670,6 +679,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     totalSales: number;
     totalPrizes: number;
     totalCommissions: number;
+    totalAssociateCommissions: number;
     balance: number;
   }>();
 
@@ -678,6 +688,10 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     if (seller.role === 'admin') continue;
 
     const { prizeForTicket, commissionForTicket } = calculateTicketFinancials(ticket);
+    const associatePlan = ticket.associate.plan ?? defaultPlan;
+    const associateCommissionRate = (associatePlan?.commission ?? 0) / 100;
+    const associateCommissionForTicket = ticket.total * associateCommissionRate;
+
     const current = byVendor.get(seller.id) ?? {
       vendorId: seller.id,
       vendorName: seller.fullName,
@@ -685,6 +699,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       totalSales: 0,
       totalPrizes: 0,
       totalCommissions: 0,
+      totalAssociateCommissions: 0,
       balance: 0,
     };
 
@@ -692,6 +707,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     current.totalSales += ticket.total;
     current.totalPrizes += prizeForTicket;
     current.totalCommissions += commissionForTicket;
+    current.totalAssociateCommissions += associateCommissionForTicket;
     current.balance = current.totalSales - current.totalPrizes;
     byVendor.set(seller.id, current);
   }
@@ -703,6 +719,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       totalSales: acc.totalSales + row.totalSales,
       totalPrizes: acc.totalPrizes + row.totalPrizes,
       totalCommissions: acc.totalCommissions + row.totalCommissions,
+      totalAssociateCommissions: acc.totalAssociateCommissions + row.totalAssociateCommissions,
       balance: acc.balance + row.balance,
     }),
     {
@@ -710,6 +727,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       totalSales: 0,
       totalPrizes: 0,
       totalCommissions: 0,
+      totalAssociateCommissions: 0,
       balance: 0,
     }
   );
@@ -721,11 +739,16 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     totalSales: number;
     totalPrizes: number;
     totalCommissions: number;
+    totalAssociateCommissions: number;
     balance: number;
   }>();
 
   for (const ticket of tickets) {
     const { prizeForTicket, commissionForTicket } = calculateTicketFinancials(ticket);
+    const associatePlan = ticket.associate.plan ?? defaultPlan;
+    const associateCommissionRate = (associatePlan?.commission ?? 0) / 100;
+    const associateCommissionForTicket = ticket.total * associateCommissionRate;
+
     const current = byDraw.get(ticket.draw.id) ?? {
       drawId: ticket.draw.id,
       drawName: ticket.draw.name,
@@ -733,6 +756,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       totalSales: 0,
       totalPrizes: 0,
       totalCommissions: 0,
+      totalAssociateCommissions: 0,
       balance: 0,
     };
 
@@ -740,6 +764,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     current.totalSales += ticket.total;
     current.totalPrizes += prizeForTicket;
     current.totalCommissions += commissionForTicket;
+    current.totalAssociateCommissions += associateCommissionForTicket;
     current.balance = current.totalSales - current.totalPrizes;
     byDraw.set(ticket.draw.id, current);
   }
@@ -751,6 +776,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       totalSales: acc.totalSales + row.totalSales,
       totalPrizes: acc.totalPrizes + row.totalPrizes,
       totalCommissions: acc.totalCommissions + row.totalCommissions,
+      totalAssociateCommissions: acc.totalAssociateCommissions + row.totalAssociateCommissions,
       balance: acc.balance + row.balance,
     }),
     {
@@ -758,6 +784,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       totalSales: 0,
       totalPrizes: 0,
       totalCommissions: 0,
+      totalAssociateCommissions: 0,
       balance: 0,
     }
   );
@@ -820,6 +847,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     totalSales: number;
     totalPrizes: number;
     totalCommissions: number;
+    totalAssociateCommissions: number;
     balance: number;
     draws: Map<string, {
       drawId: string;
@@ -830,12 +858,17 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       totalSales: number;
       totalPrizes: number;
       totalCommissions: number;
+      totalAssociateCommissions: number;
       balance: number;
     }>;
   }>();
 
   for (const ticket of tickets) {
     const { prizeForTicket, commissionForTicket } = calculateTicketFinancials(ticket);
+    const associatePlan = ticket.associate.plan ?? defaultPlan;
+    const associateCommissionRate = (associatePlan?.commission ?? 0) / 100;
+    const associateCommissionForTicket = ticket.total * associateCommissionRate;
+
     const sellerId = ticket.seller.id;
     const sellerName = ticket.seller.fullName;
 
@@ -846,6 +879,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       totalSales: 0,
       totalPrizes: 0,
       totalCommissions: 0,
+      totalAssociateCommissions: 0,
       balance: 0,
       draws: new Map(),
     };
@@ -854,6 +888,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     current.totalSales += ticket.total;
     current.totalPrizes += prizeForTicket;
     current.totalCommissions += commissionForTicket;
+    current.totalAssociateCommissions += associateCommissionForTicket;
     current.balance = current.totalSales - current.totalPrizes;
 
     const drawCurrent = current.draws.get(ticket.draw.id) ?? {
@@ -865,6 +900,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       totalSales: 0,
       totalPrizes: 0,
       totalCommissions: 0,
+      totalAssociateCommissions: 0,
       balance: 0,
     };
 
@@ -872,6 +908,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     drawCurrent.totalSales += ticket.total;
     drawCurrent.totalPrizes += prizeForTicket;
     drawCurrent.totalCommissions += commissionForTicket;
+    drawCurrent.totalAssociateCommissions += associateCommissionForTicket;
     drawCurrent.balance = drawCurrent.totalSales - drawCurrent.totalPrizes;
     if (ticket.createdAt.toISOString() > drawCurrent.lastTicketCreatedAt) {
       drawCurrent.lastTicketCreatedAt = ticket.createdAt.toISOString();
@@ -902,6 +939,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     let totalSales = 0;
     let totalPrizes = 0;
     let totalCommissions = 0;
+    let totalAssociateCommissions = 0;
     let balance = 0;
 
     for (const dId of descendantIds) {
@@ -912,6 +950,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       totalSales += data.totalSales;
       totalPrizes += data.totalPrizes;
       totalCommissions += data.totalCommissions;
+      totalAssociateCommissions += data.totalAssociateCommissions;
       balance += data.balance;
     }
 
@@ -932,6 +971,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       totalSales,
       totalPrizes,
       totalCommissions,
+      totalAssociateCommissions,
       balance,
       draws: drawsList,
     });
@@ -945,6 +985,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
         totalSales: acc.totalSales + row.totalSales,
         totalPrizes: acc.totalPrizes + row.totalPrizes,
         totalCommissions: acc.totalCommissions + row.totalCommissions,
+        totalAssociateCommissions: acc.totalAssociateCommissions + row.totalAssociateCommissions,
         balance: acc.balance + row.balance,
       }),
       {
@@ -952,6 +993,7 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
         totalSales: 0,
         totalPrizes: 0,
         totalCommissions: 0,
+        totalAssociateCommissions: 0,
         balance: 0,
       }
     );
