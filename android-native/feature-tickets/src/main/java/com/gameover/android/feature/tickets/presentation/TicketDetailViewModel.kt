@@ -9,6 +9,7 @@ import com.gameover.android.core.domain.repository.AuthRepository
 import com.gameover.android.core.domain.repository.DrawsRepository
 import com.gameover.android.core.domain.repository.FrontendSettingsRepository
 import com.gameover.android.core.domain.repository.TicketsRepository
+import com.gameover.android.core.domain.repository.ReportsRepository
 import com.gameover.android.core.domain.util.PermissionChecker
 import com.gameover.android.feature.bluetooth.BluetoothPrinterManager
 import com.gameover.android.feature.bluetooth.BtState
@@ -20,8 +21,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.gameover.android.core.domain.util.CurrencyFormatter
 import javax.inject.Inject
-
 @HiltViewModel
 class TicketDetailViewModel @Inject constructor(
     private val ticketsRepository: TicketsRepository,
@@ -31,6 +32,7 @@ class TicketDetailViewModel @Inject constructor(
     private val bluetoothPrinterManager: BluetoothPrinterManager,
     private val tokenDataStore: TokenDataStore,
     private val savedStateHandle: SavedStateHandle,
+    private val reportsRepository: ReportsRepository,
 ) : ViewModel() {
 
     companion object {
@@ -38,6 +40,7 @@ class TicketDetailViewModel @Inject constructor(
     }
 
     private val ticketId: String = savedStateHandle["ticketId"] ?: ""
+    private val fromWinningReport: Boolean = savedStateHandle["fromWinningReport"] ?: false
 
     private val _uiState = MutableStateFlow(TicketDetailUiState())
     val uiState: StateFlow<TicketDetailUiState> = _uiState.asStateFlow()
@@ -48,6 +51,7 @@ class TicketDetailViewModel @Inject constructor(
         viewModelScope.launch {
             currentUser = authRepository.getStoredUser().first()
             loadTicket()
+            _uiState.update { it.copy(fromWinningReport = fromWinningReport) }
         }
     }
 
@@ -57,7 +61,7 @@ class TicketDetailViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val ticket = ticketsRepository.getTicket(ticketId)
-                _uiState.update { it.copy(ticket = ticket, isLoading = false) }
+                _uiState.update { it.copy(ticket = ticket, isLoading = false, canCancel = !fromWinningReport) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, error = e.message) }
             }
@@ -71,6 +75,7 @@ class TicketDetailViewModel @Inject constructor(
     }
 
     fun cancelTicket() {
+        if (fromWinningReport) return
         val ticket = _uiState.value.ticket ?: return
         val reason = _uiState.value.cancelReason.trim().takeIf { it.isNotBlank() }
         _uiState.update { it.copy(isCanceling = true, cancelDialog = false) }
@@ -80,6 +85,24 @@ class TicketDetailViewModel @Inject constructor(
                 _uiState.update { it.copy(ticket = updated, isCanceling = false, operationSuccess = "Ticket anulado correctamente.") }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isCanceling = false, error = e.message) }
+            }
+        }
+    }
+
+    fun markTicketAsPaid() {
+        val ticket = _uiState.value.ticket ?: return
+        _uiState.update { it.copy(isPaying = true, error = null) }
+        viewModelScope.launch {
+            try {
+                val result = reportsRepository.markPaid(ticket.id)
+                loadTicket()
+                val formattedPrize = CurrencyFormatter.format(result.prizeAmount)
+                _uiState.update { it.copy(
+                    isPaying = false,
+                    operationSuccess = "Ticket ${result.ticket.code} pagado correctamente por $formattedPrize."
+                ) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isPaying = false, error = e.message ?: "Error al marcar como pagado") }
             }
         }
     }

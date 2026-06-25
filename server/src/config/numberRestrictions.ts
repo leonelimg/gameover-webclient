@@ -195,10 +195,10 @@ export async function setUserGlobalNumberLimit(userId: string, limit: number | n
 
   const current = await prisma.userRestrictionLimit.findUnique({
     where: { userId },
-    select: { userDrawSaleLimit: true },
+    select: { userDrawSaleLimit: true, userRestrictedNumbersLimit: true },
   });
 
-  if (limit === null && (current?.userDrawSaleLimit ?? null) === null) {
+  if (limit === null && (current?.userDrawSaleLimit ?? null) === null && (current?.userRestrictedNumbersLimit ?? null) === null) {
     await prisma.userRestrictionLimit.deleteMany({ where: { userId } });
     return null;
   }
@@ -209,6 +209,7 @@ export async function setUserGlobalNumberLimit(userId: string, limit: number | n
       userId,
       userGlobalLimit: limit,
       userDrawSaleLimit: current?.userDrawSaleLimit ?? null,
+      userRestrictedNumbersLimit: current?.userRestrictedNumbersLimit ?? null,
     },
     update: {
       userGlobalLimit: limit,
@@ -235,10 +236,10 @@ export async function setUserDrawSaleLimit(userId: string, limit: number | null)
 
   const current = await prisma.userRestrictionLimit.findUnique({
     where: { userId },
-    select: { userGlobalLimit: true },
+    select: { userGlobalLimit: true, userRestrictedNumbersLimit: true },
   });
 
-  if (limit === null && (current?.userGlobalLimit ?? null) === null) {
+  if (limit === null && (current?.userGlobalLimit ?? null) === null && (current?.userRestrictedNumbersLimit ?? null) === null) {
     await prisma.userRestrictionLimit.deleteMany({ where: { userId } });
     return null;
   }
@@ -249,6 +250,7 @@ export async function setUserDrawSaleLimit(userId: string, limit: number | null)
       userId,
       userGlobalLimit: current?.userGlobalLimit ?? null,
       userDrawSaleLimit: limit,
+      userRestrictedNumbersLimit: current?.userRestrictedNumbersLimit ?? null,
     },
     update: {
       userDrawSaleLimit: limit,
@@ -259,18 +261,60 @@ export async function setUserDrawSaleLimit(userId: string, limit: number | null)
   return updated.userDrawSaleLimit ?? null;
 }
 
+export async function getUserRestrictedNumbersLimit(userId: string): Promise<number | null> {
+  await ensureLegacyUserLimitsMigrated();
+
+  const limit = await prisma.userRestrictionLimit.findUnique({
+    where: { userId },
+    select: { userRestrictedNumbersLimit: true },
+  });
+
+  return limit?.userRestrictedNumbersLimit ?? null;
+}
+
+export async function setUserRestrictedNumbersLimit(userId: string, limit: number | null): Promise<number | null> {
+  await ensureLegacyUserLimitsMigrated();
+
+  const current = await prisma.userRestrictionLimit.findUnique({
+    where: { userId },
+    select: { userGlobalLimit: true, userDrawSaleLimit: true },
+  });
+
+  if (limit === null && (current?.userGlobalLimit ?? null) === null && (current?.userDrawSaleLimit ?? null) === null) {
+    await prisma.userRestrictionLimit.deleteMany({ where: { userId } });
+    return null;
+  }
+
+  const updated = await prisma.userRestrictionLimit.upsert({
+    where: { userId },
+    create: {
+      userId,
+      userGlobalLimit: current?.userGlobalLimit ?? null,
+      userDrawSaleLimit: current?.userDrawSaleLimit ?? null,
+      userRestrictedNumbersLimit: limit,
+    },
+    update: {
+      userRestrictedNumbersLimit: limit,
+    },
+    select: { userRestrictedNumbersLimit: true },
+  });
+
+  return updated.userRestrictedNumbersLimit ?? null;
+}
+
 export async function getAllUserRestrictionLimits(): Promise<
-  Map<string, { userGlobalLimit: number | null; userDrawSaleLimit: number | null }>
+  Map<string, { userGlobalLimit: number | null; userDrawSaleLimit: number | null; userRestrictedNumbersLimit: number | null }>
 > {
   await ensureLegacyUserLimitsMigrated();
 
-  const limitsByUser = new Map<string, { userGlobalLimit: number | null; userDrawSaleLimit: number | null }>();
+  const limitsByUser = new Map<string, { userGlobalLimit: number | null; userDrawSaleLimit: number | null; userRestrictedNumbersLimit: number | null }>();
 
   const records = await prisma.userRestrictionLimit.findMany({
     select: {
       userId: true,
       userGlobalLimit: true,
       userDrawSaleLimit: true,
+      userRestrictedNumbersLimit: true,
     },
   });
 
@@ -278,6 +322,7 @@ export async function getAllUserRestrictionLimits(): Promise<
     limitsByUser.set(record.userId, {
       userGlobalLimit: record.userGlobalLimit ?? null,
       userDrawSaleLimit: record.userDrawSaleLimit ?? null,
+      userRestrictedNumbersLimit: record.userRestrictedNumbersLimit ?? null,
     });
   }
 

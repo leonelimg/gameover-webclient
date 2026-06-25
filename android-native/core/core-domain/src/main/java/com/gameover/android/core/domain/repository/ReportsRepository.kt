@@ -6,6 +6,8 @@ import com.gameover.android.core.domain.model.Ticket
 import com.gameover.android.core.domain.model.TopNumber
 import com.gameover.android.core.domain.model.BalanceBreakdownResponse
 import com.gameover.android.core.domain.model.User
+import com.gameover.android.core.domain.model.WinningTicketsReport
+import com.gameover.android.core.domain.model.MarkPaidResult
 
 interface ReportsRepository {
     suspend fun getSummary(fromDate: String? = null, toDate: String? = null, drawId: String? = null): ReportSummary
@@ -21,5 +23,9 @@ interface ReportsRepository {
     ): BalanceBreakdownResponse
 
     suspend fun getUsers(): List<User>
+
+    suspend fun getWinningTickets(drawId: String): WinningTicketsReport
+
+    suspend fun markPaid(ticketId: String): MarkPaidResult
 }
 

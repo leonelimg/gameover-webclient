@@ -6,9 +6,12 @@ import com.gameover.android.core.domain.model.Ticket
 import com.gameover.android.core.domain.model.TopNumber
 import com.gameover.android.core.domain.model.BalanceBreakdownResponse
 import com.gameover.android.core.domain.model.User
+import com.gameover.android.core.domain.model.WinningTicketsReport
+import com.gameover.android.core.domain.model.MarkPaidResult
 import com.gameover.android.core.domain.repository.ReportsRepository
 import com.gameover.android.core.network.api.ReportsApi
 import com.gameover.android.core.network.api.TicketsApi
+import com.gameover.android.core.network.dto.MarkPaidRequestDto
 import com.gameover.android.core.network.mapper.toDomain
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -58,5 +61,16 @@ class ReportsRepositoryImpl @Inject constructor(
         if (!response.isSuccessful) throw Exception("Error al cargar usuarios: ${response.code()}")
         response.body()?.map { it.toDomain() } ?: emptyList()
     }
-}
 
+    override suspend fun getWinningTickets(drawId: String): WinningTicketsReport = withContext(Dispatchers.IO) {
+        val response = reportsApi.getWinningTickets(drawId)
+        if (!response.isSuccessful) throw Exception("Error al cargar tickets ganadores: ${response.code()}")
+        response.body()?.toDomain() ?: throw Exception("Cuerpo de tickets ganadores vacío")
+    }
+
+    override suspend fun markPaid(ticketId: String): MarkPaidResult = withContext(Dispatchers.IO) {
+        val response = reportsApi.markPaid(MarkPaidRequestDto(ticketId = ticketId))
+        if (!response.isSuccessful) throw Exception("Error al marcar como pagado: ${response.code()}")
+        response.body()?.toDomain() ?: throw Exception("Respuesta de pago vacía")
+    }
+}

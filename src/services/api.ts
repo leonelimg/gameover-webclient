@@ -179,6 +179,12 @@ export const numberRestrictionsApi = {
     });
     return res.data;
   },
+  updateUserRestrictedNumbersLimit: async (userId: string, limit: number | null): Promise<UserRestrictionLimitUpdateResult> => {
+    const res = await api.patch<UserRestrictionLimitUpdateResult>(`/api/number-restrictions/users/${userId}/restricted-numbers-limit`, {
+      limit,
+    });
+    return res.data;
+  },
   updateUserDrawSaleLimit: async (userId: string, limit: number | null): Promise<UserRestrictionLimitUpdateResult> => {
     const res = await api.patch<UserRestrictionLimitUpdateResult>(`/api/number-restrictions/users/${userId}/draw-sale-limit`, {
       limit,

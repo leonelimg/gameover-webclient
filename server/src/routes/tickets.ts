@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/prisma.js';
-import { getGlobalNumberLimit, getUserDrawSaleLimit, getUserGlobalNumberLimit, listGlobalNumberRestrictions } from '../config/numberRestrictions.js';
+import { getGlobalNumberLimit, getUserDrawSaleLimit, getUserGlobalNumberLimit, getUserRestrictedNumbersLimit, listGlobalNumberRestrictions } from '../config/numberRestrictions.js';
 import { authenticate, authorizeAnyResource, authorizeResource } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { param } from '../middleware/params.js';
@@ -242,13 +242,14 @@ router.get('/:id', authorizeAnyResource('/sales', '/ticket-payments', '/reports/
 router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema), async (req, res) => {
   const body = req.body as z.infer<typeof createTicketSchema>;
 
-  const [draw, globalNumberLimit, userGlobalNumberLimit, userDrawSaleLimit] = await Promise.all([
+  const [draw, globalNumberLimit, userGlobalNumberLimit, userDrawSaleLimit, userRestrictedNumbersLimit] = await Promise.all([
     prisma.draw.findUnique({
       where: { id: body.drawId },
     }),
     getGlobalNumberLimit(),
     getUserGlobalNumberLimit(req.user!.sub),
     getUserDrawSaleLimit(req.user!.sub),
+    getUserRestrictedNumbersLimit(req.user!.sub),
   ]);
   if (!draw) { res.status(404).json({ message: 'Sorteo no encontrado.' }); return; }
 
@@ -316,9 +317,11 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
 
   for (const [number, requestedAmount] of requestedByNumber.entries()) {
     const globalByNumberLimit = globalRestrictionByNumber.get(number) ?? null;
-    const effectiveLimit = globalByNumberLimit ?? userGlobalNumberLimit ?? globalNumberLimit;
+    const effectiveLimit = globalByNumberLimit !== null
+      ? (userRestrictedNumbersLimit !== null ? userRestrictedNumbersLimit : globalByNumberLimit)
+      : (userGlobalNumberLimit ?? globalNumberLimit);
     const restrictionType = globalByNumberLimit !== null
-      ? 'global-numero'
+      ? (userRestrictedNumbersLimit !== null ? 'restringido-usuario' : 'global-numero')
       : userGlobalNumberLimit !== null
         ? 'global-usuario'
         : 'global';

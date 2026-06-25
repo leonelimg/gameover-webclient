@@ -21,7 +21,8 @@ export default function UserGlobalRestrictionsPage() {
   const [savingUserId, setSavingUserId] = useState('');
   const [search, setSearch] = useState('');
   const [users, setUsers] = useState<UserRestrictionLimitItem[]>([]);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [globalDrafts, setGlobalDrafts] = useState<Record<string, string>>({});
+  const [restrictedDrafts, setRestrictedDrafts] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -32,11 +33,19 @@ export default function UserGlobalRestrictionsPage() {
     try {
       const items = await numberRestrictionsApi.listUserLimits(searchValue || undefined);
       setUsers(items);
-      setDrafts(
+      setGlobalDrafts(
         Object.fromEntries(
           items.map((user) => [
             user.id,
             user.userGlobalLimit === null ? '' : String(user.userGlobalLimit),
+          ])
+        )
+      );
+      setRestrictedDrafts(
+        Object.fromEntries(
+          items.map((user) => [
+            user.id,
+            user.userRestrictedNumbersLimit === null ? '' : String(user.userRestrictedNumbersLimit),
           ])
         )
       );
@@ -60,31 +69,53 @@ export default function UserGlobalRestrictionsPage() {
     setError('');
     setSuccess('');
 
-    let limit: number | null = null;
+    let globalLimit: number | null = null;
+    let restrictedLimit: number | null = null;
     try {
-      limit = parseLimit(drafts[user.id] ?? '');
+      globalLimit = parseLimit(globalDrafts[user.id] ?? '');
     } catch (parseError) {
-      setError(parseError instanceof Error ? parseError.message : 'Monto inválido.');
+      setError(parseError instanceof Error ? `Límite General: ${parseError.message}` : 'Límite General inválido.');
+      return;
+    }
+    try {
+      restrictedLimit = parseLimit(restrictedDrafts[user.id] ?? '');
+    } catch (parseError) {
+      setError(parseError instanceof Error ? `Límite Restringidos: ${parseError.message}` : 'Límite Restringidos inválido.');
       return;
     }
 
     setSavingUserId(user.id);
     try {
-      const updated = await numberRestrictionsApi.updateUserGlobalLimit(user.id, limit);
+      const [updatedGlobal, updatedRestricted] = await Promise.all([
+        numberRestrictionsApi.updateUserGlobalLimit(user.id, globalLimit),
+        numberRestrictionsApi.updateUserRestrictedNumbersLimit(user.id, restrictedLimit),
+      ]);
+
       setUsers((prev) =>
         prev.map((item) =>
           item.id === user.id
-            ? { ...item, userGlobalLimit: updated.userGlobalLimit, userDrawSaleLimit: updated.userDrawSaleLimit }
+            ? {
+                ...item,
+                userGlobalLimit: updatedGlobal.userGlobalLimit,
+                userRestrictedNumbersLimit: updatedRestricted.userRestrictedNumbersLimit,
+                userDrawSaleLimit: updatedGlobal.userDrawSaleLimit,
+              }
             : item
         )
       );
-      setDrafts((prev) => ({
+
+      setGlobalDrafts((prev) => ({
         ...prev,
-        [user.id]: updated.userGlobalLimit === null ? '' : String(updated.userGlobalLimit),
+        [user.id]: updatedGlobal.userGlobalLimit === null ? '' : String(updatedGlobal.userGlobalLimit),
       }));
-      setSuccess(`Restricción global por usuario actualizada para ${user.fullName}.`);
+      setRestrictedDrafts((prev) => ({
+        ...prev,
+        [user.id]: updatedRestricted.userRestrictedNumbersLimit === null ? '' : String(updatedRestricted.userRestrictedNumbersLimit),
+      }));
+
+      setSuccess(`Restricciones guardadas correctamente para ${user.fullName}.`);
     } catch {
-      setError('No se pudo guardar la restricción global por usuario.');
+      setError('No se pudieron guardar las restricciones del usuario.');
     } finally {
       setSavingUserId('');
     }
@@ -146,8 +177,10 @@ export default function UserGlobalRestrictionsPage() {
                   <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
                     <th className="pb-2 pr-4 font-medium">Usuario</th>
                     <th className="pb-2 pr-4 font-medium">Rol</th>
-                    <th className="pb-2 pr-4 font-medium">Actual</th>
-                    <th className="pb-2 pr-4 font-medium">Nuevo límite (C$)</th>
+                    <th className="pb-2 pr-4 font-medium">Límite General</th>
+                    <th className="pb-2 pr-4 font-medium">Nuevo Límite General</th>
+                    <th className="pb-2 pr-4 font-medium">Límite Restringidos</th>
+                    <th className="pb-2 pr-4 font-medium">Nuevo Límite Restringidos</th>
                     <th className="pb-2 font-medium text-right">Acción</th>
                   </tr>
                 </thead>
@@ -169,9 +202,29 @@ export default function UserGlobalRestrictionsPage() {
                           min="1"
                           step="0.01"
                           placeholder="Vacío para desactivar"
-                          value={drafts[user.id] ?? ''}
+                          value={globalDrafts[user.id] ?? ''}
                           onChange={(e) =>
-                            setDrafts((prev) => ({
+                            setGlobalDrafts((prev) => ({
+                              ...prev,
+                              [user.id]: e.target.value,
+                            }))
+                          }
+                          disabled={savingUserId === user.id}
+                        />
+                      </td>
+                      <td className="py-2 pr-4 text-slate-700">
+                        {user.userRestrictedNumbersLimit === null ? 'Sin límite' : formatCurrency(user.userRestrictedNumbersLimit)}
+                      </td>
+                      <td className="py-2 pr-4 min-w-44">
+                        <Input
+                          label=""
+                          type="number"
+                          min="1"
+                          step="0.01"
+                          placeholder="Vacío para desactivar"
+                          value={restrictedDrafts[user.id] ?? ''}
+                          onChange={(e) =>
+                            setRestrictedDrafts((prev) => ({
                               ...prev,
                               [user.id]: e.target.value,
                             }))

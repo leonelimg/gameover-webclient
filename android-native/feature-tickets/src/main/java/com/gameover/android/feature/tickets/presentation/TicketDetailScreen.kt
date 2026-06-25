@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -77,6 +78,8 @@ fun TicketDetailScreen(
                         canCancel = uiState.canCancel,
                         isMarkingPrinted = uiState.isMarkingPrinted,
                         isCanceling = uiState.isCanceling,
+                        fromWinningReport = uiState.fromWinningReport,
+                        isPaying = uiState.isPaying,
                         onReprint = viewModel::markPrinted,
                         onShareWhatsapp = {
                             scope.launch {
@@ -87,6 +90,7 @@ fun TicketDetailScreen(
                             }
                         },
                         onCancelClick = viewModel::showCancelDialog,
+                        onPayClick = viewModel::markTicketAsPaid,
                         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                     )
                 }
@@ -130,9 +134,12 @@ private fun TicketDetailContent(
     canCancel: Boolean,
     isMarkingPrinted: Boolean,
     isCanceling: Boolean,
+    fromWinningReport: Boolean,
+    isPaying: Boolean,
     onReprint: () -> Unit,
     onShareWhatsapp: () -> Unit,
     onCancelClick: () -> Unit,
+    onPayClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -205,6 +212,18 @@ private fun TicketDetailContent(
                         containerColor = GoSuccessDark,
                         contentColor = Color.White,
                         trailingIcon = Icons.Default.Share,
+                    )
+                }
+                if (fromWinningReport && ticket.paymentStatus.name == "pendiente") {
+                    GoButton(
+                        text = "Pagar Ticket",
+                        onClick = onPayClick,
+                        modifier = Modifier.fillMaxWidth(),
+                        variant = ButtonVariant.PRIMARY,
+                        containerColor = GoSuccess,
+                        contentColor = Color.White,
+                        trailingIcon = Icons.Default.CheckCircle,
+                        loading = isPaying,
                     )
                 }
                 if (canCancel) {

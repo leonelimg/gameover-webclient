@@ -43,7 +43,7 @@ data class UserPlanSummaryDto(
 data class UserSummaryDto(
     val id: String,
     val fullName: String,
-    val username: String,
+    val username: String? = null,
     val plan: UserPlanSummaryDto? = null,
 )
 

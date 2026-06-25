@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState, useCallback } from 'react';
 import { AlertCircle, CheckCircle2, Loader2, RotateCcw, ScanLine } from 'lucide-react';
 import { drawsApi, paymentsApi, ticketsApi } from '@/services/api';
 import { Draw, PaymentWinningTicket, Ticket } from '@/types';
@@ -9,6 +9,12 @@ import { Input, Select } from '@/components/ui/Input';
 import { formatCurrency, formatDateTime, formatDrawLabel } from '@/utils/helpers';
 import { Modal } from '@/components/ui/Modal';
 import { useAuth } from '@/context/AuthContext';
+import { DateRangeSegmentedControl } from '@/components/ui/DateRangeSegmentedControl';
+import { DateRange, getDateRange, isDateRange, toISODateLocal } from '@/utils/dateRanges';
+
+const PAYMENTS_RANGE_KEY = 'go_payments_selected_range';
+const PAYMENTS_CUSTOM_FROM_KEY = 'go_payments_custom_from_date';
+const PAYMENTS_CUSTOM_TO_KEY = 'go_payments_custom_to_date';
 
 interface PaymentsTotals {
   totalToPay: number;
@@ -54,6 +60,34 @@ export default function TicketPaymentsPage() {
   const canMarkPaid = hasPermission('/ticket-payments:mark-paid');
   const canRevertPayment = hasPermission('/ticket-payments:revert');
 
+  const [customFromDate, setCustomFromDate] = useState<string>(() => {
+    const saved = localStorage.getItem(PAYMENTS_CUSTOM_FROM_KEY);
+    return saved || toISODateLocal(new Date());
+  });
+  const [customToDate, setCustomToDate] = useState<string>(() => {
+    const saved = localStorage.getItem(PAYMENTS_CUSTOM_TO_KEY);
+    return saved || toISODateLocal(new Date());
+  });
+  const [selectedRange, setSelectedRange] = useState<DateRange>(() => {
+    const saved = localStorage.getItem(PAYMENTS_RANGE_KEY);
+    if (saved && isDateRange(saved)) {
+      return saved;
+    }
+    return 'today';
+  });
+
+  useEffect(() => {
+    localStorage.setItem(PAYMENTS_RANGE_KEY, selectedRange);
+  }, [selectedRange]);
+
+  useEffect(() => {
+    localStorage.setItem(PAYMENTS_CUSTOM_FROM_KEY, customFromDate);
+  }, [customFromDate]);
+
+  useEffect(() => {
+    localStorage.setItem(PAYMENTS_CUSTOM_TO_KEY, customToDate);
+  }, [customToDate]);
+
   useEffect(() => {
     drawsApi
       .list()
@@ -65,15 +99,37 @@ export default function TicketPaymentsPage() {
       });
   }, []);
 
+  const filteredDraws = useMemo(() => {
+    const isCustomRange = selectedRange === 'custom';
+    if (isCustomRange && (!customFromDate || !customToDate || customFromDate > customToDate)) {
+      return [];
+    }
+    const { fromDate, toDate } = isCustomRange
+      ? { fromDate: customFromDate, toDate: customToDate }
+      : getDateRange(selectedRange);
+
+    return draws.filter((d) => {
+      const drawDate = toISODateLocal(new Date(d.closeTime));
+      return drawDate >= fromDate && drawDate <= toDate;
+    });
+  }, [draws, selectedRange, customFromDate, customToDate]);
+
+  useEffect(() => {
+    if (selectedDrawId && !filteredDraws.some((d) => d.id === selectedDrawId)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedDrawId('');
+    }
+  }, [filteredDraws, selectedDrawId]);
+
   const drawOptions = useMemo(
     () => [
       { value: '', label: 'Seleccione un sorteo' },
-      ...draws.map((draw) => ({ value: draw.id, label: formatDrawLabel(draw) })),
+      ...filteredDraws.map((draw) => ({ value: draw.id, label: formatDrawLabel(draw) })),
     ],
-    [draws]
+    [filteredDraws]
   );
 
-  const loadData = async (overrideCode?: string) => {
+  const loadData = useCallback(async (overrideCode?: string) => {
     if (!selectedDrawId) {
       setTickets([]);
       setPaidTickets([]);
@@ -104,11 +160,12 @@ export default function TicketPaymentsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedDrawId, status, searchCode]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
-  }, [selectedDrawId, status]);
+  }, [loadData]);
 
   const handleSearchSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -254,6 +311,16 @@ export default function TicketPaymentsPage() {
         <h1 className="text-2xl font-bold text-slate-900">Pago de tickets</h1>
         <p className="text-sm text-slate-500">Gestiona pagos de tickets ganadores por sorteo.</p>
       </div>
+
+      {/* Date range filter */}
+      <DateRangeSegmentedControl
+        selectedRange={selectedRange}
+        onRangeChange={setSelectedRange}
+        customFromDate={customFromDate}
+        customToDate={customToDate}
+        onCustomFromDateChange={setCustomFromDate}
+        onCustomToDateChange={setCustomToDate}
+      />
 
       <Card>
         <CardBody>

@@ -37,6 +37,7 @@ import com.gameover.android.feature.dashboard.presentation.ReportsScreen
 import com.gameover.android.feature.dashboard.presentation.DrawListReportScreen
 import com.gameover.android.feature.dashboard.presentation.DepositsWithdrawalsReportScreen
 import com.gameover.android.feature.dashboard.presentation.BalanceBreakdownReportScreen
+import com.gameover.android.feature.dashboard.presentation.WinningTicketsReportScreen
 import com.gameover.android.feature.sales.presentation.SalesScreen
 import com.gameover.android.feature.settings.presentation.SettingsScreen
 import com.gameover.android.feature.tickets.presentation.TicketDetailScreen
@@ -52,11 +53,13 @@ object Routes {
     const val DRAW_LIST_REPORT = "reports/draw-list"
     const val DEPOSITS_WITHDRAWALS_REPORT = "reports/deposits-withdrawals"
     const val BALANCE_BREAKDOWN_REPORT = "reports/balance-breakdown"
-    const val TICKET_DETAIL = "ticket/{ticketId}"
+    const val WINNING_TICKETS_REPORT = "reports/winning-tickets"
+    const val TICKET_DETAIL = "ticket/{ticketId}?fromWinningReport={fromWinningReport}"
     const val SETTINGS = "settings"
     const val ANNOUNCEMENTS = "announcements"
 
-    fun ticketDetail(ticketId: String) = "ticket/$ticketId"
+    fun ticketDetail(ticketId: String, fromWinningReport: Boolean = false) = 
+        "ticket/$ticketId?fromWinningReport=$fromWinningReport"
 
     val tabs = listOf(DASHBOARD, SALES, TICKETS, REPORTS, SETTINGS)
 }
@@ -318,6 +321,9 @@ fun AppNavGraph(
                     },
                     onBalanceBreakdownReportClick = {
                         navController.navigate(Routes.BALANCE_BREAKDOWN_REPORT)
+                    },
+                    onWinningTicketsReportClick = {
+                        navController.navigate(Routes.WINNING_TICKETS_REPORT)
                     }
                 )
             }
@@ -334,9 +340,24 @@ fun AppNavGraph(
                 BalanceBreakdownReportScreen(onBack = { navController.popBackStack() })
             }
 
+            composable(Routes.WINNING_TICKETS_REPORT) {
+                WinningTicketsReportScreen(
+                    onBack = { navController.popBackStack() },
+                    onTicketClick = { ticketId ->
+                        navController.navigate(Routes.ticketDetail(ticketId, fromWinningReport = true))
+                    }
+                )
+            }
+
             composable(
                 route = Routes.TICKET_DETAIL,
-                arguments = listOf(navArgument("ticketId") { type = NavType.StringType }),
+                arguments = listOf(
+                    navArgument("ticketId") { type = NavType.StringType },
+                    navArgument("fromWinningReport") {
+                        type = NavType.BoolType
+                        defaultValue = false
+                    }
+                ),
             ) {
                 TicketDetailScreen(onBack = { navController.popBackStack() })
             }

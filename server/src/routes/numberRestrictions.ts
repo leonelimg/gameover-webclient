@@ -8,11 +8,13 @@ import {
   getGlobalNumberRestrictionByNumber,
   getUserDrawSaleLimit,
   getUserGlobalNumberLimit,
+  getUserRestrictedNumbersLimit,
   GLOBAL_NUMBER_LIMIT_SETTING_KEY,
   listGlobalNumberRestrictions,
   setGlobalNumberLimit,
   setUserDrawSaleLimit,
   setUserGlobalNumberLimit,
+  setUserRestrictedNumbersLimit,
   upsertGlobalNumberRestriction,
 } from '../config/numberRestrictions.js';
 import { authenticate, authorizeAnyResource, authorizeResource } from '../middleware/auth.js';
@@ -45,14 +47,16 @@ router.get('/global', authorizeAnyResource('/number-restrictions', '/restriction
 });
 
 router.get('/me-limits', authorizeAnyResource('/sales', '/restrictions/user-global', '/restrictions/user-sales-limit'), async (req, res) => {
-  const [userGlobalLimit, userDrawSaleLimit] = await Promise.all([
+  const [userGlobalLimit, userDrawSaleLimit, userRestrictedNumbersLimit] = await Promise.all([
     getUserGlobalNumberLimit(req.user!.sub),
     getUserDrawSaleLimit(req.user!.sub),
+    getUserRestrictedNumbersLimit(req.user!.sub),
   ]);
 
   res.json({
     userGlobalLimit,
     userDrawSaleLimit,
+    userRestrictedNumbersLimit,
   });
 });
 
@@ -186,12 +190,14 @@ router.get('/users-limits', authorizeAnyResource('/restrictions/user-global', '/
     const limit = limitsByUser.get(user.id) ?? {
       userGlobalLimit: null,
       userDrawSaleLimit: null,
+      userRestrictedNumbersLimit: null,
     };
 
     return {
       ...user,
       userGlobalLimit: limit.userGlobalLimit,
       userDrawSaleLimit: limit.userDrawSaleLimit,
+      userRestrictedNumbersLimit: limit.userRestrictedNumbersLimit,
     };
   });
 
@@ -278,6 +284,50 @@ router.patch(
       userId: user.id,
       userGlobalLimit,
       userDrawSaleLimit,
+    });
+  }
+);
+
+router.patch(
+  '/users/:userId/restricted-numbers-limit',
+  authorizeResource('/restrictions:update-user-global'),
+  validate(userLimitSchema),
+  async (req, res) => {
+    const userId = param(req, 'userId');
+    const body = req.body as z.infer<typeof userLimitSchema>;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, fullName: true, username: true },
+    });
+    if (!user) {
+      res.status(404).json({ message: 'Usuario no encontrado.' });
+      return;
+    }
+
+    const userRestrictedNumbersLimit = await setUserRestrictedNumbersLimit(userId, body.limit);
+    const userGlobalLimit = await getUserGlobalNumberLimit(userId);
+    const userDrawSaleLimit = await getUserDrawSaleLimit(userId);
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'UPDATE_USER_RESTRICTED_NUMBERS_LIMIT',
+        entity: 'UserRestrictionLimit',
+        entityId: userId,
+        userId: req.user!.sub,
+        details: {
+          targetUserId: user.id,
+          targetUsername: user.username,
+          userRestrictedNumbersLimit,
+        },
+      },
+    });
+
+    res.json({
+      userId: user.id,
+      userGlobalLimit,
+      userDrawSaleLimit,
+      userRestrictedNumbersLimit,
     });
   }
 );

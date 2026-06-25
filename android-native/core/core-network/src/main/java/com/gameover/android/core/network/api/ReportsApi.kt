@@ -38,5 +38,17 @@ interface ReportsApi {
 
     @GET("api/users")
     suspend fun getUsers(): Response<List<UserDto>>
+
+    @GET("api/payments/winning-tickets")
+    suspend fun getWinningTickets(
+        @Query("drawId") drawId: String,
+        @Query("status") status: String? = "all",
+        @Query("code") code: String? = null
+    ): Response<WinningTicketsResponseDto>
+
+    @PATCH("api/payments/mark-paid")
+    suspend fun markPaid(
+        @Body request: MarkPaidRequestDto
+    ): Response<MarkPaidResponseDto>
 }
 

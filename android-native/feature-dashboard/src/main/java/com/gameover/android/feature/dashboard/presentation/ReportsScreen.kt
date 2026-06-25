@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.CompareArrows
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -23,7 +24,8 @@ import com.gameover.android.core.ui.component.GoCard
 fun ReportsScreen(
     onDrawListReportClick: () -> Unit,
     onDepositsWithdrawalsReportClick: () -> Unit,
-    onBalanceBreakdownReportClick: () -> Unit
+    onBalanceBreakdownReportClick: () -> Unit,
+    onWinningTicketsReportClick: () -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -63,7 +65,7 @@ fun ReportsScreen(
             ) {
                 item {
                     ReportCard(
-                        title = "Lista de Sorteo",
+                        title = "Lista de Sorteos",
                         icon = Icons.Default.Assignment,
                         onClick = onDrawListReportClick
                     )
@@ -80,6 +82,13 @@ fun ReportsScreen(
                         title = "Desglose de Balance",
                         icon = Icons.Default.TrendingUp,
                         onClick = onBalanceBreakdownReportClick
+                    )
+                }
+                item {
+                    ReportCard(
+                        title = "Pago de Tickets",
+                        icon = Icons.Default.Star,
+                        onClick = onWinningTicketsReportClick
                     )
                 }
             }

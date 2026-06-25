@@ -45,7 +45,7 @@ fun DrawListReportScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Lista de Sorteo",
+                        "Lista de Sorteos",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )

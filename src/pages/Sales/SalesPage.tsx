@@ -124,6 +124,7 @@ export default function SalesPage() {
   const [globalNumberRestrictions, setGlobalNumberRestrictions] = useState<GlobalNumberRestrictionItem[]>([]);
   const [userGlobalNumberLimit, setUserGlobalNumberLimit] = useState<number | null>(null);
   const [userDrawSaleLimit, setUserDrawSaleLimit] = useState<number | null>(null);
+  const [userRestrictedNumbersLimit, setUserRestrictedNumbersLimit] = useState<number | null>(null);
 
   const openDraws = useMemo(
     () => draws.filter((d) => isDrawSellable(d)),
@@ -175,6 +176,7 @@ export default function SalesPage() {
         setGlobalNumberRestrictions(globalNumberItems);
         setUserGlobalNumberLimit(myLimits.userGlobalLimit);
         setUserDrawSaleLimit(myLimits.userDrawSaleLimit);
+        setUserRestrictedNumbersLimit(myLimits.userRestrictedNumbersLimit);
       })
       .catch(() => {});
   }, []);
@@ -371,14 +373,16 @@ export default function SalesPage() {
       number: string;
       sold: number;
       limit: number | null;
-      limitType: 'global-numero' | 'global-usuario' | 'global' | null;
+      limitType: 'restringido-usuario' | 'global-numero' | 'global-usuario' | 'global' | null;
       remaining: number | null;
     }[] = [];
     for (const [number, sold] of soldByNumber.entries()) {
       const individualLimit = individualByNumber.get(number) ?? null;
-      const effectiveLimit = individualLimit ?? userGlobalNumberLimit ?? globalNumberLimit;
+      const effectiveLimit = individualLimit !== null
+        ? (userRestrictedNumbersLimit !== null ? userRestrictedNumbersLimit : individualLimit)
+        : (userGlobalNumberLimit ?? globalNumberLimit);
       const limitType = individualLimit !== null
-        ? 'global-numero'
+        ? (userRestrictedNumbersLimit !== null ? 'restringido-usuario' : 'global-numero')
         : userGlobalNumberLimit !== null
           ? 'global-usuario'
           : globalNumberLimit !== null
@@ -393,7 +397,7 @@ export default function SalesPage() {
       });
     }
     return entries.sort((a, b) => b.sold - a.sold);
-  }, [soldByNumber, globalNumberRestrictions, userGlobalNumberLimit, globalNumberLimit]);
+  }, [soldByNumber, globalNumberRestrictions, userGlobalNumberLimit, globalNumberLimit, userRestrictedNumbersLimit]);
 
   const restrictedSummary = useMemo(() => {
     if (globalNumberRestrictions.length === 0) return [];
@@ -801,12 +805,12 @@ export default function SalesPage() {
 
                 let effectiveLimit: number | null = null;
                 let soldForRule = 0;
-                let restrictionScope: 'global-numero' | 'global-usuario' | 'global' | null = null;
+                let restrictionScope: 'restringido-usuario' | 'global-numero' | 'global-usuario' | 'global' | null = null;
 
                 if (individualLimit !== null) {
-                  effectiveLimit = individualLimit;
+                  effectiveLimit = userRestrictedNumbersLimit !== null ? userRestrictedNumbersLimit : individualLimit;
                   soldForRule = soldByNumber.get(normalizedNumber) ?? 0;
-                  restrictionScope = 'global-numero';
+                  restrictionScope = userRestrictedNumbersLimit !== null ? 'restringido-usuario' : 'global-numero';
                 } else if (userGlobalNumberLimit !== null) {
                   effectiveLimit = userGlobalNumberLimit;
                   soldForRule = soldByNumber.get(normalizedNumber) ?? 0;
@@ -892,9 +896,11 @@ export default function SalesPage() {
                         ⚠ Restricción {
                           restrictionScope === 'global-numero'
                             ? 'global por número'
-                            : restrictionScope === 'global-usuario'
-                              ? 'global por usuario'
-                              : 'global'
+                            : restrictionScope === 'restringido-usuario'
+                              ? 'restringido por usuario'
+                              : restrictionScope === 'global-usuario'
+                                ? 'global por usuario'
+                                : 'global'
                         } — Disponible: C$ {Math.max(0, remaining)}
                       </div>
                     )}

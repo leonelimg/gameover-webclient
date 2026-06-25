@@ -44,6 +44,7 @@ export interface GlobalNumberRestrictionItem {
 export interface CurrentUserRestrictionSettings {
   userGlobalLimit: number | null;
   userDrawSaleLimit: number | null;
+  userRestrictedNumbersLimit: number | null;
 }
 
 export interface UserRestrictionLimitItem {
@@ -54,12 +55,14 @@ export interface UserRestrictionLimitItem {
   status: UserStatus;
   userGlobalLimit: number | null;
   userDrawSaleLimit: number | null;
+  userRestrictedNumbersLimit: number | null;
 }
 
 export interface UserRestrictionLimitUpdateResult {
   userId: string;
   userGlobalLimit: number | null;
   userDrawSaleLimit: number | null;
+  userRestrictedNumbersLimit: number | null;
 }
 
 export interface FrontendTicketSettings {

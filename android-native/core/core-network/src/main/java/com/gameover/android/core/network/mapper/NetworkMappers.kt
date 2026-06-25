@@ -58,7 +58,7 @@ fun TicketDto.toDomain(): Ticket = Ticket(
         UserSummary(
             id = it.id,
             fullName = it.fullName,
-            username = it.username,
+            username = it.username.orEmpty(),
             planMultiplier = it.plan?.multiplier,
         )
     },
@@ -194,6 +194,69 @@ fun BalanceBreakdownResponseDto.toDomain(): BalanceBreakdownResponse = BalanceBr
     totals = byAssociate.totals.toDomain(),
     rows = byAssociate.rows.map { it.toDomain() }
 )
+
+fun WinningTicketsResponseDto.toDomain(): WinningTicketsReport = WinningTicketsReport(
+    draw = draw.toDomain(),
+    tickets = tickets.map { it.toDomain() },
+    paidTickets = paidTickets.map { it.toDomain() },
+    totals = totals.toDomain()
+)
+
+fun WinningTicketsDrawDto.toDomain(): WinningTicketsDraw = WinningTicketsDraw(
+    id = id,
+    name = name,
+    winnerNumber = winnerNumber,
+    hasWinnerNumber = hasWinnerNumber
+)
+
+fun WinningTicketDto.toDomain(): WinningTicket = WinningTicket(
+    ticketId = ticketId,
+    code = code,
+    customerName = customerName,
+    seller = seller.toDomain(),
+    createdAt = createdAt,
+    paymentStatus = paymentStatus,
+    paidAt = paidAt,
+    paidBy = paidBy?.toDomain(),
+    winningNumbers = winningNumbers,
+    prizeAmount = prizeAmount
+)
+
+fun WinningTicketSellerDto.toDomain(): WinningTicketSeller = WinningTicketSeller(
+    id = id,
+    fullName = fullName,
+    username = username,
+    plan = plan?.toDomain()
+)
+
+fun WinningTicketPlanDto.toDomain(): WinningTicketPlan = WinningTicketPlan(
+    id = id,
+    name = name,
+    multiplier = multiplier,
+    commission = commission
+)
+
+fun WinningTicketUserDto.toDomain(): WinningTicketUser = WinningTicketUser(
+    id = id,
+    fullName = fullName,
+    username = username
+)
+
+fun WinningTicketsTotalsDto.toDomain(): WinningTicketsTotals = WinningTicketsTotals(
+    totalToPay = totalToPay,
+    totalPaid = totalPaid,
+    totalPending = totalPending,
+    winnersCount = winnersCount,
+    paidCount = paidCount,
+    pendingCount = pendingCount
+)
+
+fun MarkPaidResponseDto.toDomain(): MarkPaidResult = MarkPaidResult(
+    ticket = ticket.toDomain(),
+    prizeAmount = prizeAmount
+)
+
+
 
 
 
