@@ -166,6 +166,97 @@ router.get('/:id', authorizeAnyResource('/draws/list', '/draws', '/sales', '/tic
   res.json(withResolvedStatus(draw));
 });
 
+function normalizeNumber(value: string): string {
+  const trimmed = value.trim();
+  return trimmed.replace(/^0+(?=\d)/, '');
+}
+
+async function updatePrizesForDraw(drawId: string, winnerNumber: string | null): Promise<void> {
+  if (!winnerNumber || !winnerNumber.trim()) {
+    await prisma.ticket.updateMany({
+      where: { drawId },
+      data: { prize: 0 },
+    });
+    return;
+  }
+
+  const normalizedWinner = normalizeNumber(winnerNumber);
+
+  const draw = await prisma.draw.findUnique({
+    where: { id: drawId },
+    select: {
+      specialMultiplier: { select: { value: true } },
+    },
+  });
+
+  const specialMultiplierValue = draw?.specialMultiplier?.value ?? null;
+
+  const defaultPlan = await prisma.plan.findFirst({
+    orderBy: { createdAt: 'asc' },
+    select: { multiplier: true },
+  });
+
+
+  const tickets = await prisma.ticket.findMany({
+    where: { drawId, canceledAt: null },
+    select: {
+      id: true,
+      lines: {
+        where: { number: winnerNumber },
+        select: {
+          number: true,
+          amount: true,
+          specialAmount: true,
+        },
+      },
+      seller: {
+        select: {
+          plan: { select: { multiplier: true } },
+        },
+      },
+      associate: {
+        select: {
+          plan: { select: { multiplier: true } },
+        },
+      },
+    },
+  });
+
+  const updates = tickets.map((ticket) => {
+    const effectivePlan = ticket.seller.plan ?? ticket.associate.plan ?? defaultPlan;
+    const regularMultiplier = effectivePlan?.multiplier ?? 0;
+
+    let prize = 0;
+    for (const line of ticket.lines) {
+      if (normalizeNumber(line.number) === normalizedWinner) {
+        if (specialMultiplierValue !== null && (line.specialAmount ?? 0) > 0) {
+          prize += (line.amount + (line.specialAmount ?? 0)) * regularMultiplier * specialMultiplierValue;
+        } else {
+          prize += line.amount * regularMultiplier;
+        }
+      }
+    }
+
+    return prisma.ticket.update({
+      where: { id: ticket.id },
+      data: { prize },
+    });
+  });
+
+  if (updates.length > 0) {
+    await prisma.$transaction(updates);
+  }
+
+  const updatedIds = tickets.map((t) => t.id);
+  await prisma.ticket.updateMany({
+    where: {
+      drawId,
+      id: { notIn: updatedIds },
+    },
+    data: { prize: 0 },
+  });
+}
+
 // POST /api/draws
 router.post('/', authorizeResource('/draws:create'), validate(drawSchema), async (req, res) => {
   const body = req.body as z.infer<typeof drawSchema>;
@@ -181,6 +272,11 @@ router.post('/', authorizeResource('/draws:create'), validate(drawSchema), async
     },
     include: rnInclude,
   });
+
+  if (body.winnerNumber !== undefined && body.winnerNumber !== null) {
+    await updatePrizesForDraw(draw.id, body.winnerNumber);
+  }
+
   res.status(201).json(draw);
 });
 
@@ -205,6 +301,11 @@ router.patch('/:id', authorizeResource('/draws:update'), validate(drawSchema.par
     },
     include: rnInclude,
   });
+
+  if (body.winnerNumber !== undefined) {
+    await updatePrizesForDraw(draw.id, body.winnerNumber);
+  }
+
   res.json(draw);
 });
 

@@ -248,30 +248,32 @@ export default function DashboardPage() {
             {recentTickets.length === 0 ? (
               <p className="text-slate-500 text-sm p-6 text-center">Sin tickets registrados</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="text-left px-4 py-2 text-slate-600 font-medium">Código</th>
-                    <th className="text-left px-4 py-2 text-slate-600 font-medium">Cliente</th>
-                    <th className="text-right px-4 py-2 text-slate-600 font-medium">Total</th>
-                    <th className="text-left px-4 py-2 text-slate-600 font-medium">Fecha</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentTickets.map((t) => (
-                    <tr key={t.id} className="border-t border-slate-100">
-                      <td className="px-4 py-3 font-mono text-xs">{t.code}</td>
-                      <td className="px-4 py-3">{t.customerName}</td>
-                      <td className="px-4 py-3 text-right font-medium text-green-700">
-                        {formatCurrency(t.total)}
-                      </td>
-                      <td className="px-4 py-3 text-slate-500 text-xs">
-                        {formatDateTime(t.createdAt)}
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="text-left px-4 py-2 text-slate-600 font-medium">Código</th>
+                      <th className="text-left px-4 py-2 text-slate-600 font-medium">Cliente</th>
+                      <th className="text-right px-4 py-2 text-slate-600 font-medium">Total</th>
+                      <th className="text-left px-4 py-2 text-slate-600 font-medium">Fecha</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {recentTickets.map((t) => (
+                      <tr key={t.id} className="border-t border-slate-100">
+                        <td className="px-4 py-3 font-mono text-xs">{t.code}</td>
+                        <td className="px-4 py-3">{t.customerName}</td>
+                        <td className="px-4 py-3 text-right font-medium text-green-700">
+                          {formatCurrency(t.total)}
+                        </td>
+                        <td className="px-4 py-3 text-slate-500 text-xs">
+                          {formatDateTime(t.createdAt)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </CardBody>
         </Card>

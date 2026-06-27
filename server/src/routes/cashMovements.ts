@@ -20,30 +20,7 @@ type HierarchyUser = {
   parentId: string | null;
 };
 
-interface PrizeTicket {
-  total: number;
-  lines: Array<{
-    number: string;
-    amount: number;
-    specialAmount: number | null;
-  }>;
-  draw: {
-    winnerNumber: string | null;
-    specialMultiplier: { value: number } | null;
-  };
-  seller: {
-    plan: {
-      multiplier: number;
-      commission: number;
-    } | null;
-  };
-  associate: {
-    plan: {
-      multiplier: number;
-      commission: number;
-    } | null;
-  };
-}
+
 
 type HistoryActor = {
   id: string;
@@ -229,54 +206,12 @@ function parseCreatedAtFilter(
   return { filter };
 }
 
-function normalizeNumber(value: string): string {
-  const trimmed = value.trim();
-  return trimmed.replace(/^0+(?=\d)/, '');
-}
 
-function calculatePrizeForTicket(
-  ticket: PrizeTicket,
-  defaultPlan: { multiplier: number; commission: number } | null
-): number {
-  const winnerNumber = ticket.draw.winnerNumber;
-  if (!winnerNumber) return 0;
-
-  const effectivePlan = ticket.seller.plan ?? ticket.associate.plan ?? defaultPlan;
-  const regularMultiplier = effectivePlan?.multiplier ?? 0;
-  const specialMultiplierValue = ticket.draw.specialMultiplier?.value ?? null;
-  const normalizedWinner = normalizeNumber(winnerNumber);
-
-  return ticket.lines.reduce((sum, line) => {
-    if (normalizeNumber(line.number) !== normalizedWinner) {
-      return sum;
-    }
-
-    if (specialMultiplierValue !== null && (line.specialAmount ?? 0) > 0) {
-      return sum + (line.amount + (line.specialAmount ?? 0)) * regularMultiplier * specialMultiplierValue;
-    }
-
-    return sum + line.amount * regularMultiplier;
-  }, 0);
-}
-
-function calculateTicketFinancials(
-  ticket: PrizeTicket,
-  defaultPlan: { multiplier: number; commission: number } | null
-): { prizeForTicket: number; commissionForTicket: number } {
-  const effectivePlan = ticket.seller.plan ?? ticket.associate.plan ?? defaultPlan;
-  const commissionRate = (effectivePlan?.commission ?? 0) / 100;
-
-  return {
-    prizeForTicket: calculatePrizeForTicket(ticket, defaultPlan),
-    commissionForTicket: ticket.total * commissionRate,
-  };
-}
 
 async function getOpeningBalances(
   userIds: string[],
   cutoffDate: Date | null,
-  drawFilterRule: DrawFilterRule,
-  defaultPlan: { multiplier: number; commission: number } | null
+  drawFilterRule: DrawFilterRule
 ): Promise<Record<string, number>> {
   const balances: Record<string, number> = {};
   for (const id of userIds) {
@@ -314,33 +249,20 @@ async function getOpeningBalances(
   };
   applyDrawFilterRule(ticketWhere, drawFilterRule);
 
-  const tickets = await prisma.ticket.findMany({
+  const ticketAggs = await prisma.ticket.groupBy({
+    by: ['sellerId'],
     where: ticketWhere,
-    include: {
-      lines: { select: { number: true, amount: true, specialAmount: true } },
-      draw: {
-        select: {
-          winnerNumber: true,
-          specialMultiplier: { select: { value: true } },
-        },
-      },
-      seller: {
-        select: {
-          plan: { select: { multiplier: true, commission: true } },
-        },
-      },
-      associate: {
-        select: {
-          plan: { select: { multiplier: true, commission: true } },
-        },
-      },
+    _sum: {
+      total: true,
+      prize: true,
     },
   });
 
-  for (const t of tickets) {
-    const userId = t.sellerId;
-    const prize = calculatePrizeForTicket(t as PrizeTicket, defaultPlan);
-    balances[userId] = (balances[userId] ?? 0) + t.total - prize;
+  for (const agg of ticketAggs) {
+    const userId = agg.sellerId;
+    const sales = agg._sum.total ?? 0;
+    const prize = agg._sum.prize ?? 0;
+    balances[userId] = (balances[userId] ?? 0) + sales - prize;
   }
 
   return balances;
@@ -418,16 +340,10 @@ router.get('/', async (req, res) => {
   const openingBalanceCutoff = fromDate ? parseDateYmdToUtc(fromDate, false) : null;
   const drawFilterRule = await getDrawFilterRule('cash-movements.balance');
 
-  const defaultPlan = await prisma.plan.findFirst({
-    orderBy: { createdAt: 'asc' },
-    select: { multiplier: true, commission: true },
-  });
-
   const openingBalances = await getOpeningBalances(
     targetUserIds,
     openingBalanceCutoff,
-    drawFilterRule,
-    defaultPlan
+    drawFilterRule
   );
 
   const rangeMovementWhere: Record<string, unknown> = {
@@ -454,24 +370,12 @@ router.get('/', async (req, res) => {
     }),
     prisma.ticket.findMany({
       where: rangeTicketWhere,
-      include: {
-        lines: { select: { number: true, amount: true, specialAmount: true } },
-        draw: {
-          select: {
-            winnerNumber: true,
-            specialMultiplier: { select: { value: true } },
-          },
-        },
-        seller: {
-          select: {
-            plan: { select: { multiplier: true, commission: true } },
-          },
-        },
-        associate: {
-          select: {
-            plan: { select: { multiplier: true, commission: true } },
-          },
-        },
+      select: {
+        id: true,
+        sellerId: true,
+        total: true,
+        prize: true,
+        createdAt: true,
       },
       orderBy: { createdAt: 'asc' },
     }),
@@ -487,12 +391,11 @@ router.get('/', async (req, res) => {
       isMovement: true,
     })),
     ...allTickets.map(t => {
-      const prize = calculatePrizeForTicket(t as PrizeTicket, defaultPlan);
       return {
         id: t.id,
         userId: t.sellerId,
         type: 'ticket' as const,
-        amount: t.total - prize,
+        amount: t.total - t.prize,
         createdAt: t.createdAt,
         isMovement: false,
       };
@@ -600,35 +503,11 @@ router.get('/balance', async (req, res) => {
   const drawFilterRule = await getDrawFilterRule('cash-movements.balance');
   applyDrawFilterRule(ticketWhere, drawFilterRule);
 
-  const [ticketAgg, defaultPlan, tickets] = await Promise.all([
-    prisma.ticket.aggregate({ where: ticketWhere, _sum: { total: true }, _count: { id: true } }),
-    prisma.plan.findFirst({
-      orderBy: { createdAt: 'asc' },
-      select: { multiplier: true, commission: true },
-    }),
-    prisma.ticket.findMany({
-      where: ticketWhere,
-      include: {
-        lines: { select: { number: true, amount: true, specialAmount: true } },
-        draw: {
-          select: {
-            winnerNumber: true,
-            specialMultiplier: { select: { value: true } },
-          },
-        },
-        seller: {
-          select: {
-            plan: { select: { multiplier: true, commission: true } },
-          },
-        },
-        associate: {
-          select: {
-            plan: { select: { multiplier: true, commission: true } },
-          },
-        },
-      },
-    }),
-  ]);
+  const ticketAgg = await prisma.ticket.aggregate({
+    where: ticketWhere,
+    _sum: { total: true, prize: true },
+    _count: { id: true },
+  });
 
   let openingBalance = 0;
   if (openingBalanceCutoff) {
@@ -644,7 +523,7 @@ router.get('/balance', async (req, res) => {
     };
     applyDrawFilterRule(openingTicketWhere, drawFilterRule);
 
-    const [openingDepositsAgg, openingWithdrawalsAgg, openingTicketAgg, openingTickets] = await Promise.all([
+    const [openingDepositsAgg, openingWithdrawalsAgg, openingTicketAgg] = await Promise.all([
       prisma.cashMovement.aggregate({
         where: { ...openingMovementWhere, type: 'deposito' },
         _sum: { amount: true },
@@ -653,57 +532,20 @@ router.get('/balance', async (req, res) => {
         where: { ...openingMovementWhere, type: 'retiro' },
         _sum: { amount: true },
       }),
-      prisma.ticket.aggregate({ where: openingTicketWhere, _sum: { total: true } }),
-      prisma.ticket.findMany({
+      prisma.ticket.aggregate({
         where: openingTicketWhere,
-        include: {
-          lines: { select: { number: true, amount: true, specialAmount: true } },
-          draw: {
-            select: {
-              winnerNumber: true,
-              specialMultiplier: { select: { value: true } },
-            },
-          },
-          seller: {
-            select: {
-              plan: { select: { multiplier: true, commission: true } },
-            },
-          },
-          associate: {
-            select: {
-              plan: { select: { multiplier: true, commission: true } },
-            },
-          },
-        },
+        _sum: { total: true, prize: true },
       }),
     ]);
-
-    const openingFinancials = openingTickets.reduce(
-      (sum, ticket) => {
-        const financials = calculateTicketFinancials(ticket as PrizeTicket, defaultPlan);
-        return {
-          prizes: sum.prizes + financials.prizeForTicket,
-          commissions: sum.commissions + financials.commissionForTicket,
-        };
-      },
-      {
-        prizes: 0,
-        commissions: 0,
-      }
-    );
 
     openingBalance =
       (openingDepositsAgg._sum.amount ?? 0) -
       (openingWithdrawalsAgg._sum.amount ?? 0) +
       (openingTicketAgg._sum.total ?? 0) -
-      openingFinancials.prizes;
+      (openingTicketAgg._sum.prize ?? 0);
   }
 
-  const totalPrizes = tickets.reduce(
-    (sum, ticket) => sum + calculatePrizeForTicket(ticket as PrizeTicket, defaultPlan),
-    0
-  );
-
+  const totalPrizes = ticketAgg._sum.prize ?? 0;
   const totalDeposits = depositsAgg._sum.amount ?? 0;
   const totalWithdrawals = withdrawalsAgg._sum.amount ?? 0;
   const totalSales = ticketAgg._sum.total ?? 0;
@@ -775,37 +617,25 @@ router.get('/summary-by-event', async (req, res) => {
   const drawFilterRule = await getDrawFilterRule('cash-movements.summary-by-event');
   applyDrawFilterRule(ticketWhere, drawFilterRule);
 
-  const [tickets, defaultPlan] = await Promise.all([
-    prisma.ticket.findMany({
-      where: ticketWhere,
-      include: {
-        lines: { select: { number: true, amount: true, specialAmount: true } },
-        draw: {
-          select: {
-            id: true,
-            name: true,
-            closeTime: true,
-            winnerNumber: true,
-            specialMultiplier: { select: { value: true } },
-          },
-        },
-        seller: {
-          select: {
-            plan: { select: { multiplier: true, commission: true } },
-          },
-        },
-        associate: {
-          select: {
-            plan: { select: { multiplier: true, commission: true } },
-          },
-        },
-      },
-    }),
-    prisma.plan.findFirst({
-      orderBy: { createdAt: 'asc' },
-      select: { multiplier: true, commission: true },
-    }),
-  ]);
+  const ticketGroups = await prisma.ticket.groupBy({
+    by: ['drawId'],
+    where: ticketWhere,
+    _sum: {
+      total: true,
+      prize: true,
+      commission: true,
+    },
+    _count: {
+      id: true,
+    },
+  });
+
+  const drawIds = ticketGroups.map((g) => g.drawId);
+  const draws = await prisma.draw.findMany({
+    where: { id: { in: drawIds } },
+    select: { id: true, name: true, closeTime: true },
+  });
+  const drawById = new Map(draws.map((d) => [d.id, d]));
 
   let openingBalance = 0;
   if (openingBalanceCutoff) {
@@ -821,7 +651,7 @@ router.get('/summary-by-event', async (req, res) => {
     };
     applyDrawFilterRule(openingTicketWhere, drawFilterRule);
 
-    const [openingDepositsAgg, openingWithdrawalsAgg, openingTicketAgg, openingTickets] = await Promise.all([
+    const [openingDepositsAgg, openingWithdrawalsAgg, openingTicketAgg] = await Promise.all([
       prisma.cashMovement.aggregate({
         where: { ...openingMovementWhere, type: 'deposito' },
         _sum: { amount: true },
@@ -830,64 +660,35 @@ router.get('/summary-by-event', async (req, res) => {
         where: { ...openingMovementWhere, type: 'retiro' },
         _sum: { amount: true },
       }),
-      prisma.ticket.aggregate({ where: openingTicketWhere, _sum: { total: true } }),
-      prisma.ticket.findMany({
+      prisma.ticket.aggregate({
         where: openingTicketWhere,
-        include: {
-          lines: { select: { number: true, amount: true, specialAmount: true } },
-          draw: {
-            select: {
-              winnerNumber: true,
-              specialMultiplier: { select: { value: true } },
-            },
-          },
-          seller: {
-            select: {
-              plan: { select: { multiplier: true, commission: true } },
-            },
-          },
-          associate: {
-            select: {
-              plan: { select: { multiplier: true, commission: true } },
-            },
-          },
-        },
+        _sum: { total: true, prize: true },
       }),
     ]);
-
-    const openingPrizes = openingTickets.reduce(
-      (sum, ticket) => sum + calculatePrizeForTicket(ticket as PrizeTicket, defaultPlan),
-      0
-    );
 
     openingBalance =
       (openingDepositsAgg._sum.amount ?? 0) -
       (openingWithdrawalsAgg._sum.amount ?? 0) +
       (openingTicketAgg._sum.total ?? 0) -
-      openingPrizes;
+      (openingTicketAgg._sum.prize ?? 0);
   }
 
   const byEvent = new Map<string, CashMovementEventSummaryRow>();
-  for (const ticket of tickets) {
-    const { prizeForTicket, commissionForTicket } = calculateTicketFinancials(ticket as PrizeTicket, defaultPlan);
-    const current = byEvent.get(ticket.draw.id) ?? {
-      eventId: ticket.draw.id,
-      eventName: ticket.draw.name,
-      eventDate: ticket.draw.closeTime,
-      ticketCount: 0,
-      totalSales: 0,
-      totalPrizes: 0,
-      totalCommissions: 0,
-      balance: 0,
-      balanceAfterTransaction: 0,
-    };
+  for (const group of ticketGroups) {
+    const draw = drawById.get(group.drawId);
+    if (!draw) continue;
 
-    current.ticketCount += 1;
-    current.totalSales += ticket.total;
-    current.totalPrizes += prizeForTicket;
-    current.totalCommissions += commissionForTicket;
-    current.balance = current.totalSales - current.totalPrizes;
-    byEvent.set(ticket.draw.id, current);
+    byEvent.set(group.drawId, {
+      eventId: group.drawId,
+      eventName: draw.name,
+      eventDate: draw.closeTime,
+      ticketCount: group._count.id,
+      totalSales: group._sum.total ?? 0,
+      totalPrizes: group._sum.prize ?? 0,
+      totalCommissions: group._sum.commission ?? 0,
+      balance: (group._sum.total ?? 0) - (group._sum.prize ?? 0),
+      balanceAfterTransaction: 0,
+    });
   }
 
   let runningBalance = openingBalance;

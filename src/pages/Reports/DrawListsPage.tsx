@@ -262,9 +262,13 @@ export default function DrawListsPage() {
             <p className="text-center text-slate-500 py-10">Cargando reporte...</p>
           ) : (
             <>
+            <div className="overflow-x-auto pb-2">
               <div
                 className="grid gap-4"
-                style={{ gridTemplateColumns: `repeat(${chunkedRows.length}, minmax(0, 1fr))` }}
+                style={{
+                  gridTemplateColumns: `repeat(${chunkedRows.length}, minmax(0, 1fr))`,
+                  minWidth: `${chunkedRows.length * 140}px`,
+                }}
               >
                 {chunkedRows.map((columnRows, index) => {
                   const subtotal = columnRows.reduce((acc, row) => acc + row.total, 0);
@@ -299,6 +303,7 @@ export default function DrawListsPage() {
                   );
                 })}
               </div>
+            </div>
 
               <div className="mt-4 flex justify-end">
                 <p className="text-base font-semibold text-slate-900">

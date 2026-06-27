@@ -68,21 +68,20 @@ const cancelTicketSchema = z.object({
 });
 
 async function getAllowedSellerIds(userId: string): Promise<string[]> {
-  const users = await prisma.user.findMany({
+  const allUsers = await prisma.user.findMany({
     select: { id: true, parentId: true },
   });
-
-  const allowed = new Set<string>();
-  const visit = (parentId: string) => {
-    if (allowed.has(parentId)) return;
-    allowed.add(parentId);
-    users
-      .filter((u) => u.parentId === parentId)
-      .forEach((child) => visit(child.id));
+  const ids = new Set<string>([userId]);
+  const walk = (parentId: string) => {
+    for (const u of allUsers) {
+      if (u.parentId === parentId && !ids.has(u.id)) {
+        ids.add(u.id);
+        walk(u.id);
+      }
+    }
   };
-
-  visit(userId);
-  return Array.from(allowed);
+  walk(userId);
+  return Array.from(ids);
 }
 
 async function buildTicketScopeWhere(user: AuthUser): Promise<Record<string, unknown>> {
@@ -296,24 +295,24 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
   const globalRestrictions = await listGlobalNumberRestrictions();
   const globalRestrictionByNumber = new Map(globalRestrictions.map((item) => [item.number, item.limit]));
 
-  const soldByUserNumber = new Map<string, number>();
-  await Promise.all(
-    Array.from(requestedByNumber.keys()).map(async (number) => {
-      const userAgg = await prisma.ticketLine.aggregate({
-        where: {
-          number,
-          ticket: {
-            drawId: body.drawId,
-            sellerId: req.user!.sub,
-            canceledAt: null,
-          },
-        },
-        _sum: { amount: true },
-      });
+  const numbersToQuery = Array.from(requestedByNumber.keys());
+  const userAggs = await prisma.ticketLine.groupBy({
+    by: ['number'],
+    where: {
+      number: { in: numbersToQuery },
+      ticket: {
+        drawId: body.drawId,
+        sellerId: req.user!.sub,
+        canceledAt: null,
+      },
+    },
+    _sum: { amount: true },
+  });
 
-      soldByUserNumber.set(number, userAgg._sum.amount ?? 0);
-    })
-  );
+  const soldByUserNumber = new Map<string, number>();
+  for (const agg of userAggs) {
+    soldByUserNumber.set(agg.number, agg._sum.amount ?? 0);
+  }
 
   for (const [number, requestedAmount] of requestedByNumber.entries()) {
     const globalByNumberLimit = globalRestrictionByNumber.get(number) ?? null;
@@ -340,8 +339,29 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
     }
   }
 
-  const seller = await prisma.user.findUnique({ where: { id: req.user!.sub } });
+  const [seller, defaultPlan] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: req.user!.sub },
+      include: { plan: { select: { commission: true } } },
+    }),
+    prisma.plan.findFirst({
+      orderBy: { createdAt: 'asc' },
+      select: { commission: true },
+    }),
+  ]);
   const associateId = seller?.parentId ?? req.user!.sub;
+
+  let associate = null;
+  if (seller?.parentId) {
+    associate = await prisma.user.findUnique({
+      where: { id: seller.parentId },
+      include: { plan: { select: { commission: true } } },
+    });
+  }
+
+  const effectivePlan = seller?.plan ?? associate?.plan ?? defaultPlan;
+  const commissionRate = (effectivePlan?.commission ?? 0) / 100;
+  const commission = total * commissionRate;
 
   let code = generateCode();
   for (let i = 0; i < 5; i++) {
@@ -355,6 +375,8 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
       code,
       customerName: body.customerName,
       total,
+      commission,
+      prize: 0,
       drawId: body.drawId,
       sellerId: req.user!.sub,
       associateId,

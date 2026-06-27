@@ -179,7 +179,7 @@ export function FilteredTicketsCard({
               </div>
             ) : null}
 
-            <div className="overflow-x-auto border border-slate-200 rounded-lg">
+            <div className="overflow-auto max-h-60 border border-slate-200 rounded-lg">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50">
                   <tr>

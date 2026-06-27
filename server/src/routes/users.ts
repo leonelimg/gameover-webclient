@@ -53,15 +53,32 @@ router.get('/', authorizeAnyResource('/users', '/plans', '/reports/balance-break
   const where: Record<string, unknown> = {};
   if (role) where['role'] = role;
   if (status) where['status'] = status;
+
+  if (req.user!.role !== 'admin') {
+    // Non-admin roles (e.g. asociado) can only query themselves and their descendants recursively.
+    const allUserRelations = await prisma.user.findMany({
+      select: { id: true, parentId: true }
+    });
+    const allowedIds = new Set<string>([req.user!.sub]);
+    const walk = (parentId: string) => {
+      for (const u of allUserRelations) {
+        if (u.parentId === parentId && !allowedIds.has(u.id)) {
+          allowedIds.add(u.id);
+          walk(u.id);
+        }
+      }
+    };
+    walk(req.user!.sub);
+
+    where['id'] = { in: Array.from(allowedIds) };
+  }
+
   if (search) {
     where['OR'] = [
       { fullName: { contains: search, mode: 'insensitive' } },
       { username: { contains: search, mode: 'insensitive' } },
       { email: { contains: search, mode: 'insensitive' } },
     ];
-  }
-  if (req.user!.role === 'asociado') {
-    where['OR'] = [{ id: req.user!.sub }, { parentId: req.user!.sub }];
   }
   const users = await prisma.user.findMany({ where, select: safeSelect, orderBy: { createdAt: 'desc' } });
   res.json(users);

@@ -37,6 +37,7 @@ model User {
   announcementDismissals   AnnouncementDismissal[]
   restrictionLimits        UserRestrictionLimit?
 
+  @@index([parentId])
   @@map("users")
 }
 
@@ -144,6 +145,8 @@ model Ticket {
   code          String            @unique
   customerName  String
   total         Float
+  commission    Float             @default(0)
+  prize         Float             @default(0)
   createdAt     DateTime          @default(now())
   printedAt     DateTime?
   drawId        String
@@ -162,6 +165,10 @@ model Ticket {
   seller        User              @relation("SellerTickets", fields: [sellerId], references: [id])
   paidBy        User?             @relation("PaidTickets", fields: [paidById], references: [id])
 
+  @@index([sellerId, createdAt])
+  @@index([associateId, createdAt])
+  @@index([drawId])
+  @@index([createdAt])
   @@map("tickets")
 }
 
@@ -174,6 +181,8 @@ model TicketLine {
   ticketId       String
   ticket         Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
+  @@index([ticketId])
+  @@index([number])
   @@map("ticket_lines")
 }
 
@@ -216,6 +225,8 @@ model CashMovement {
   targetUser  User             @relation("CashMovementsTargetUser", fields: [targetUserId], references: [id])
   canceledBy  User?            @relation("CashMovementsCanceledBy", fields: [canceledById], references: [id])
 
+  @@index([targetUserId, createdAt])
+  @@index([createdById])
   @@map("cash_movements")
 }
 

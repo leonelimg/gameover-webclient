@@ -75,21 +75,20 @@ const markPaidSchema = z
   });
 
 async function getAllowedSellerIds(userId: string): Promise<string[]> {
-  const users = await prisma.user.findMany({
+  const allUsers = await prisma.user.findMany({
     select: { id: true, parentId: true },
   });
-
-  const allowed = new Set<string>();
-  const visit = (parentId: string) => {
-    if (allowed.has(parentId)) return;
-    allowed.add(parentId);
-    users
-      .filter((u) => u.parentId === parentId)
-      .forEach((child) => visit(child.id));
+  const ids = new Set<string>([userId]);
+  const walk = (parentId: string) => {
+    for (const u of allUsers) {
+      if (u.parentId === parentId && !ids.has(u.id)) {
+        ids.add(u.id);
+        walk(u.id);
+      }
+    }
   };
-
-  visit(userId);
-  return Array.from(allowed);
+  walk(userId);
+  return Array.from(ids);
 }
 
 async function canAccessTicket(ticketId: string, user: AuthUser): Promise<boolean> {
@@ -291,7 +290,14 @@ router.get('/winning-tickets', async (req, res) => {
   const defaultPlanMultiplier = defaultPlan?.multiplier ?? 0;
 
   const tickets = (await prisma.ticket.findMany({
-    where,
+    where: {
+      ...where,
+      lines: {
+        some: {
+          number: draw.winnerNumber!,
+        },
+      },
+    },
     orderBy: { createdAt: 'desc' },
     include: {
       draw: {

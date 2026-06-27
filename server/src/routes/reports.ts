@@ -9,30 +9,7 @@ import { authenticate, authorizeAnyResource, authorizeResource } from '../middle
 
 type Stats = { totalSales: number; ticketCount: number };
 
-interface SummaryTicket {
-  total: number;
-  lines: Array<{
-    number: string;
-    amount: number;
-    specialAmount: number | null;
-  }>;
-  draw: {
-    winnerNumber: string | null;
-    specialMultiplier: { value: number } | null;
-  };
-  seller: {
-    plan: {
-      multiplier: number;
-      commission: number;
-    } | null;
-  };
-  associate: {
-    plan: {
-      multiplier: number;
-      commission: number;
-    } | null;
-  };
-}
+
 
 type ReportUser = {
   id: string;
@@ -41,6 +18,10 @@ type ReportUser = {
   role: 'admin' | 'asociado' | 'vendedor';
   parentId: string | null;
   status: 'activo' | 'bloqueado' | 'archivado';
+  plan?: {
+    multiplier: number;
+    commission: number;
+  } | null;
 };
 
 const router = Router();
@@ -146,6 +127,12 @@ async function getScopedUsers() {
       role: true,
       parentId: true,
       status: true,
+      plan: {
+        select: {
+          multiplier: true,
+          commission: true,
+        },
+      },
     },
   }) as Promise<ReportUser[]>;
 }
@@ -158,35 +145,9 @@ function getScopedSellerIds(users: ReportUser[], user: { sub: string; role: 'adm
   return getDescendantUserIds(users, user.sub);
 }
 
-function normalizeNumber(value: string): string {
-  const trimmed = value.trim();
-  return trimmed.replace(/^0+(?=\d)/, '');
-}
 
-function calculatePrizeForTicket(
-  ticket: SummaryTicket,
-  defaultPlan: { multiplier: number; commission: number } | null
-): number {
-  const winnerNumber = ticket.draw.winnerNumber;
-  if (!winnerNumber) return 0;
 
-  const effectivePlan = ticket.seller.plan ?? ticket.associate.plan ?? defaultPlan;
-  const regularMultiplier = effectivePlan?.multiplier ?? 0;
-  const specialMultiplierValue = ticket.draw.specialMultiplier?.value ?? null;
-  const normalizedWinner = normalizeNumber(winnerNumber);
 
-  return ticket.lines.reduce((sum, line) => {
-    if (normalizeNumber(line.number) !== normalizedWinner) {
-      return sum;
-    }
-
-    if (specialMultiplierValue !== null && (line.specialAmount ?? 0) > 0) {
-      return sum + (line.amount + (line.specialAmount ?? 0)) * regularMultiplier * specialMultiplierValue;
-    }
-
-    return sum + line.amount * regularMultiplier;
-  }, 0);
-}
 
 // ── GET /api/reports/summary ──────────────────────────────────────────────────
 
@@ -216,54 +177,39 @@ router.get('/summary', authorizeAnyResource('/reports/sales-stats', '/dashboard'
     canceledAt: null,
   };
 
-  const [ticketCount, totalResult, ticketIdsForCounts, defaultPlan, ticketsForFinancials] = await Promise.all([
-    prisma.ticket.count({ where: activeTicketWhere }),
-    prisma.ticket.aggregate({ where: activeTicketWhere, _sum: { total: true } }),
-    prisma.ticket.findMany({
+  const [ticketAgg, drawGroups, sellerGroups, associateGroups] = await Promise.all([
+    prisma.ticket.aggregate({
       where: activeTicketWhere,
-      select: { drawId: true, sellerId: true, associateId: true },
+      _sum: { total: true, prize: true, commission: true },
+      _count: { id: true },
     }),
-    prisma.plan.findFirst({
-      orderBy: { createdAt: 'asc' },
-      select: { multiplier: true, commission: true },
-    }),
-    prisma.ticket.findMany({
+    prisma.ticket.groupBy({
+      by: ['drawId'],
       where: activeTicketWhere,
-      select: {
-        total: true,
-        lines: { select: { number: true, amount: true, specialAmount: true } },
-        draw: {
-          select: {
-            winnerNumber: true,
-            specialMultiplier: { select: { value: true } },
-          },
-        },
-        seller: { select: { plan: { select: { multiplier: true, commission: true } } } },
-        associate: { select: { plan: { select: { multiplier: true, commission: true } } } },
-      },
-    }) as Promise<SummaryTicket[]>,
+    }),
+    prisma.ticket.groupBy({
+      by: ['sellerId'],
+      where: activeTicketWhere,
+    }),
+    prisma.ticket.groupBy({
+      by: ['associateId'],
+      where: activeTicketWhere,
+    }),
   ]);
 
-  const drawCount = new Set(ticketIdsForCounts.map((ticket) => ticket.drawId)).size;
+  const drawCount = drawGroups.length;
   const activeUsersById = new Map(scopedUsers.map((user): [string, ReportUser] => [user.id, user]));
-  const involvedUserIds = new Set(ticketIdsForCounts.flatMap((ticket) => [ticket.sellerId, ticket.associateId]));
+  const involvedUserIds = new Set([
+    ...sellerGroups.map((g) => g.sellerId),
+    ...associateGroups.map((g) => g.associateId),
+  ]);
   const userCount = Array.from(involvedUserIds).filter((userId) => activeUsersById.get(userId)?.status === 'activo').length;
 
-  let totalPrizes = 0;
-  let totalCommissions = 0;
-
-  for (const ticket of ticketsForFinancials) {
-    const effectivePlan = ticket.seller.plan ?? ticket.associate.plan ?? defaultPlan;
-    const commissionRate = (effectivePlan?.commission ?? 0) / 100;
-    totalCommissions += ticket.total * commissionRate;
-    totalPrizes += calculatePrizeForTicket(ticket, defaultPlan);
-  }
-
   res.json({
-    ticketCount,
-    totalSales: totalResult._sum.total ?? 0,
-    totalPrizes,
-    totalCommissions,
+    ticketCount: ticketAgg._count.id,
+    totalSales: ticketAgg._sum.total ?? 0,
+    totalPrizes: ticketAgg._sum.prize ?? 0,
+    totalCommissions: ticketAgg._sum.commission ?? 0,
     userCount,
     drawCount,
   });
@@ -305,16 +251,11 @@ router.get('/top-numbers', authorizeAnyResource('/reports/sales-stats', '/dashbo
     applyDrawFilterRule(ticketWhere, drawFilterRule);
   }
 
-  // Get all ticket IDs matching filter
-  const tickets = await prisma.ticket.findMany({
-    where: ticketWhere,
-    select: { id: true },
-  });
-  const ticketIds = tickets.map((t: { id: string }) => t.id);
-
   const grouped = await prisma.ticketLine.groupBy({
     by: ['number'],
-    where: { ticketId: { in: ticketIds } },
+    where: {
+      ticket: ticketWhere,
+    },
     _sum: { amount: true },
     orderBy: { _sum: { amount: 'desc' } },
     take: parseInt(limit, 10),
@@ -486,100 +427,34 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
   const drawFilterRule = await getDrawFilterRule('reports.balance-breakdown');
   applyDrawFilterRule(where, drawFilterRule);
 
-  interface BreakdownTicket {
-    createdAt: Date;
-    associateId: string;
-    associate: {
-      id: string;
-      fullName: string;
-      plan: {
-        multiplier: number;
-        commission: number;
-      } | null;
-    };
-    total: number;
-    draw: {
-      id: string;
-      name: string;
-      closeTime: Date;
-      winnerNumber: string | null;
-    };
-    lines: Array<{
-      number: string;
-      amount: number;
-    }>;
-    seller: {
-      id: string;
-      fullName: string;
-      username: string;
-      role: 'asociado' | 'vendedor' | 'admin';
-      parentId: string | null;
-      plan: {
-        multiplier: number;
-        commission: number;
-      } | null;
-    };
-  }
-
-  const tickets = (await prisma.ticket.findMany({
-    where,
-    include: {
-      lines: { select: { number: true, amount: true } },
-      draw: { select: { id: true, name: true, closeTime: true, winnerNumber: true } },
-      associate: {
-        select: {
-          id: true,
-          fullName: true,
-          plan: { select: { multiplier: true, commission: true } },
-        },
+  const [ticketGroups, defaultPlan] = await Promise.all([
+    prisma.ticket.groupBy({
+      by: ['sellerId', 'associateId', 'drawId'],
+      where,
+      _sum: {
+        total: true,
+        prize: true,
+        commission: true,
       },
-      seller: {
-        select: {
-          id: true,
-          fullName: true,
-          username: true,
-          role: true,
-          parentId: true,
-          plan: { select: { multiplier: true, commission: true } },
-        },
+      _max: {
+        createdAt: true,
       },
-    },
-  })) as BreakdownTicket[];
+      _count: {
+        id: true,
+      },
+    }),
+    prisma.plan.findFirst({
+      orderBy: { createdAt: 'asc' },
+      select: { multiplier: true, commission: true },
+    }),
+  ]);
 
-  const defaultPlan = await prisma.plan.findFirst({
-    orderBy: { createdAt: 'asc' },
-    select: { multiplier: true, commission: true },
+  const drawIds = Array.from(new Set(ticketGroups.map((g) => g.drawId)));
+  const draws = await prisma.draw.findMany({
+    where: { id: { in: drawIds } },
+    select: { id: true, name: true, closeTime: true },
   });
-
-  function normalizeNumber(value: string): string {
-    const trimmed = value.trim();
-    return trimmed.replace(/^0+(?=\d)/, '');
-  }
-
-  function calculateTicketFinancials(ticket: BreakdownTicket): { prizeForTicket: number; commissionForTicket: number } {
-    const effectivePlan = ticket.seller.plan ?? ticket.associate.plan ?? defaultPlan;
-    const multiplier = effectivePlan?.multiplier ?? 0;
-    const commissionRate = (effectivePlan?.commission ?? 0) / 100;
-
-    const winnerNumber = ticket.draw.winnerNumber;
-    if (!winnerNumber) {
-      return {
-        prizeForTicket: 0,
-        commissionForTicket: ticket.total * commissionRate,
-      };
-    }
-
-    const normalizedWinner = normalizeNumber(winnerNumber);
-    const prizeForTicket = ticket.lines.reduce((sum, line) => {
-      if (normalizeNumber(line.number) !== normalizedWinner) return sum;
-      return sum + line.amount * multiplier;
-    }, 0);
-
-    return {
-      prizeForTicket,
-      commissionForTicket: ticket.total * commissionRate,
-    };
-  }
+  const drawById = new Map(draws.map((d) => [d.id, d]));
 
   interface BreakdownAccumulator {
     userId: string;
@@ -595,18 +470,20 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
   }
 
   const bySeller = new Map<string, BreakdownAccumulator>();
-  for (const ticket of tickets) {
-    const seller = ticket.seller;
-    const { prizeForTicket, commissionForTicket } = calculateTicketFinancials(ticket);
-    const associatePlan = ticket.associate.plan ?? defaultPlan;
-    const associateCommissionRate = (associatePlan?.commission ?? 0) / 100;
-    const associateCommissionForTicket = ticket.total * associateCommissionRate;
+  for (const group of ticketGroups) {
+    const seller = userById.get(group.sellerId);
+    if (!seller) continue;
 
-    const current = bySeller.get(seller.id) ?? {
-      userId: seller.id,
+    const associate = userById.get(group.associateId);
+    const associatePlan = associate?.plan ?? defaultPlan;
+    const associateCommissionRate = (associatePlan?.commission ?? 0) / 100;
+    const associateCommissionForGroup = (group._sum.total ?? 0) * associateCommissionRate;
+
+    const current = bySeller.get(group.sellerId) ?? {
+      userId: group.sellerId,
       fullName: seller.fullName,
       username: seller.username,
-      role: seller.role,
+      role: seller.role as 'asociado' | 'vendedor' | 'admin',
       parentId: seller.parentId,
       ticketCount: 0,
       totalSales: 0,
@@ -615,12 +492,12 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       totalAssociateCommissions: 0,
     };
 
-    current.ticketCount += 1;
-    current.totalSales += ticket.total;
-    current.totalPrizes += prizeForTicket;
-    current.totalCommissions += commissionForTicket;
-    current.totalAssociateCommissions += associateCommissionForTicket;
-    bySeller.set(seller.id, current);
+    current.ticketCount += group._count.id;
+    current.totalSales += group._sum.total ?? 0;
+    current.totalPrizes += group._sum.prize ?? 0;
+    current.totalCommissions += group._sum.commission ?? 0;
+    current.totalAssociateCommissions += associateCommissionForGroup;
+    bySeller.set(group.sellerId, current);
   }
 
   const roleOrder: Record<'asociado' | 'vendedor' | 'admin', number> = {
@@ -683,17 +560,17 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     balance: number;
   }>();
 
-  for (const ticket of tickets) {
-    const seller = ticket.seller;
-    if (seller.role === 'admin') continue;
+  for (const group of ticketGroups) {
+    const seller = userById.get(group.sellerId);
+    if (!seller || seller.role === 'admin') continue;
 
-    const { prizeForTicket, commissionForTicket } = calculateTicketFinancials(ticket);
-    const associatePlan = ticket.associate.plan ?? defaultPlan;
+    const associate = userById.get(group.associateId);
+    const associatePlan = associate?.plan ?? defaultPlan;
     const associateCommissionRate = (associatePlan?.commission ?? 0) / 100;
-    const associateCommissionForTicket = ticket.total * associateCommissionRate;
+    const associateCommissionForGroup = (group._sum.total ?? 0) * associateCommissionRate;
 
-    const current = byVendor.get(seller.id) ?? {
-      vendorId: seller.id,
+    const current = byVendor.get(group.sellerId) ?? {
+      vendorId: group.sellerId,
       vendorName: seller.fullName,
       ticketCount: 0,
       totalSales: 0,
@@ -703,13 +580,13 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       balance: 0,
     };
 
-    current.ticketCount += 1;
-    current.totalSales += ticket.total;
-    current.totalPrizes += prizeForTicket;
-    current.totalCommissions += commissionForTicket;
-    current.totalAssociateCommissions += associateCommissionForTicket;
+    current.ticketCount += group._count.id;
+    current.totalSales += group._sum.total ?? 0;
+    current.totalPrizes += group._sum.prize ?? 0;
+    current.totalCommissions += group._sum.commission ?? 0;
+    current.totalAssociateCommissions += associateCommissionForGroup;
     current.balance = current.totalSales - current.totalPrizes;
-    byVendor.set(seller.id, current);
+    byVendor.set(group.sellerId, current);
   }
 
   const vendorRows = Array.from(byVendor.values()).sort((a, b) => b.totalSales - a.totalSales);
@@ -743,15 +620,18 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     balance: number;
   }>();
 
-  for (const ticket of tickets) {
-    const { prizeForTicket, commissionForTicket } = calculateTicketFinancials(ticket);
-    const associatePlan = ticket.associate.plan ?? defaultPlan;
-    const associateCommissionRate = (associatePlan?.commission ?? 0) / 100;
-    const associateCommissionForTicket = ticket.total * associateCommissionRate;
+  for (const group of ticketGroups) {
+    const draw = drawById.get(group.drawId);
+    if (!draw) continue;
 
-    const current = byDraw.get(ticket.draw.id) ?? {
-      drawId: ticket.draw.id,
-      drawName: ticket.draw.name,
+    const associate = userById.get(group.associateId);
+    const associatePlan = associate?.plan ?? defaultPlan;
+    const associateCommissionRate = (associatePlan?.commission ?? 0) / 100;
+    const associateCommissionForGroup = (group._sum.total ?? 0) * associateCommissionRate;
+
+    const current = byDraw.get(group.drawId) ?? {
+      drawId: group.drawId,
+      drawName: draw.name,
       ticketCount: 0,
       totalSales: 0,
       totalPrizes: 0,
@@ -760,13 +640,13 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       balance: 0,
     };
 
-    current.ticketCount += 1;
-    current.totalSales += ticket.total;
-    current.totalPrizes += prizeForTicket;
-    current.totalCommissions += commissionForTicket;
-    current.totalAssociateCommissions += associateCommissionForTicket;
+    current.ticketCount += group._count.id;
+    current.totalSales += group._sum.total ?? 0;
+    current.totalPrizes += group._sum.prize ?? 0;
+    current.totalCommissions += group._sum.commission ?? 0;
+    current.totalAssociateCommissions += associateCommissionForGroup;
     current.balance = current.totalSales - current.totalPrizes;
-    byDraw.set(ticket.draw.id, current);
+    byDraw.set(group.drawId, current);
   }
 
   const drawRows = Array.from(byDraw.values()).sort((a, b) => b.totalSales - a.totalSales);
@@ -863,18 +743,21 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
     }>;
   }>();
 
-  for (const ticket of tickets) {
-    const { prizeForTicket, commissionForTicket } = calculateTicketFinancials(ticket);
-    const associatePlan = ticket.associate.plan ?? defaultPlan;
+  for (const group of ticketGroups) {
+    const seller = userById.get(group.sellerId);
+    if (!seller) continue;
+
+    const draw = drawById.get(group.drawId);
+    if (!draw) continue;
+
+    const associate = userById.get(group.associateId);
+    const associatePlan = associate?.plan ?? defaultPlan;
     const associateCommissionRate = (associatePlan?.commission ?? 0) / 100;
-    const associateCommissionForTicket = ticket.total * associateCommissionRate;
+    const associateCommissionForGroup = (group._sum.total ?? 0) * associateCommissionRate;
 
-    const sellerId = ticket.seller.id;
-    const sellerName = ticket.seller.fullName;
-
-    const current = byUser.get(sellerId) ?? {
-      userId: sellerId,
-      userName: sellerName,
+    const current = byUser.get(group.sellerId) ?? {
+      userId: group.sellerId,
+      userName: seller.fullName,
       ticketCount: 0,
       totalSales: 0,
       totalPrizes: 0,
@@ -884,18 +767,20 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       draws: new Map(),
     };
 
-    current.ticketCount += 1;
-    current.totalSales += ticket.total;
-    current.totalPrizes += prizeForTicket;
-    current.totalCommissions += commissionForTicket;
-    current.totalAssociateCommissions += associateCommissionForTicket;
+    current.ticketCount += group._count.id;
+    current.totalSales += group._sum.total ?? 0;
+    current.totalPrizes += group._sum.prize ?? 0;
+    current.totalCommissions += group._sum.commission ?? 0;
+    current.totalAssociateCommissions += associateCommissionForGroup;
     current.balance = current.totalSales - current.totalPrizes;
 
-    const drawCurrent = current.draws.get(ticket.draw.id) ?? {
-      drawId: ticket.draw.id,
-      drawName: ticket.draw.name,
-      drawCloseTime: ticket.draw.closeTime.toISOString(),
-      lastTicketCreatedAt: ticket.createdAt.toISOString(),
+    const maxCreatedAtStr = group._max.createdAt ? group._max.createdAt.toISOString() : new Date().toISOString();
+
+    const drawCurrent = current.draws.get(group.drawId) ?? {
+      drawId: group.drawId,
+      drawName: draw.name,
+      drawCloseTime: draw.closeTime.toISOString(),
+      lastTicketCreatedAt: maxCreatedAtStr,
       ticketCount: 0,
       totalSales: 0,
       totalPrizes: 0,
@@ -904,18 +789,19 @@ router.get('/balance-breakdown', authorizeResource('/reports/balance-breakdown')
       balance: 0,
     };
 
-    drawCurrent.ticketCount += 1;
-    drawCurrent.totalSales += ticket.total;
-    drawCurrent.totalPrizes += prizeForTicket;
-    drawCurrent.totalCommissions += commissionForTicket;
-    drawCurrent.totalAssociateCommissions += associateCommissionForTicket;
+    drawCurrent.ticketCount += group._count.id;
+    drawCurrent.totalSales += group._sum.total ?? 0;
+    drawCurrent.totalPrizes += group._sum.prize ?? 0;
+    drawCurrent.totalCommissions += group._sum.commission ?? 0;
+    drawCurrent.totalAssociateCommissions += associateCommissionForGroup;
     drawCurrent.balance = drawCurrent.totalSales - drawCurrent.totalPrizes;
-    if (ticket.createdAt.toISOString() > drawCurrent.lastTicketCreatedAt) {
-      drawCurrent.lastTicketCreatedAt = ticket.createdAt.toISOString();
+
+    if (maxCreatedAtStr > drawCurrent.lastTicketCreatedAt) {
+      drawCurrent.lastTicketCreatedAt = maxCreatedAtStr;
     }
 
-    current.draws.set(ticket.draw.id, drawCurrent);
-    byUser.set(sellerId, current);
+    current.draws.set(group.drawId, drawCurrent);
+    byUser.set(group.sellerId, current);
   }
 
   function hasSalesOrDescendantHasSales(userId: string): boolean {
@@ -1266,42 +1152,22 @@ router.get('/commissions', authorizeResource('/reports/commissions'), async (req
   const drawFilterRule = await getDrawFilterRule('reports.commissions');
   applyDrawFilterRule(where, drawFilterRule);
 
-  const defaultPlan = await prisma.plan.findFirst({
-    orderBy: { createdAt: 'asc' },
-    select: { commission: true },
+
+  const ticketGroups = await prisma.ticket.groupBy({
+    by: ['sellerId', 'drawId'],
+    where,
+    _sum: {
+      total: true,
+      commission: true,
+    },
   });
 
-  const tickets = await prisma.ticket.findMany({
-    where,
-    select: {
-      createdAt: true,
-      total: true,
-      draw: {
-        select: {
-          id: true,
-          name: true,
-          closeTime: true,
-        },
-      },
-      seller: {
-        select: {
-          id: true,
-          fullName: true,
-          username: true,
-          plan: { select: { commission: true } },
-        },
-      },
-      associate: {
-        select: {
-          plan: { select: { commission: true } },
-        },
-      },
-    },
-    orderBy: [
-      { seller: { fullName: 'asc' } },
-      { createdAt: 'desc' },
-    ],
+  const drawIds = Array.from(new Set(ticketGroups.map((g) => g.drawId)));
+  const draws = await prisma.draw.findMany({
+    where: { id: { in: drawIds } },
+    select: { id: true, name: true, closeTime: true },
   });
+  const drawById = new Map(draws.map((d) => [d.id, d]));
 
   const bySeller = new Map<string, {
     sellerId: string;
@@ -1312,34 +1178,39 @@ router.get('/commissions', authorizeResource('/reports/commissions'), async (req
     rows: Map<string, { drawId: string; drawName: string; drawCloseTime: string; totalSales: number; commission: number }>;
   }>();
 
-  for (const ticket of tickets) {
-    const commissionRate = (ticket.seller.plan?.commission ?? ticket.associate.plan?.commission ?? defaultPlan?.commission ?? 0) / 100;
-    const commission = ticket.total * commissionRate;
+  const userByIdMap = new Map(users.map((u) => [u.id, u]));
 
-    const current = bySeller.get(ticket.seller.id) ?? {
-      sellerId: ticket.seller.id,
-      sellerName: ticket.seller.fullName,
-      sellerUsername: ticket.seller.username,
+  for (const group of ticketGroups) {
+    const seller = userByIdMap.get(group.sellerId);
+    if (!seller) continue;
+
+    const draw = drawById.get(group.drawId);
+    if (!draw) continue;
+
+    const current = bySeller.get(group.sellerId) ?? {
+      sellerId: group.sellerId,
+      sellerName: seller.fullName,
+      sellerUsername: seller.username,
       totalSales: 0,
       subtotal: 0,
-      rows: new Map<string, { drawId: string; drawName: string; drawCloseTime: string; totalSales: number; commission: number }>(),
+      rows: new Map(),
     };
 
-    current.totalSales += ticket.total;
-    current.subtotal += commission;
+    current.totalSales += group._sum.total ?? 0;
+    current.subtotal += group._sum.commission ?? 0;
 
-    const row = current.rows.get(ticket.draw.id) ?? {
-      drawId: ticket.draw.id,
-      drawName: ticket.draw.name,
-      drawCloseTime: ticket.draw.closeTime.toISOString(),
+    const row = current.rows.get(group.drawId) ?? {
+      drawId: group.drawId,
+      drawName: draw.name,
+      drawCloseTime: draw.closeTime.toISOString(),
       totalSales: 0,
       commission: 0,
     };
-    row.totalSales += ticket.total;
-    row.commission += commission;
+    row.totalSales += group._sum.total ?? 0;
+    row.commission += group._sum.commission ?? 0;
 
-    current.rows.set(ticket.draw.id, row);
-    bySeller.set(ticket.seller.id, current);
+    current.rows.set(group.drawId, row);
+    bySeller.set(group.sellerId, current);
   }
 
   let parentId: string | null = null;
