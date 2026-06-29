@@ -12,7 +12,7 @@ import com.gameover.android.core.domain.model.MarkPaidResult
 interface ReportsRepository {
     suspend fun getSummary(fromDate: String? = null, toDate: String? = null, drawId: String? = null): ReportSummary
     suspend fun getTopNumbers(drawId: String, limit: Int = 10): List<TopNumber>
-    suspend fun getRecentTickets(limit: Int = 5): List<Ticket>
+    suspend fun getRecentTickets(limit: Int = 5, fromDate: String? = null, toDate: String? = null): List<Ticket>
     suspend fun getDrawLists(drawId: String): List<DrawListEntry>
 
     suspend fun getBalanceBreakdown(

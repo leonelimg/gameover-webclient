@@ -14,7 +14,7 @@ data class TicketDto(
     val sellerId: String,
     val associateId: String,
     val customerName: String,
-    val lines: List<TicketLineDto>,
+    val lines: List<TicketLineDto>? = null,
     val total: Double,
     val createdAt: String,
     val printedAt: String? = null,
@@ -29,7 +29,7 @@ data class TicketDto(
 )
 
 data class DrawSummaryDto(
-    val id: String,
+    val id: String? = null,
     val name: String,
     val specialMultiplier: SpecialMultiplierDto? = null,
 )
@@ -41,7 +41,7 @@ data class UserPlanSummaryDto(
 )
 
 data class UserSummaryDto(
-    val id: String,
+    val id: String? = null,
     val fullName: String,
     val username: String? = null,
     val plan: UserPlanSummaryDto? = null,

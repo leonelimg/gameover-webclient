@@ -388,8 +388,8 @@ router.get('/recent-tickets', authorizeAnyResource('/reports/sales-stats', '/das
     orderBy: { createdAt: 'desc' },
     take: parseInt(limit, 10),
     include: {
-      draw: { select: { name: true } },
-      seller: { select: { fullName: true } },
+      draw: { select: { id: true, name: true } },
+      seller: { select: { id: true, fullName: true } },
     },
   });
   res.json(tickets);

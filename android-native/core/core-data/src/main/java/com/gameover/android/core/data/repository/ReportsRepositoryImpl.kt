@@ -33,10 +33,10 @@ class ReportsRepositoryImpl @Inject constructor(
         response.body()?.map { it.toDomain() } ?: emptyList()
     }
 
-    override suspend fun getRecentTickets(limit: Int): List<Ticket> = withContext(Dispatchers.IO) {
-        val response = ticketsApi.getTickets()
+    override suspend fun getRecentTickets(limit: Int, fromDate: String?, toDate: String?): List<Ticket> = withContext(Dispatchers.IO) {
+        val response = reportsApi.getRecentTickets(limit = limit, fromDate = fromDate, toDate = toDate)
         if (!response.isSuccessful) throw Exception("Error al cargar tickets recientes: ${response.code()}")
-        (response.body() ?: emptyList()).take(limit).map { it.toDomain() }
+        response.body()?.map { it.toDomain() } ?: emptyList()
     }
 
     override suspend fun getDrawLists(drawId: String): List<DrawListEntry> = withContext(Dispatchers.IO) {

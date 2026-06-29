@@ -21,6 +21,8 @@ interface ReportsApi {
     @GET("api/reports/recent-tickets")
     suspend fun getRecentTickets(
         @Query("limit") limit: Int = 5,
+        @Query("fromDate") fromDate: String? = null,
+        @Query("toDate") toDate: String? = null,
     ): Response<List<TicketDto>>
 
     @GET("api/reports/draw-lists")

@@ -36,7 +36,7 @@ fun TicketDto.toDomain(): Ticket = Ticket(
     sellerId = sellerId,
     associateId = associateId,
     customerName = customerName,
-    lines = lines.map { TicketLine(it.number, it.amount, it.specialAmount, it.isNicaEspecial) },
+    lines = lines?.map { TicketLine(it.number, it.amount, it.specialAmount, it.isNicaEspecial) } ?: emptyList(),
     total = total,
     createdAt = createdAt,
     printedAt = printedAt,
@@ -47,7 +47,7 @@ fun TicketDto.toDomain(): Ticket = Ticket(
     cancelReason = cancelReason,
     draw = draw?.let {
         DrawSummary(
-            id = it.id,
+            id = it.id.orEmpty(),
             name = it.name,
             specialMultiplier = it.specialMultiplier?.let { sm ->
                 SpecialMultiplierSummary(sm.id, sm.name, sm.value)
@@ -56,7 +56,7 @@ fun TicketDto.toDomain(): Ticket = Ticket(
     },
     seller = seller?.let {
         UserSummary(
-            id = it.id,
+            id = it.id.orEmpty(),
             fullName = it.fullName,
             username = it.username.orEmpty(),
             planMultiplier = it.plan?.multiplier,

@@ -79,12 +79,12 @@ class DashboardViewModel @Inject constructor(
                 coroutineScope {
                     val summaryDeferred = async { reportsRepository.getSummary(fromDate = from, toDate = to) }
                     val balanceDeferred = async { cashMovementsRepository.getBalance(targetUserId = userId, fromDate = from, toDate = to) }
-                    val recentDeferred = async { ticketsRepository.getTickets() }
+                    val recentDeferred = async { reportsRepository.getRecentTickets(limit = 5, fromDate = from, toDate = to) }
                     val announcementsDeferred = async { announcementRepository.getActiveAnnouncements() }
                     
                     val summary = summaryDeferred.await()
                     val balance = try { balanceDeferred.await() } catch (e: Exception) { null }
-                    val recent = recentDeferred.await().take(5)
+                    val recent = recentDeferred.await()
                     val announcements = try { announcementsDeferred.await() } catch (e: Exception) { emptyList() }
                     
                     _uiState.update {
