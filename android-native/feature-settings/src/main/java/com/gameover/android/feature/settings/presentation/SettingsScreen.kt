@@ -83,6 +83,51 @@ fun SettingsScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            // App Update Section Header
+            item {
+                Text(
+                    "Aplicación",
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            // App Update Card
+            item {
+                GoCard(elevation = 2f) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                "Buscar actualización",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                            Text(
+                                "Versión actual: v${viewModel.getAppVersionName()}",
+                                fontSize = 12.sp,
+                                color = GoNeutral,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        GoButton(
+                            text = "Comprobar",
+                            onClick = viewModel::checkForUpdates,
+                            variant = ButtonVariant.TEXT,
+                            loading = uiState.isCheckingUpdates
+                        )
+                    }
+                }
+            }
+
+            item { Spacer(modifier = Modifier.height(8.dp)) }
+
             // Bluetooth section header
             item {
                 Text(
@@ -244,51 +289,6 @@ fun SettingsScreen(
                         loading = uiState.isTestPrinting,
                         variant = ButtonVariant.OUTLINED,
                     )
-                }
-            }
-
-            item { Spacer(modifier = Modifier.height(16.dp)) }
-
-            // App Update Section Header
-            item {
-                Text(
-                    "Aplicación",
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 16.sp,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-
-            // App Update Card
-            item {
-                GoCard(elevation = 2f) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(
-                                "Buscar actualización",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium,
-                                style = MaterialTheme.typography.labelLarge
-                            )
-                            Text(
-                                "Versión actual: v${viewModel.getAppVersionName()}",
-                                fontSize = 12.sp,
-                                color = GoNeutral,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                        GoButton(
-                            text = "Comprobar",
-                            onClick = viewModel::checkForUpdates,
-                            variant = ButtonVariant.TEXT,
-                            loading = uiState.isCheckingUpdates
-                        )
-                    }
                 }
             }
 
