@@ -71,4 +71,7 @@ abstract class DataBindsModule {
 
     @Binds
     abstract fun bindCashMovementsRepository(impl: CashMovementsRepositoryImpl): CashMovementsRepository
+
+    @Binds
+    abstract fun bindAppUpdateRepository(impl: AppUpdateRepositoryImpl): AppUpdateRepository
 }

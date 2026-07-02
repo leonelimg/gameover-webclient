@@ -3,6 +3,8 @@ package com.gameover.android.feature.settings.presentation
 import android.bluetooth.BluetoothDevice
 import com.gameover.android.feature.bluetooth.BtState
 
+import com.gameover.android.core.domain.model.AppUpdateInfo
+
 data class SettingsUiState(
     val pairedDevices: List<BluetoothDevice> = emptyList(),
     val connectionState: BtState = BtState.Disconnected,
@@ -11,4 +13,6 @@ data class SettingsUiState(
     val savedPrinterAddress: String = "",
     val statusMessage: String? = null,
     val isTestPrinting: Boolean = false,
+    val isCheckingUpdates: Boolean = false,
+    val updateInfo: AppUpdateInfo? = null,
 )

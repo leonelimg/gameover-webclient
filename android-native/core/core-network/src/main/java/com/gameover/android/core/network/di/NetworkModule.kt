@@ -90,4 +90,9 @@ object NetworkModule {
     @Singleton
     fun provideCashMovementsApi(@Named("main") retrofit: Retrofit): CashMovementsApi =
         retrofit.create(CashMovementsApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideAppUpdateApi(@Named("auth") retrofit: Retrofit): AppUpdateApi =
+        retrofit.create(AppUpdateApi::class.java)
 }
