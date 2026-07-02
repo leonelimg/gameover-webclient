@@ -14,4 +14,7 @@ interface DrawsApi {
         @Query("page") page: Int = 1,
         @Query("pageSize") pageSize: Int = 100,
     ): Response<DrawSearchResponseDto>
+
+    @GET("api/draws")
+    suspend fun getAllDraws(): Response<List<DrawDto>>
 }

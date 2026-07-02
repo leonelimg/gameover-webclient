@@ -46,8 +46,8 @@ class TicketsViewModel @Inject constructor(
         _uiState.update { it.copy(isLoading = true, error = null) }
         viewModelScope.launch {
             try {
-                val draws = drawsRepository.getDraws()
-                                val (fromDate, toDate) = getDatesForRange(_uiState.value.selectedRange)
+                val (fromDate, toDate) = getDatesForRange(_uiState.value.selectedRange)
+                val draws = drawsRepository.getDraws(fromDate, toDate)
                 val tickets = ticketsRepository.getTickets(
                     drawId = _uiState.value.selectedDrawId.takeIf { it.isNotBlank() },
                     includeCanceled = _uiState.value.includeCanceled,

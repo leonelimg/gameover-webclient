@@ -12,8 +12,14 @@ class DrawsRepositoryImpl @Inject constructor(
     private val drawsApi: DrawsApi,
 ) : DrawsRepository {
     override suspend fun getDraws(fromDate: String?, toDate: String?): List<Draw> = withContext(Dispatchers.IO) {
-        val response = drawsApi.getDraws(fromDate = fromDate, toDate = toDate, page = 1, pageSize = 100)
-        if (!response.isSuccessful) throw Exception("Error al cargar sorteos: ${response.code()}")
-        response.body()?.items?.map { it.toDomain() } ?: emptyList()
+        if (fromDate == null && toDate == null) {
+            val response = drawsApi.getAllDraws()
+            if (!response.isSuccessful) throw Exception("Error al cargar sorteos: ${response.code()}")
+            response.body()?.map { it.toDomain() } ?: emptyList()
+        } else {
+            val response = drawsApi.getDraws(fromDate = fromDate, toDate = toDate, page = 1, pageSize = 100)
+            if (!response.isSuccessful) throw Exception("Error al cargar sorteos: ${response.code()}")
+            response.body()?.items?.map { it.toDomain() } ?: emptyList()
+        }
     }
 }

@@ -65,7 +65,8 @@ class SalesViewModel @Inject constructor(
         _uiState.update { it.copy(isLoadingDraws = true) }
         viewModelScope.launch {
             try {
-                val draws = drawsRepository.getDraws()
+                val todayStr = java.time.LocalDate.now().toString()
+                val draws = drawsRepository.getDraws(fromDate = todayStr)
                 _uiState.update { state ->
                     val firstOpen = draws.firstOrNull { it.isOpen() }
                     val selectedId = if (draws.any { it.id == state.selectedDrawId }) state.selectedDrawId
