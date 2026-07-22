@@ -4,6 +4,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -13,6 +16,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Refresh
@@ -60,6 +64,12 @@ fun SalesScreen(
     viewModel: SalesViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val textFieldColors = OutlinedTextFieldDefaults.colors(
+        focusedBorderColor = Color(0xFF673AB7),
+        unfocusedBorderColor = if (isSystemInDarkTheme()) Color(0xFFCCCCCC) else Color(0xFF1E1E1E),
+        focusedLabelColor = Color(0xFF673AB7),
+        unfocusedLabelColor = if (isSystemInDarkTheme()) Color(0xFFAAAAAA) else Color(0xFF555555),
+    )
     val snackbarHostState = remember { SnackbarHostState() }
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
@@ -238,24 +248,30 @@ fun SalesScreen(
                         return@LazyColumn
                     }
 
-                    // Draw selector
+                    // Draw selector & Customer name
                     item {
-                        DrawSelector(
-                            openDraws = uiState.openDraws,
-                            selectedDrawId = uiState.selectedDrawId,
-                            onDrawSelected = viewModel::onDrawSelected,
-                            isLoading = uiState.isLoadingDraws,
-                        )
-                    }
-
-                    // Customer name (optional)
-                    item {
-                        GoTextField(
-                            value = uiState.customerName,
-                            onValueChange = viewModel::onCustomerNameChanged,
-                            label = "Nombre del cliente",
-                            placeholder = "Juan Pérez (opcional)",
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            DrawSelector(
+                                openDraws = uiState.openDraws,
+                                selectedDrawId = uiState.selectedDrawId,
+                                onDrawSelected = viewModel::onDrawSelected,
+                                isLoading = uiState.isLoadingDraws,
+                                modifier = Modifier.weight(1f),
+                                colors = textFieldColors,
+                            )
+                            GoTextField(
+                                value = uiState.customerName,
+                                onValueChange = viewModel::onCustomerNameChanged,
+                                label = "Cliente",
+                                placeholder = "Juan Pérez",
+                                modifier = Modifier.weight(1f),
+                                colors = textFieldColors,
+                            )
+                        }
                     }
 
                     // Active special multiplier indicator
@@ -290,23 +306,61 @@ fun SalesScreen(
                         }
                     }
 
-                    // Bet lines header
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                "Números",
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 16.sp,
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            TextButton(onClick = viewModel::addLine) {
-                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Agregar", style = MaterialTheme.typography.labelSmall)
+                    // Restricted numbers section (replacing "Numeros" label and "Agregar" button)
+                    if (uiState.restrictedNumbers.isNotEmpty()) {
+                        item {
+                            OutlinedCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                border = CardDefaults.outlinedCardBorder(enabled = true).copy(
+                                    brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.error.copy(alpha = 0.4f))
+                                )
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Warning,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text(
+                                            text = "RESTRINGIDOS",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 10.sp,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .horizontalScroll(rememberScrollState()),
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        uiState.restrictedNumbers.forEach { number ->
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f),
+                                                shape = MaterialTheme.shapes.small
+                                            ) {
+                                                Text(
+                                                    text = number,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.error,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -339,7 +393,8 @@ fun SalesScreen(
                             onDelete = { viewModel.removeLine(line.id) },
                             numberFocusRequester = numberFocusRequester,
                             isLastLine = index == uiState.lines.lastIndex,
-                            onNextLine = { viewModel.addLine() }
+                            onNextLine = { viewModel.addLine() },
+                            colors = textFieldColors,
                         )
                     }
                 }
@@ -417,11 +472,17 @@ private fun DrawSelector(
     selectedDrawId: String,
     onDrawSelected: (String) -> Unit,
     isLoading: Boolean,
+    modifier: Modifier = Modifier,
+    colors: TextFieldColors = OutlinedTextFieldDefaults.colors(),
 ) {
     var expanded by remember { mutableStateOf(false) }
     val selectedDraw = openDraws.find { it.id == selectedDrawId }
 
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = modifier
+    ) {
         OutlinedTextField(
             value = selectedDraw?.name ?: if (isLoading) "Cargando..." else "Selecciona un sorteo...",
             onValueChange = {},
@@ -431,6 +492,7 @@ private fun DrawSelector(
             modifier = Modifier
                 .fillMaxWidth()
                 .menuAnchor(),
+            colors = colors,
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             if (openDraws.isEmpty()) {
@@ -464,6 +526,7 @@ private fun BetLineRow(
     numberFocusRequester: FocusRequester,
     isLastLine: Boolean,
     onNextLine: () -> Unit,
+    colors: TextFieldColors = OutlinedTextFieldDefaults.colors(),
 ) {
     val focusManager = LocalFocusManager.current
 
@@ -505,6 +568,7 @@ private fun BetLineRow(
                 ),
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodySmall,
+                colors = colors,
             )
             OutlinedTextField(
                 value = amountValue,
@@ -549,6 +613,7 @@ private fun BetLineRow(
                 ),
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodySmall,
+                colors = colors,
             )
             if (showSpecial) {
                 OutlinedTextField(
@@ -590,6 +655,7 @@ private fun BetLineRow(
                     ),
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodySmall,
+                    colors = colors,
                 )
             }
             FilledIconButton(

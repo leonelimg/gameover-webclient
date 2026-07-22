@@ -31,6 +31,7 @@ data class SalesUiState(
     val searchTicketCode: String = "",
     val isSearchingTicket: Boolean = false,
     val searchError: String? = null,
+    val restrictedNumbers: List<String> = emptyList(),
 ) {
     val selectedDraw: Draw? get() = draws.find { it.id == selectedDrawId }
     val hasSpecialMultiplier: Boolean get() = selectedDraw?.specialMultiplier != null

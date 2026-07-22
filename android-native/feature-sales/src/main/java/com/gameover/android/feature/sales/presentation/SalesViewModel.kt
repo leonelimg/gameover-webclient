@@ -10,6 +10,7 @@ import com.gameover.android.core.domain.repository.FrontendSettingsRepository
 import com.gameover.android.core.domain.repository.OfflineQueueRepository
 import com.gameover.android.core.domain.repository.ReportsRepository
 import com.gameover.android.core.domain.repository.TicketsRepository
+import com.gameover.android.core.domain.repository.NumberRestrictionsRepository
 import com.gameover.android.core.domain.usecase.CancelTicketUseCase
 import com.gameover.android.core.domain.usecase.CreateTicketUseCase
 import com.gameover.android.core.domain.usecase.EnqueueOfflineSaleUseCase
@@ -42,6 +43,7 @@ class SalesViewModel @Inject constructor(
     private val frontendSettingsRepository: FrontendSettingsRepository,
     private val ticketsRepository: TicketsRepository,
     private val reportsRepository: ReportsRepository,
+    private val numberRestrictionsRepository: NumberRestrictionsRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SalesUiState())
@@ -49,6 +51,7 @@ class SalesViewModel @Inject constructor(
 
     init {
         loadDraws()
+        loadRestrictedNumbers()
         viewModelScope.launch {
             networkMonitor.isOnline.collect { online ->
                 _uiState.update { it.copy(isOnline = online) }
@@ -63,6 +66,7 @@ class SalesViewModel @Inject constructor(
 
     fun loadDraws() {
         _uiState.update { it.copy(isLoadingDraws = true) }
+        loadRestrictedNumbers()
         viewModelScope.launch {
             try {
                 val todayStr = java.time.LocalDate.now().toString()
@@ -78,6 +82,17 @@ class SalesViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoadingDraws = false) }
+            }
+        }
+    }
+
+    private fun loadRestrictedNumbers() {
+        viewModelScope.launch {
+            try {
+                val restrictions = numberRestrictionsRepository.getGlobalNumbers()
+                _uiState.update { it.copy(restrictedNumbers = restrictions.map { it.number }) }
+            } catch (e: Exception) {
+                // Fail silently
             }
         }
     }

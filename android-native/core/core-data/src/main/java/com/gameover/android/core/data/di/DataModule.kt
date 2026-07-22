@@ -74,4 +74,7 @@ abstract class DataBindsModule {
 
     @Binds
     abstract fun bindAppUpdateRepository(impl: AppUpdateRepositoryImpl): AppUpdateRepository
+
+    @Binds
+    abstract fun bindNumberRestrictionsRepository(impl: NumberRestrictionsRepositoryImpl): NumberRestrictionsRepository
 }

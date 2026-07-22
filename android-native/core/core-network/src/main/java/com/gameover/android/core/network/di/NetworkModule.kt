@@ -95,4 +95,9 @@ object NetworkModule {
     @Singleton
     fun provideAppUpdateApi(@Named("auth") retrofit: Retrofit): AppUpdateApi =
         retrofit.create(AppUpdateApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideNumberRestrictionsApi(@Named("main") retrofit: Retrofit): NumberRestrictionsApi =
+        retrofit.create(NumberRestrictionsApi::class.java)
 }
