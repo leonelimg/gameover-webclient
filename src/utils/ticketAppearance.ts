@@ -7,6 +7,8 @@ export const DEFAULT_FRONTEND_TICKET_SETTINGS: FrontendTicketSettings = {
   ticketCodeFontSize: 32,
   defaultTicketWidth: 80,
   sellerTicketWidths: {},
+  balanceThresholdNormal: 1000,
+  balanceThresholdWarning: 5000,
 };
 
 let cachedFrontendTicketSettings: FrontendTicketSettings = DEFAULT_FRONTEND_TICKET_SETTINGS;
@@ -52,12 +54,19 @@ const normalizeSellerTicketWidths = (
   return normalized;
 };
 
+const normalizeThresholdValue = (value: number | string | null | undefined, defaultValue: number) => {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : defaultValue;
+};
+
 const normalizeSettings = (value?: Partial<FrontendTicketSettings> | null): FrontendTicketSettings => ({
   ticketTitle: normalizeTicketTitle(value?.ticketTitle),
   footerNote: normalizeFooterNote(value?.footerNote),
   ticketCodeFontSize: normalizeTicketCodeFontSize(value?.ticketCodeFontSize),
   defaultTicketWidth: normalizeTicketWidth(value?.defaultTicketWidth),
   sellerTicketWidths: normalizeSellerTicketWidths(value?.sellerTicketWidths),
+  balanceThresholdNormal: normalizeThresholdValue(value?.balanceThresholdNormal, DEFAULT_FRONTEND_TICKET_SETTINGS.balanceThresholdNormal),
+  balanceThresholdWarning: normalizeThresholdValue(value?.balanceThresholdWarning, DEFAULT_FRONTEND_TICKET_SETTINGS.balanceThresholdWarning),
 });
 
 const setCachedFrontendTicketSettings = (value?: Partial<FrontendTicketSettings> | null): FrontendTicketSettings => {

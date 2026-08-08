@@ -17,6 +17,8 @@ export default function FrontendSettingsPage() {
   const [footerNote, setFooterNote] = useState(currentSettings.footerNote);
   const [ticketCodeFontSize, setTicketCodeFontSize] = useState(currentSettings.ticketCodeFontSize);
   const [defaultTicketWidth, setDefaultTicketWidth] = useState<58 | 80>(currentSettings.defaultTicketWidth);
+  const [balanceThresholdNormal, setBalanceThresholdNormal] = useState(currentSettings.balanceThresholdNormal);
+  const [balanceThresholdWarning, setBalanceThresholdWarning] = useState(currentSettings.balanceThresholdWarning);
   const [sellerRows, setSellerRows] = useState<FrontendTicketVendorWidthRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -30,6 +32,8 @@ export default function FrontendSettingsPage() {
         setFooterNote(settings.footerNote);
         setTicketCodeFontSize(settings.ticketCodeFontSize);
         setDefaultTicketWidth(settings.defaultTicketWidth);
+        setBalanceThresholdNormal(settings.balanceThresholdNormal);
+        setBalanceThresholdWarning(settings.balanceThresholdWarning);
         setSellerRows(widths.sellers);
       })
       .catch(() => {
@@ -59,11 +63,15 @@ export default function FrontendSettingsPage() {
         ticketCodeFontSize,
         defaultTicketWidth,
         sellerTicketWidths,
+        balanceThresholdNormal,
+        balanceThresholdWarning,
       });
       setTicketTitle(saved.ticketTitle);
       setFooterNote(saved.footerNote);
       setTicketCodeFontSize(saved.ticketCodeFontSize);
       setDefaultTicketWidth(saved.defaultTicketWidth);
+      setBalanceThresholdNormal(saved.balanceThresholdNormal);
+      setBalanceThresholdWarning(saved.balanceThresholdWarning);
       setSellerRows((prev) =>
         prev.map((seller) => ({
           ...seller,
@@ -89,6 +97,8 @@ export default function FrontendSettingsPage() {
       setFooterNote(reset.footerNote);
       setTicketCodeFontSize(reset.ticketCodeFontSize);
       setDefaultTicketWidth(reset.defaultTicketWidth);
+      setBalanceThresholdNormal(reset.balanceThresholdNormal);
+      setBalanceThresholdWarning(reset.balanceThresholdWarning);
       setSellerRows((prev) =>
         prev.map((seller) => ({
           ...seller,
@@ -211,6 +221,47 @@ export default function FrontendSettingsPage() {
               <option value={80}>80 mm</option>
             </select>
           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="balance-threshold-normal" className="text-sm font-medium text-slate-700">
+                Límite Normal (BIEN) - Saldo menor o igual a
+              </label>
+              <input
+                id="balance-threshold-normal"
+                type="number"
+                value={balanceThresholdNormal}
+                onChange={(event) => {
+                  setBalanceThresholdNormal(Number(event.target.value));
+                  setSuccess('');
+                  setError('');
+                }}
+                disabled={loading || saving}
+                className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label htmlFor="balance-threshold-warning" className="text-sm font-medium text-slate-700">
+                Límite Alerta (ALERTA) - Saldo menor o igual a
+              </label>
+              <input
+                id="balance-threshold-warning"
+                type="number"
+                value={balanceThresholdWarning}
+                onChange={(event) => {
+                  setBalanceThresholdWarning(Number(event.target.value));
+                  setSuccess('');
+                  setError('');
+                }}
+                disabled={loading || saving}
+                className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <p className="text-xs text-slate-500 -mt-2">
+            Configuración de límites de balance para vendedores: <b>BIEN</b> si es menor o igual a Normal; <b>ALERTA</b> si es mayor a Normal pero menor o igual a Alerta; <b>CRÍTICO</b> si es mayor a Alerta.
+          </p>
 
           <div className="rounded-lg border border-slate-200 bg-white">
             <div className="border-b border-slate-200 px-4 py-3">

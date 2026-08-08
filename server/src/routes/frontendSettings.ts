@@ -31,6 +31,8 @@ const frontendTicketSettingsSchema = z.object({
   ticketCodeFontSize: z.number().int().min(18).max(64),
   defaultTicketWidth: z.union([z.literal(58), z.literal(80)]),
   sellerTicketWidths: z.record(z.string(), z.union([z.literal(58), z.literal(80)])),
+  balanceThresholdNormal: z.number(),
+  balanceThresholdWarning: z.number(),
 });
 
 const reportingFilterRuleSchema = z.object({

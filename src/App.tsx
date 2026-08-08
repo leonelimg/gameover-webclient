@@ -13,6 +13,7 @@ import MultiplicadoresEspecialesPage from '@/pages/MultiplicadoresEspeciales/Mul
 import SalesPage from '@/pages/Sales/SalesPage';
 import ReportsPage from '@/pages/Reports/ReportsPage';
 import BalanceBreakdownPage from '@/pages/Reports/BalanceBreakdownPage';
+import SellersBalancePage from '@/pages/Reports/SellersBalancePage';
 import SalesByUserPage from '@/pages/Reports/SalesByUserPage';
 import DrawListsPage from '@/pages/Reports/DrawListsPage';
 import PrintQueuePage from '@/pages/PrintQueue/PrintQueuePage';
@@ -44,6 +45,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route element={<AppLayout />}>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<ProtectedByPermission resourceKey="/dashboard" element={<DashboardPage />} />} />
             <Route path="/users" element={<ProtectedByPermission resourceKey="/users" element={<UsersPage />} />} />
             <Route path="/roles" element={<ProtectedByPermission resourceKey="/roles" element={<RolesPage />} />} />
@@ -67,6 +69,7 @@ export default function App() {
             <Route path="/reports" element={<ProtectedByPermission resourceKey="/reports" element={<Navigate to="/reports/sales-stats" replace />} />} />
             <Route path="/reports/sales-stats" element={<ProtectedByPermission resourceKey="/reports/sales-stats" element={<ReportsPage />} />} />
             <Route path="/reports/balance-breakdown" element={<ProtectedByPermission resourceKey="/reports/balance-breakdown" element={<BalanceBreakdownPage />} />} />
+            <Route path="/reports/sellers-balance" element={<ProtectedByPermission resourceKey="/reports/sellers-balance" element={<SellersBalancePage />} />} />
             <Route path="/reports/sales-by-user" element={<ProtectedByPermission resourceKey="/reports/sales-by-user" element={<SalesByUserPage />} />} />
             <Route path="/reports/draw-lists" element={<ProtectedByPermission resourceKey="/reports/draw-lists" element={<DrawListsPage />} />} />
             <Route path="/reports/commissions" element={<ProtectedByPermission resourceKey="/reports/commissions" element={<CommissionsPage />} />} />

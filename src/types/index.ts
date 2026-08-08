@@ -71,6 +71,8 @@ export interface FrontendTicketSettings {
   ticketCodeFontSize: number;
   defaultTicketWidth: 58 | 80;
   sellerTicketWidths: Record<string, 58 | 80>;
+  balanceThresholdNormal: number;
+  balanceThresholdWarning: number;
 }
 
 export interface FrontendTicketVendorWidthRow {

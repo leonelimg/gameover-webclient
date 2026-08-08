@@ -6,6 +6,8 @@ export interface FrontendTicketSettings {
   ticketCodeFontSize: number;
   defaultTicketWidth: 58 | 80;
   sellerTicketWidths: Record<string, 58 | 80>;
+  balanceThresholdNormal: number;
+  balanceThresholdWarning: number;
 }
 
 export const FRONTEND_TICKET_TITLE_SETTING_KEY = 'frontend.ticket-title';
@@ -13,6 +15,8 @@ export const FRONTEND_TICKET_FOOTER_NOTE_SETTING_KEY = 'frontend.ticket-footer-n
 export const FRONTEND_TICKET_CODE_FONT_SIZE_SETTING_KEY = 'frontend.ticket-code-font-size';
 export const FRONTEND_TICKET_DEFAULT_WIDTH_SETTING_KEY = 'frontend.ticket-default-width';
 export const FRONTEND_TICKET_SELLER_WIDTHS_SETTING_KEY = 'frontend.ticket-seller-widths';
+export const FRONTEND_BALANCE_THRESHOLD_NORMAL_SETTING_KEY = 'frontend.balance-threshold-normal';
+export const FRONTEND_BALANCE_THRESHOLD_WARNING_SETTING_KEY = 'frontend.balance-threshold-warning';
 
 export const DEFAULT_FRONTEND_TICKET_SETTINGS: FrontendTicketSettings = {
   ticketTitle: 'GameOver Loteria',
@@ -20,6 +24,8 @@ export const DEFAULT_FRONTEND_TICKET_SETTINGS: FrontendTicketSettings = {
   ticketCodeFontSize: 32,
   defaultTicketWidth: 80,
   sellerTicketWidths: {},
+  balanceThresholdNormal: 1000,
+  balanceThresholdWarning: 5000,
 };
 
 function normalizeTicketTitle(value: string | null | undefined): string {
@@ -73,6 +79,11 @@ function normalizeSellerTicketWidths(
   return normalized;
 }
 
+function normalizeThreshold(value: number | string | null | undefined, defaultValue: number): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : defaultValue;
+}
+
 function normalizeSettings(value?: Partial<FrontendTicketSettings> | null): FrontendTicketSettings {
   return {
     ticketTitle: normalizeTicketTitle(value?.ticketTitle),
@@ -80,6 +91,8 @@ function normalizeSettings(value?: Partial<FrontendTicketSettings> | null): Fron
     ticketCodeFontSize: normalizeTicketCodeFontSize(value?.ticketCodeFontSize),
     defaultTicketWidth: normalizeTicketWidth(value?.defaultTicketWidth),
     sellerTicketWidths: normalizeSellerTicketWidths(value?.sellerTicketWidths),
+    balanceThresholdNormal: normalizeThreshold(value?.balanceThresholdNormal, DEFAULT_FRONTEND_TICKET_SETTINGS.balanceThresholdNormal),
+    balanceThresholdWarning: normalizeThreshold(value?.balanceThresholdWarning, DEFAULT_FRONTEND_TICKET_SETTINGS.balanceThresholdWarning),
   };
 }
 
@@ -93,6 +106,8 @@ export async function getFrontendTicketSettings(): Promise<FrontendTicketSetting
           FRONTEND_TICKET_CODE_FONT_SIZE_SETTING_KEY,
           FRONTEND_TICKET_DEFAULT_WIDTH_SETTING_KEY,
           FRONTEND_TICKET_SELLER_WIDTHS_SETTING_KEY,
+          FRONTEND_BALANCE_THRESHOLD_NORMAL_SETTING_KEY,
+          FRONTEND_BALANCE_THRESHOLD_WARNING_SETTING_KEY,
         ],
       },
     },
@@ -115,6 +130,8 @@ export async function getFrontendTicketSettings(): Promise<FrontendTicketSetting
         : undefined,
     defaultTicketWidth: storedDefaultWidth !== undefined ? normalizeTicketWidth(storedDefaultWidth) : undefined,
     sellerTicketWidths: storedSellerWidths !== undefined ? normalizeSellerTicketWidths(storedSellerWidths) : undefined,
+    balanceThresholdNormal: map.get(FRONTEND_BALANCE_THRESHOLD_NORMAL_SETTING_KEY) !== undefined ? Number(map.get(FRONTEND_BALANCE_THRESHOLD_NORMAL_SETTING_KEY)) : undefined,
+    balanceThresholdWarning: map.get(FRONTEND_BALANCE_THRESHOLD_WARNING_SETTING_KEY) !== undefined ? Number(map.get(FRONTEND_BALANCE_THRESHOLD_WARNING_SETTING_KEY)) : undefined,
   });
 }
 
@@ -170,6 +187,26 @@ export async function setFrontendTicketSettings(value: FrontendTicketSettings): 
       },
       update: {
         value: JSON.stringify(normalized.sellerTicketWidths),
+      },
+    }),
+    prisma.systemSetting.upsert({
+      where: { key: FRONTEND_BALANCE_THRESHOLD_NORMAL_SETTING_KEY },
+      create: {
+        key: FRONTEND_BALANCE_THRESHOLD_NORMAL_SETTING_KEY,
+        value: String(normalized.balanceThresholdNormal),
+      },
+      update: {
+        value: String(normalized.balanceThresholdNormal),
+      },
+    }),
+    prisma.systemSetting.upsert({
+      where: { key: FRONTEND_BALANCE_THRESHOLD_WARNING_SETTING_KEY },
+      create: {
+        key: FRONTEND_BALANCE_THRESHOLD_WARNING_SETTING_KEY,
+        value: String(normalized.balanceThresholdWarning),
+      },
+      update: {
+        value: String(normalized.balanceThresholdWarning),
       },
     }),
   ]);

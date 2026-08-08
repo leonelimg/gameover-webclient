@@ -94,6 +94,11 @@ const NAV_ITEMS: NavItem[] = [
         label: 'Desglose de balance por asociados/vendedores',
       },
       {
+        to: '/reports/sellers-balance',
+        label: 'Balance final por vendedor',
+        permissionKey: '/reports/sellers-balance',
+      },
+      {
         to: '/reports/sales-by-user',
         label: 'Ventas por usuario / tickets',
       },
