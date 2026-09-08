@@ -229,8 +229,11 @@ export const mapSaleTicketToPrintBridge = ({
     const regularTotal = ticket.lines.reduce((sum, line) => sum + line.amount, 0);
     const specialTotal = ticket.lines.reduce((sum, line) => sum + (line.specialAmount ?? 0), 0);
     const hasSpecialAmounts = ticket.lines.some((line) => (line.specialAmount ?? 0) > 0);
-    const regularMultiplier = ticket.seller?.plan?.multiplier;
     const effectiveDraw = draw ?? ticket.draw;
+    const regularMultiplier =
+      (effectiveDraw && 'drawType' in effectiveDraw && effectiveDraw.drawType?.multiplier)
+        ? effectiveDraw.drawType.multiplier
+        : (ticket.draw?.drawType?.multiplier ?? 80);
     const specialMultiplier = effectiveDraw?.specialMultiplier?.value;
     const drawUsesSpecial = typeof specialMultiplier === 'number' ? specialMultiplier > 0 : hasSpecialAmounts;
     const showSpecialColumn = drawUsesSpecial && hasSpecialAmounts;

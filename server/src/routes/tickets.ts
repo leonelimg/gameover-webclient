@@ -52,8 +52,9 @@ function drawCancellationLocked(draw: { closeTime: Date; minutosPreviosCierre: n
 }
 
 const ticketLineSchema = z.object({
-  number: z.string().regex(/^\d{2}$/, 'El número debe tener exactamente 2 dígitos.'),
-  amount: z.number().positive(),
+  number: z.string().regex(/^\d+$/, 'El número debe contener solo dígitos.').min(1, 'El número es requerido.'),
+  amount: z.number().positive('El monto debe ser mayor a 0.'),
+  specialAmount: z.number().nonnegative().optional().nullable(),
   isNicaEspecial: z.boolean().default(false),
 });
 
@@ -207,6 +208,14 @@ router.get('/:id', authorizeAnyResource('/sales', '/ticket-payments', '/reports/
           name: true,
           closeTime: true,
           minutosPreviosCierre: true,
+          drawType: {
+            select: {
+              id: true,
+              name: true,
+              digits: true,
+              multiplier: true,
+            },
+          },
           specialMultiplier: {
             select: {
               id: true,
@@ -256,15 +265,16 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
   const drawType = draw.drawType;
   const drawTypeId = draw.drawTypeId ?? undefined;
 
-  if (drawType) {
-    for (const line of body.lines) {
-      const cleanNum = line.number.trim();
-      if (cleanNum.length !== drawType.digits || !/^\d+$/.test(cleanNum)) {
-        res.status(400).json({
-          message: `El número "${line.number}" debe tener exactamente ${drawType.digits} dígitos para el tipo de sorteo "${drawType.name}".`,
-        });
-        return;
-      }
+  const expectedDigits = drawType?.digits ?? 2;
+  for (const line of body.lines) {
+    const cleanNum = line.number.trim();
+    if (cleanNum.length !== expectedDigits || !/^\d+$/.test(cleanNum)) {
+      res.status(400).json({
+        message: drawType
+          ? `El número "${line.number}" debe tener exactamente ${drawType.digits} dígitos para el tipo de sorteo "${drawType.name}".`
+          : `El número "${line.number}" debe tener exactamente 2 dígitos.`,
+      });
+      return;
     }
   }
 
@@ -422,7 +432,14 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
       drawId: body.drawId,
       sellerId: req.user!.sub,
       associateId,
-      lines: { create: body.lines.map((l) => ({ number: l.number, amount: l.amount, isNicaEspecial: l.isNicaEspecial })) },
+      lines: {
+        create: body.lines.map((l) => ({
+          number: l.number,
+          amount: l.amount,
+          specialAmount: l.specialAmount ?? null,
+          isNicaEspecial: l.isNicaEspecial,
+        })),
+      },
     },
     include: {
       lines: true,
@@ -432,6 +449,14 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
           name: true,
           closeTime: true,
           minutosPreviosCierre: true,
+          drawType: {
+            select: {
+              id: true,
+              name: true,
+              digits: true,
+              multiplier: true,
+            },
+          },
           specialMultiplier: {
             select: {
               id: true,

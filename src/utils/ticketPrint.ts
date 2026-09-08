@@ -53,7 +53,7 @@ export async function printSaleTicket(ticket: Ticket): Promise<void> {
   const specialTotal = showSpecialColumn
     ? ticket.lines.reduce((sum, line) => sum + (line.specialAmount ?? 0), 0)
     : 0;
-  const regularMultiplier = ticket.seller?.plan?.multiplier;
+  const regularMultiplier = ticket.draw?.drawType?.multiplier ?? 80;
   const specialMultiplier = ticket.draw?.specialMultiplier?.value;
   const effectiveMultiplier = showSpecialColumn && typeof specialMultiplier === 'number'
     ? specialMultiplier

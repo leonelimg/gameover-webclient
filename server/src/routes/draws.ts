@@ -197,14 +197,7 @@ async function updatePrizesForDraw(drawId: string, winnerNumber: string | null):
   });
 
   const specialMultiplierValue = draw?.specialMultiplier?.value ?? null;
-
-  const defaultPlan = await prisma.plan.findFirst({
-    orderBy: { createdAt: 'asc' },
-    select: { multiplier: true },
-  });
-
-  // Effective base multiplier comes from DrawType if present, else plan multiplier
-  const drawTypeMultiplier = draw?.drawType?.multiplier ?? null;
+  const regularMultiplier = draw?.drawType?.multiplier ?? 80;
 
   const tickets = await prisma.ticket.findMany({
     where: { drawId, canceledAt: null },
@@ -218,23 +211,10 @@ async function updatePrizesForDraw(drawId: string, winnerNumber: string | null):
           specialAmount: true,
         },
       },
-      seller: {
-        select: {
-          plan: { select: { multiplier: true } },
-        },
-      },
-      associate: {
-        select: {
-          plan: { select: { multiplier: true } },
-        },
-      },
     },
   });
 
   const updates = tickets.map((ticket) => {
-    const effectivePlan = ticket.seller.plan ?? ticket.associate.plan ?? defaultPlan;
-    const regularMultiplier = drawTypeMultiplier ?? effectivePlan?.multiplier ?? 0;
-
     let prize = 0;
     for (const line of ticket.lines) {
       if (normalizeNumber(line.number) === normalizedWinner) {

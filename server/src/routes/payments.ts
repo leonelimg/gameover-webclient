@@ -161,12 +161,11 @@ function extractTicketCodeCandidates(value: string): string[] {
   return Array.from(candidates);
 }
 
-function calculatePrize(ticket: PaymentTicket, defaultPlanMultiplier: number): number {
+function calculatePrize(ticket: PaymentTicket): number {
   const winnerNumber = ticket.draw.winnerNumber;
   if (!winnerNumber) return 0;
 
-  const effectiveMultiplier =
-    ticket.seller.plan?.multiplier ?? ticket.associate.plan?.multiplier ?? defaultPlanMultiplier;
+  const effectiveMultiplier = ticket.draw.drawType?.multiplier ?? 80;
   const specialMultiplierValue = ticket.draw.specialMultiplier?.value ?? null;
   const normalizedWinner = normalizeNumber(winnerNumber);
 
@@ -201,6 +200,7 @@ async function getTicketForPayment(where: { id?: string; code?: string }): Promi
           id: true,
           name: true,
           winnerNumber: true,
+          drawType: { select: { id: true, name: true, multiplier: true } },
           specialMultiplier: { select: { id: true, name: true, value: true } },
         },
       },
@@ -284,11 +284,7 @@ router.get('/winning-tickets', async (req, res) => {
     where['code'] = { contains: code, mode: 'insensitive' };
   }
 
-  const defaultPlan = await prisma.plan.findFirst({
-    orderBy: { createdAt: 'asc' },
-    select: { multiplier: true },
-  });
-  const defaultPlanMultiplier = defaultPlan?.multiplier ?? 0;
+
 
   const tickets = (await prisma.ticket.findMany({
     where: {
@@ -306,6 +302,7 @@ router.get('/winning-tickets', async (req, res) => {
           id: true,
           name: true,
           winnerNumber: true,
+          drawType: { select: { id: true, name: true, multiplier: true } },
           specialMultiplier: { select: { id: true, name: true, value: true } },
         },
       },
@@ -331,7 +328,7 @@ router.get('/winning-tickets', async (req, res) => {
 
   const winnerTickets = tickets
     .map((ticket) => {
-      const prizeAmount = calculatePrize(ticket, defaultPlanMultiplier);
+      const prizeAmount = calculatePrize(ticket);
       const normalizedWinner = ticket.draw.winnerNumber ? normalizeNumber(ticket.draw.winnerNumber) : null;
       const winningNumbers = normalizedWinner
         ? ticket.lines
@@ -418,11 +415,7 @@ router.patch('/mark-paid', authorizeResource('/ticket-payments:mark-paid'), vali
     return;
   }
 
-  const defaultPlan = await prisma.plan.findFirst({
-    orderBy: { createdAt: 'asc' },
-    select: { multiplier: true },
-  });
-  const prizeAmount = calculatePrize(ticket, defaultPlan?.multiplier ?? 0);
+  const prizeAmount = calculatePrize(ticket);
   if (prizeAmount <= 0) {
     res.status(400).json({ message: 'El ticket no contiene número ganador para pagar.' });
     return;

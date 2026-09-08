@@ -10,7 +10,7 @@ router.use(authenticate);
 
 const planSchema = z.object({
   name: z.string().min(2),
-  multiplier: z.number().positive(),
+  multiplier: z.number().positive().optional().default(80),
   commission: z.number().min(0).max(100),
   masterId: z.string().optional().nullable(),
 });

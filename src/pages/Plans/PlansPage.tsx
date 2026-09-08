@@ -11,14 +11,12 @@ import { plansApi, usersApi, PlanPayload } from '@/services/api';
 
 interface PlanFormData {
   name: string;
-  multiplier: string;
   commission: string;
   masterId: string;
 }
 
 const emptyForm: PlanFormData = {
   name: '',
-  multiplier: '60',
   commission: '10',
   masterId: '',
 };
@@ -57,7 +55,6 @@ export default function PlansPage() {
     setEditingPlan(p);
     setForm({
       name: p.name,
-      multiplier: String(p.multiplier),
       commission: String(p.commission),
       masterId: p.masterId ?? '',
     });
@@ -72,12 +69,7 @@ export default function PlansPage() {
       setFormError('El nombre es requerido.');
       return;
     }
-    const mult = parseFloat(form.multiplier);
     const comm = parseFloat(form.commission);
-    if (isNaN(mult) || mult <= 0) {
-      setFormError('El multiplicador debe ser un número positivo.');
-      return;
-    }
     if (isNaN(comm) || comm < 0 || comm > 100) {
       setFormError('La comisión debe estar entre 0 y 100.');
       return;
@@ -85,7 +77,6 @@ export default function PlansPage() {
 
     const payload: PlanPayload = {
       name: form.name,
-      multiplier: mult,
       commission: comm,
       masterId: form.masterId || null,
     };
@@ -123,7 +114,7 @@ export default function PlansPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Planes de Afiliados</h1>
-          <p className="text-sm text-slate-500">Configuración de multiplicadores y comisiones</p>
+          <p className="text-sm text-slate-500">Configuración de comisiones de afiliados</p>
         </div>
         {canCreatePlan && (
           <Button onClick={openCreate}>
@@ -165,10 +156,6 @@ export default function PlansPage() {
               </div>
 
               <div className="space-y-2">
-                <div className="flex justify-between items-center p-2 bg-blue-50 rounded-lg">
-                  <span className="text-sm text-slate-600">Multiplicador</span>
-                  <span className="font-bold text-blue-700">×{plan.multiplier}</span>
-                </div>
                 <div className="flex justify-between items-center p-2 bg-green-50 rounded-lg">
                   <span className="text-sm text-slate-600">Comisión</span>
                   <span className="font-bold text-green-700">{plan.commission}%</span>
@@ -210,27 +197,16 @@ export default function PlansPage() {
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               required
             />
-            <div className="grid grid-cols-2 gap-4">
-              <Input
-                label="Multiplicador (×)"
-                type="number"
-                min="1"
-                step="1"
-                value={form.multiplier}
-                onChange={(e) => setForm({ ...form, multiplier: e.target.value })}
-                required
-              />
-              <Input
-                label="Comisión (%)"
-                type="number"
-                min="0"
-                max="100"
-                step="0.5"
-                value={form.commission}
-                onChange={(e) => setForm({ ...form, commission: e.target.value })}
-                required
-              />
-            </div>
+            <Input
+              label="Comisión (%)"
+              type="number"
+              min="0"
+              max="100"
+              step="0.5"
+              value={form.commission}
+              onChange={(e) => setForm({ ...form, commission: e.target.value })}
+              required
+            />
             <Select
               label="Asociado master (opcional)"
               value={form.masterId}

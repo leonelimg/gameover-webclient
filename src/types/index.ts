@@ -203,6 +203,12 @@ export interface Ticket {
     winnerNumber?: string | null;
     closeTime?: string;
     minutosPreviosCierre?: number;
+    drawType?: {
+      id: string;
+      name: string;
+      digits: number;
+      multiplier: number;
+    } | null;
     specialMultiplier?: {
       id: string;
       name: string;

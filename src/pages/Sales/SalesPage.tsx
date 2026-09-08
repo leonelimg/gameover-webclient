@@ -627,8 +627,17 @@ export default function SalesPage() {
       setLines([{ id: generateId(), number: '', amount: '', specialAmount: '' }]);
       void refreshCurrentDraw();
     } catch (err: unknown) {
-      const responseData = (err as { response?: { data?: { message?: string; error?: string } } })?.response?.data;
-      const msg = responseData?.message ?? responseData?.error;
+      const responseData = (err as {
+        response?: {
+          data?: {
+            message?: string;
+            error?: string;
+            errors?: Array<{ field?: string; message?: string }>;
+          };
+        };
+      })?.response?.data;
+      const fieldErrors = responseData?.errors?.map((e) => e.message).filter(Boolean).join('. ');
+      const msg = fieldErrors || responseData?.message || responseData?.error;
       setError(msg ?? 'Error al registrar la venta. Intenta de nuevo.');
     } finally {
       setSubmitting(false);

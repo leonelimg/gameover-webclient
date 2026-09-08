@@ -336,7 +336,7 @@ export const usersApi = {
 
 export interface PlanPayload {
   name: string;
-  multiplier: number;
+  multiplier?: number;
   commission: number;
   masterId?: string | null;
 }
@@ -463,7 +463,7 @@ export const drawsApi = {
 export interface CreateTicketPayload {
   drawId: string;
   customerName: string;
-  lines: { number: string; amount: number; isNicaEspecial: boolean }[];
+  lines: { number: string; amount: number; specialAmount?: number; isNicaEspecial: boolean }[];
 }
 
 export const ticketsApi = {
