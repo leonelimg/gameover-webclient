@@ -165,20 +165,6 @@ export default function SalesPage() {
       });
     }).catch(() => {});
     usersApi.list().then(setUsers).catch(() => {});
-
-    Promise.all([
-      numberRestrictionsApi.getGlobal(),
-      numberRestrictionsApi.listGlobalNumbers(),
-      numberRestrictionsApi.getMyLimits(),
-    ])
-      .then(([globalSettings, globalNumberItems, myLimits]) => {
-        setGlobalNumberLimit(globalSettings.globalLimit);
-        setGlobalNumberRestrictions(globalNumberItems);
-        setUserGlobalNumberLimit(myLimits.userGlobalLimit);
-        setUserDrawSaleLimit(myLimits.userDrawSaleLimit);
-        setUserRestrictedNumbersLimit(myLimits.userRestrictedNumbersLimit);
-      })
-      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -301,6 +287,24 @@ export default function SalesPage() {
     () => draws.find((d) => d.id === selectedDrawId),
     [draws, selectedDrawId],
   );
+
+  useEffect(() => {
+    const dtId = selectedDraw?.drawTypeId ?? undefined;
+
+    Promise.all([
+      numberRestrictionsApi.getGlobal(dtId),
+      numberRestrictionsApi.listGlobalNumbers(dtId),
+      numberRestrictionsApi.getMyLimits(dtId),
+    ])
+      .then(([globalSettings, globalNumberItems, myLimits]) => {
+        setGlobalNumberLimit(globalSettings.globalLimit);
+        setGlobalNumberRestrictions(globalNumberItems);
+        setUserGlobalNumberLimit(myLimits.userGlobalLimit);
+        setUserDrawSaleLimit(myLimits.userDrawSaleLimit);
+        setUserRestrictedNumbersLimit(myLimits.userRestrictedNumbersLimit);
+      })
+      .catch(() => {});
+  }, [selectedDraw?.drawTypeId]);
 
   const visibleLastTicket = useMemo(() => {
     if (!lastTicket || (user && lastTicket.sellerId !== user.id)) {
@@ -484,7 +488,8 @@ export default function SalesPage() {
   };
 
   const isLineReadyForNext = (line: SaleLine, requireSpecial: boolean) => {
-    const numberOk = /^\d{2}$/.test(line.number.trim());
+    const requiredDigits = selectedDraw?.drawType?.digits ?? 2;
+    const numberOk = new RegExp(`^\\d{${requiredDigits}}$`).test(line.number.trim());
     const amount = parseFloat(line.amount);
     const amountOk = Number.isFinite(amount) && amount > 0;
     if (!numberOk || !amountOk) {
@@ -558,9 +563,12 @@ export default function SalesPage() {
       return;
     }
 
+    const requiredDigits = selectedDraw.drawType?.digits ?? 2;
+    const numRegex = new RegExp(`^\\d{${requiredDigits}}$`);
+
     for (const line of linesToSell) {
-      if (!/^\d{2}$/.test(line.number.trim()) || !line.amount || parseFloat(line.amount) <= 0) {
-        setError('Todos los números deben tener exactamente 2 dígitos y montos válidos.');
+      if (!numRegex.test(line.number.trim()) || !line.amount || parseFloat(line.amount) <= 0) {
+        setError(`Todos los números deben tener exactamente ${requiredDigits} dígitos y montos válidos.`);
         return;
       }
       if (activeSpecialMultiplier) {
@@ -821,7 +829,8 @@ export default function SalesPage() {
                   restrictionScope = 'global';
                 }
 
-                const remaining = effectiveLimit !== null && /^\d{2}$/.test(normalizedNumber)
+                const requiredDigits = selectedDraw?.drawType?.digits ?? 2;
+                const remaining = effectiveLimit !== null && new RegExp(`^\\d{${requiredDigits}}$`).test(normalizedNumber)
                   ? Math.max(0, effectiveLimit - soldForRule)
                   : null;
 
@@ -831,17 +840,17 @@ export default function SalesPage() {
                       <div>
                         <input
                           className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                          placeholder="00"
+                          placeholder={'0'.repeat(requiredDigits)}
                           data-line-id={line.id}
                           data-field="number"
                           value={line.number}
-                          onChange={(e) => updateLine(line.id, { number: e.target.value.replace(/\D/g, '').slice(0, 2) })}
+                          onChange={(e) => updateLine(line.id, { number: e.target.value.replace(/\D/g, '').slice(0, requiredDigits) })}
                           onKeyDown={(e) => {
                             if (e.key !== 'Enter') return;
                             e.preventDefault();
                             handleLineEnter(line.id, 'number');
                           }}
-                          maxLength={2}
+                          maxLength={requiredDigits}
                         />
                       </div>
                       <div>

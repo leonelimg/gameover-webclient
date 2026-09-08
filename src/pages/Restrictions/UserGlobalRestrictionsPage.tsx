@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { numberRestrictionsApi } from '@/services/api';
-import { UserRestrictionLimitItem } from '@/types';
+import { Input, Select } from '@/components/ui/Input';
+import { numberRestrictionsApi, drawTypesApi } from '@/services/api';
+import { UserRestrictionLimitItem, DrawType } from '@/types';
 import { formatCurrency } from '@/utils/helpers';
 
 function parseLimit(raw: string): number | null {
@@ -17,6 +17,9 @@ function parseLimit(raw: string): number | null {
 }
 
 export default function UserGlobalRestrictionsPage() {
+  const [drawTypes, setDrawTypes] = useState<DrawType[]>([]);
+  const [selectedDrawTypeId, setSelectedDrawTypeId] = useState<string>('');
+
   const [loading, setLoading] = useState(true);
   const [savingUserId, setSavingUserId] = useState('');
   const [search, setSearch] = useState('');
@@ -26,12 +29,12 @@ export default function UserGlobalRestrictionsPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const loadUsers = async (searchValue: string) => {
+  const loadUsers = useCallback(async (searchValue: string, dtId?: string) => {
     setLoading(true);
     setError('');
 
     try {
-      const items = await numberRestrictionsApi.listUserLimits(searchValue || undefined);
+      const items = await numberRestrictionsApi.listUserLimits(searchValue || undefined, dtId || undefined);
       setUsers(items);
       setGlobalDrafts(
         Object.fromEntries(
@@ -54,11 +57,20 @@ export default function UserGlobalRestrictionsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadUsers('');
+    drawTypesApi.list().then((list) => {
+      setDrawTypes(list);
+      if (list.length > 0) {
+        setSelectedDrawTypeId(list[0].id);
+      }
+    }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    loadUsers(search, selectedDrawTypeId);
+  }, [search, selectedDrawTypeId, loadUsers]);
 
   const filteredCountText = useMemo(() => {
     if (loading) return 'Cargando...';
@@ -87,8 +99,8 @@ export default function UserGlobalRestrictionsPage() {
     setSavingUserId(user.id);
     try {
       const [updatedGlobal, updatedRestricted] = await Promise.all([
-        numberRestrictionsApi.updateUserGlobalLimit(user.id, globalLimit),
-        numberRestrictionsApi.updateUserRestrictedNumbersLimit(user.id, restrictedLimit),
+        numberRestrictionsApi.updateUserGlobalLimit(user.id, globalLimit, selectedDrawTypeId || undefined),
+        numberRestrictionsApi.updateUserRestrictedNumbersLimit(user.id, restrictedLimit, selectedDrawTypeId || undefined),
       ]);
 
       setUsers((prev) =>
@@ -123,11 +135,26 @@ export default function UserGlobalRestrictionsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Restricción global por usuario</h1>
-        <p className="text-sm text-slate-500">
-          Define un límite base por número para cada usuario en cualquier sorteo. Esta restricción predomina sobre la global general y solo es superada por la individual por número del sorteo.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Restricción global por usuario</h1>
+          <p className="text-sm text-slate-500">
+            Define un límite base por número para cada usuario parametrizado por Tipo de Sorteo.
+          </p>
+        </div>
+
+        {drawTypes.length > 0 && (
+          <div className="w-full sm:w-64">
+            <Select
+              value={selectedDrawTypeId}
+              onChange={(e) => setSelectedDrawTypeId(e.target.value)}
+              options={drawTypes.map((dt) => ({
+                value: dt.id,
+                label: `${dt.name} (${dt.digits} Dígitos)`,
+              }))}
+            />
+          </div>
+        )}
       </div>
 
       <Card>
@@ -144,13 +171,6 @@ export default function UserGlobalRestrictionsPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
-              <Button
-                variant="secondary"
-                disabled={loading}
-                onClick={() => loadUsers(search.trim())}
-              >
-                Buscar
-              </Button>
             </div>
           </div>
         </CardHeader>

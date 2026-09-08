@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { numberRestrictionsApi } from '@/services/api';
-import { UserRestrictionLimitItem } from '@/types';
+import { Input, Select } from '@/components/ui/Input';
+import { numberRestrictionsApi, drawTypesApi } from '@/services/api';
+import { UserRestrictionLimitItem, DrawType } from '@/types';
 import { formatCurrency } from '@/utils/helpers';
 
 function parseLimit(raw: string): number | null {
@@ -17,6 +17,9 @@ function parseLimit(raw: string): number | null {
 }
 
 export default function UserSalesRestrictionsPage() {
+  const [drawTypes, setDrawTypes] = useState<DrawType[]>([]);
+  const [selectedDrawTypeId, setSelectedDrawTypeId] = useState<string>('');
+
   const [loading, setLoading] = useState(true);
   const [savingUserId, setSavingUserId] = useState('');
   const [search, setSearch] = useState('');
@@ -25,12 +28,12 @@ export default function UserSalesRestrictionsPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const loadUsers = async (searchValue: string) => {
+  const loadUsers = useCallback(async (searchValue: string, dtId?: string) => {
     setLoading(true);
     setError('');
 
     try {
-      const items = await numberRestrictionsApi.listUserLimits(searchValue || undefined);
+      const items = await numberRestrictionsApi.listUserLimits(searchValue || undefined, dtId || undefined);
       setUsers(items);
       setDrafts(
         Object.fromEntries(
@@ -45,11 +48,20 @@ export default function UserSalesRestrictionsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadUsers('');
+    drawTypesApi.list().then((list) => {
+      setDrawTypes(list);
+      if (list.length > 0) {
+        setSelectedDrawTypeId(list[0].id);
+      }
+    }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    loadUsers(search, selectedDrawTypeId);
+  }, [search, selectedDrawTypeId, loadUsers]);
 
   const filteredCountText = useMemo(() => {
     if (loading) return 'Cargando...';
@@ -70,7 +82,7 @@ export default function UserSalesRestrictionsPage() {
 
     setSavingUserId(user.id);
     try {
-      const updated = await numberRestrictionsApi.updateUserDrawSaleLimit(user.id, limit);
+      const updated = await numberRestrictionsApi.updateUserDrawSaleLimit(user.id, limit, selectedDrawTypeId || undefined);
       setUsers((prev) =>
         prev.map((item) =>
           item.id === user.id
@@ -92,11 +104,26 @@ export default function UserSalesRestrictionsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Restricción de venta por usuario</h1>
-        <p className="text-sm text-slate-500">
-          Define el monto máximo total que cada usuario puede vender por sorteo. Se valida por el total de la venta del usuario en el sorteo seleccionado.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Restricción de venta por usuario</h1>
+          <p className="text-sm text-slate-500">
+            Define el monto máximo total que cada usuario puede vender por sorteo, parametrizado por Tipo de Sorteo.
+          </p>
+        </div>
+
+        {drawTypes.length > 0 && (
+          <div className="w-full sm:w-64">
+            <Select
+              value={selectedDrawTypeId}
+              onChange={(e) => setSelectedDrawTypeId(e.target.value)}
+              options={drawTypes.map((dt) => ({
+                value: dt.id,
+                label: `${dt.name} (${dt.digits} Dígitos)`,
+              }))}
+            />
+          </div>
+        )}
       </div>
 
       <Card>

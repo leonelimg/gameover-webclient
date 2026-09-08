@@ -19,6 +19,7 @@ interface PaymentTicket {
     id: string;
     name: string;
     winnerNumber: string | null;
+    drawType?: { id: string; name: string; multiplier: number } | null;
     specialMultiplier: { id: string; name: string; value: number } | null;
   };
   lines: Array<{

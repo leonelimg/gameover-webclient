@@ -11,6 +11,7 @@ import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import planRoutes from './routes/plans.js';
 import drawRoutes from './routes/draws.js';
+import drawTypeRoutes from './routes/drawTypes.js';
 import ticketRoutes from './routes/tickets.js';
 import reportRoutes from './routes/reports.js';
 import printBridgeRoutes from './routes/printBridge.js';
@@ -80,6 +81,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/users', apiLimiter, userRoutes);
 app.use('/api/plans', apiLimiter, planRoutes);
+app.use('/api/draw-types', apiLimiter, drawTypeRoutes);
 app.use('/api/draws', apiLimiter, drawRoutes);
 app.use('/api/tickets', apiLimiter, ticketRoutes);
 app.use('/api/reports', apiLimiter, reportRoutes);

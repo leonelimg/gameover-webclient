@@ -34,6 +34,10 @@ export interface RolePermissionRow {
 
 export interface GlobalNumberRestrictionSettings {
   globalLimit: number | null;
+  maxDrawSales?: number | null;
+  drawTypeId?: string;
+  drawTypeName?: string;
+  digits?: number;
 }
 
 export interface GlobalNumberRestrictionItem {
@@ -119,8 +123,44 @@ export interface RestrictedNumber {
   limit: number; // max amount that can be bet on this number platform-wide
 }
 
+export interface DrawTypeRestrictedNumber {
+  id: string;
+  drawTypeId: string;
+  number: string;
+  limit: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface DrawType {
+  id: string;
+  name: string;
+  description?: string | null;
+  digits: number; // 2, 3, or 4
+  multiplier: number;
+  maxDrawSales?: number | null;
+  globalNumberLimit?: number | null;
+  restrictedNumbers?: DrawTypeRestrictedNumber[];
+  _count?: {
+    draws: number;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface UserDrawTypeLimit {
+  id: string;
+  userId: string;
+  drawTypeId: string;
+  userGlobalLimit: number | null;
+  userDrawSaleLimit: number | null;
+  userRestrictedNumbersLimit: number | null;
+}
+
 export interface Draw {
   id: string;
+  drawTypeId?: string | null;
+  drawType?: DrawType | null;
   name: string;
   closeTime: string;  // ISO datetime
   minutosPreviosCierre: number;

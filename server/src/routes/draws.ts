@@ -11,15 +11,16 @@ const router = Router();
 router.use(authenticate);
 
 const drawSchema = z.object({
+  drawTypeId: z.string().optional().nullable(),
   name: z.string().min(2),
   closeTime: z.string().datetime(),
   minutosPreviosCierre: z.coerce.number().int().min(0).max(1440).default(10),
-  winnerNumber: z.string().regex(/^\d{2}$/, 'El número ganador debe tener exactamente 2 dígitos.').optional().nullable(),
+  winnerNumber: z.string().optional().nullable(),
   specialMultiplierId: z.string().optional().nullable(),
 });
 
 const rnSchema = z.object({
-  number: z.string().regex(/^\d{2}$/, 'El número restringido debe tener exactamente 2 dígitos.'),
+  number: z.string().min(1),
   limit: z.number().positive(),
 });
 
@@ -77,6 +78,11 @@ function parseDateYmdToUtc(dateValue: string, endOfDay: boolean): Date | null {
 }
 
 const rnInclude = {
+  drawType: {
+    include: {
+      restrictedNumbers: true,
+    },
+  },
   restrictedNumbers: true,
   specialMultiplier: { select: { id: true, name: true, value: true } },
 };
@@ -185,6 +191,7 @@ async function updatePrizesForDraw(drawId: string, winnerNumber: string | null):
   const draw = await prisma.draw.findUnique({
     where: { id: drawId },
     select: {
+      drawType: { select: { multiplier: true } },
       specialMultiplier: { select: { value: true } },
     },
   });
@@ -196,6 +203,8 @@ async function updatePrizesForDraw(drawId: string, winnerNumber: string | null):
     select: { multiplier: true },
   });
 
+  // Effective base multiplier comes from DrawType if present, else plan multiplier
+  const drawTypeMultiplier = draw?.drawType?.multiplier ?? null;
 
   const tickets = await prisma.ticket.findMany({
     where: { drawId, canceledAt: null },
@@ -224,7 +233,7 @@ async function updatePrizesForDraw(drawId: string, winnerNumber: string | null):
 
   const updates = tickets.map((ticket) => {
     const effectivePlan = ticket.seller.plan ?? ticket.associate.plan ?? defaultPlan;
-    const regularMultiplier = effectivePlan?.multiplier ?? 0;
+    const regularMultiplier = drawTypeMultiplier ?? effectivePlan?.multiplier ?? 0;
 
     let prize = 0;
     for (const line of ticket.lines) {
@@ -260,9 +269,37 @@ async function updatePrizesForDraw(drawId: string, winnerNumber: string | null):
 // POST /api/draws
 router.post('/', authorizeResource('/draws:create'), validate(drawSchema), async (req, res) => {
   const body = req.body as z.infer<typeof drawSchema>;
+
+  let drawTypeId = body.drawTypeId;
+  if (!drawTypeId) {
+    const defaultType = await prisma.drawType.findFirst({ orderBy: { createdAt: 'asc' } });
+    if (!defaultType) {
+      res.status(400).json({ message: 'No existen tipos de sorteo en el sistema.' });
+      return;
+    }
+    drawTypeId = defaultType.id;
+  }
+
+  const drawType = await prisma.drawType.findUnique({ where: { id: drawTypeId } });
+  if (!drawType) {
+    res.status(400).json({ message: 'El tipo de sorteo seleccionado no existe.' });
+    return;
+  }
+
+  if (body.winnerNumber) {
+    const cleanNum = body.winnerNumber.trim();
+    if (cleanNum.length !== drawType.digits || !/^\d+$/.test(cleanNum)) {
+      res.status(400).json({
+        message: `El número ganador debe ser numérico y tener exactamente ${drawType.digits} dígitos para el tipo de sorteo "${drawType.name}".`,
+      });
+      return;
+    }
+  }
+
   const status = resolveStatus(body.closeTime, body.minutosPreviosCierre, body.winnerNumber);
   const draw = await prisma.draw.create({
     data: {
+      drawTypeId,
       name: body.name,
       closeTime: new Date(body.closeTime),
       minutosPreviosCierre: body.minutosPreviosCierre,
@@ -284,14 +321,31 @@ router.post('/', authorizeResource('/draws:create'), validate(drawSchema), async
 router.patch('/:id', authorizeResource('/draws:update'), validate(drawSchema.partial()), async (req, res) => {
   const id = param(req, 'id');
   const body = req.body as Partial<z.infer<typeof drawSchema>>;
-  const existing = await prisma.draw.findUnique({ where: { id } });
+  const existing = await prisma.draw.findUnique({ where: { id }, include: { drawType: true } });
   if (!existing) { res.status(404).json({ message: 'Sorteo no encontrado.' }); return; }
+
+  const drawTypeId = body.drawTypeId ?? existing.drawTypeId;
+  const drawType = drawTypeId ? await prisma.drawType.findUnique({ where: { id: drawTypeId } }) : existing.drawType;
+
+  const winnerNumber = body.winnerNumber !== undefined ? body.winnerNumber : existing.winnerNumber;
+
+  if (winnerNumber && drawType) {
+    const cleanNum = winnerNumber.trim();
+    if (cleanNum.length !== drawType.digits || !/^\d+$/.test(cleanNum)) {
+      res.status(400).json({
+        message: `El número ganador debe ser numérico y tener exactamente ${drawType.digits} dígitos para el tipo de sorteo "${drawType.name}".`,
+      });
+      return;
+    }
+  }
+
   const closeTime = body.closeTime ?? existing.closeTime.toISOString();
   const minutosPreviosCierre = body.minutosPreviosCierre ?? existing.minutosPreviosCierre;
-  const winnerNumber = body.winnerNumber !== undefined ? body.winnerNumber : existing.winnerNumber;
+
   const draw = await prisma.draw.update({
     where: { id },
     data: {
+      ...(body.drawTypeId !== undefined && { drawTypeId: body.drawTypeId }),
       ...(body.name !== undefined && { name: body.name }),
       ...(body.closeTime !== undefined && { closeTime: new Date(body.closeTime) }),
       ...(body.minutosPreviosCierre !== undefined && { minutosPreviosCierre: body.minutosPreviosCierre }),

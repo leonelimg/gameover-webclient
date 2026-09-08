@@ -1,11 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { numberRestrictionsApi } from '@/services/api';
-import { GlobalNumberRestrictionItem } from '@/types';
+import { Input, Select } from '@/components/ui/Input';
+import { numberRestrictionsApi, drawTypesApi } from '@/services/api';
+import { GlobalNumberRestrictionItem, DrawType } from '@/types';
 
 export default function GlobalNumberRestrictionsPage() {
+  const [searchParams] = useSearchParams();
+  const urlDrawTypeId = searchParams.get('drawTypeId');
+
+  const [drawTypes, setDrawTypes] = useState<DrawType[]>([]);
+  const [selectedDrawTypeId, setSelectedDrawTypeId] = useState<string>(urlDrawTypeId || '');
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -15,6 +22,12 @@ export default function GlobalNumberRestrictionsPage() {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [numberDraft, setNumberDraft] = useState('');
   const [limitDraft, setLimitDraft] = useState('');
+
+  const selectedDrawType = useMemo(
+    () => drawTypes.find((dt) => dt.id === selectedDrawTypeId),
+    [drawTypes, selectedDrawTypeId]
+  );
+  const requiredDigits = selectedDrawType?.digits ?? 2;
 
   const sortedItems = useMemo(
     () => [...items].sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true })),
@@ -26,11 +39,11 @@ export default function GlobalNumberRestrictionsPage() {
     [items, drafts]
   );
 
-  const loadItems = async () => {
+  const loadItems = useCallback(async (dtId?: string) => {
     setLoading(true);
     setError('');
     try {
-      const response = await numberRestrictionsApi.listGlobalNumbers();
+      const response = await numberRestrictionsApi.listGlobalNumbers(dtId || undefined);
       setItems(response);
       setDrafts(
         Object.fromEntries(response.map((item) => [item.number, String(item.limit)]))
@@ -40,19 +53,30 @@ export default function GlobalNumberRestrictionsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadItems();
-  }, []);
+    drawTypesApi.list().then((list) => {
+      setDrawTypes(list);
+      if (list.length > 0) {
+        const matching = urlDrawTypeId && list.some((dt) => dt.id === urlDrawTypeId);
+        setSelectedDrawTypeId((prev) => (matching ? (urlDrawTypeId as string) : prev || list[0].id));
+      }
+    }).catch(() => {});
+  }, [urlDrawTypeId]);
+
+  useEffect(() => {
+    loadItems(selectedDrawTypeId);
+  }, [selectedDrawTypeId, loadItems]);
 
   const handleAddOrUpdate = async () => {
     setError('');
     setSuccess('');
 
-    const number = numberDraft.replace(/\D/g, '').slice(0, 2);
-    if (!/^\d{2}$/.test(number)) {
-      setError('Ingresa un número válido de 2 dígitos.');
+    const number = numberDraft.replace(/\D/g, '').slice(0, requiredDigits);
+    const numRegex = new RegExp(`^\\d{${requiredDigits}}$`);
+    if (!numRegex.test(number)) {
+      setError(`Ingresa un número válido de ${requiredDigits} dígitos.`);
       return;
     }
 
@@ -64,7 +88,7 @@ export default function GlobalNumberRestrictionsPage() {
 
     setSaving(true);
     try {
-      const item = await numberRestrictionsApi.upsertGlobalNumber(number, limit);
+      const item = await numberRestrictionsApi.upsertGlobalNumber(number, limit, selectedDrawTypeId || undefined);
       setItems((prev) => {
         const exists = prev.some((entry) => entry.number === item.number);
         if (exists) {
@@ -91,7 +115,7 @@ export default function GlobalNumberRestrictionsPage() {
     setSuccess('');
     setSaving(true);
     try {
-      await numberRestrictionsApi.deleteGlobalNumber(number);
+      await numberRestrictionsApi.deleteGlobalNumber(number, selectedDrawTypeId || undefined);
       setItems((prev) => prev.filter((entry) => entry.number !== number));
       setDrafts((prev) => {
         const next = { ...prev };
@@ -129,7 +153,7 @@ export default function GlobalNumberRestrictionsPage() {
     setSaving(true);
     try {
       const updatedItems = await Promise.all(
-        updates.map((entry) => numberRestrictionsApi.updateGlobalNumber(entry.number, entry.limit))
+        updates.map((entry) => numberRestrictionsApi.updateGlobalNumber(entry.number, entry.limit, selectedDrawTypeId || undefined))
       );
 
       const updatedByNumber = new Map(updatedItems.map((item) => [item.number, item]));
@@ -148,16 +172,33 @@ export default function GlobalNumberRestrictionsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Globales por número</h1>
-        <p className="text-sm text-slate-500">
-          Define límites de venta por número que aplican al sorteo seleccionado al vender o facturar.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Globales por número</h1>
+          <p className="text-sm text-slate-500">
+            Define límites de venta por número parametrizados por Tipo de Sorteo.
+          </p>
+        </div>
+
+        {drawTypes.length > 0 && (
+          <div className="w-full sm:w-64">
+            <Select
+              value={selectedDrawTypeId}
+              onChange={(e) => setSelectedDrawTypeId(e.target.value)}
+              options={drawTypes.map((dt) => ({
+                value: dt.id,
+                label: `${dt.name} (${dt.digits} Dígitos)`,
+              }))}
+            />
+          </div>
+        )}
       </div>
 
       <Card>
         <CardHeader>
-          <h2 className="font-semibold text-slate-800">Gestión de restricciones</h2>
+          <h2 className="font-semibold text-slate-800 flex items-center justify-between">
+            <span>Gestión de restricciones {selectedDrawType ? `— ${selectedDrawType.name}` : ''}</span>
+          </h2>
         </CardHeader>
         <CardBody className="space-y-4">
           {error && (
@@ -173,10 +214,11 @@ export default function GlobalNumberRestrictionsPage() {
 
           <div className="flex gap-2">
             <Input
-              placeholder="Número (ej: 00)"
+              placeholder={`Número (${requiredDigits}D)`}
               value={numberDraft}
-              onChange={(e) => setNumberDraft(e.target.value.replace(/\D/g, '').slice(0, 2))}
-              className="w-28"
+              onChange={(e) => setNumberDraft(e.target.value.replace(/\D/g, '').slice(0, requiredDigits))}
+              maxLength={requiredDigits}
+              className="w-32 font-mono"
               disabled={loading || saving}
             />
             <Input

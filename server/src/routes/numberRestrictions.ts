@@ -4,14 +4,14 @@ import { prisma } from '../config/prisma.js';
 import {
   deleteGlobalNumberRestriction,
   getAllUserRestrictionLimits,
-  getGlobalNumberLimit,
+  getGlobalLimitsConfig,
   getGlobalNumberRestrictionByNumber,
   getUserDrawSaleLimit,
   getUserGlobalNumberLimit,
   getUserRestrictedNumbersLimit,
   GLOBAL_NUMBER_LIMIT_SETTING_KEY,
   listGlobalNumberRestrictions,
-  setGlobalNumberLimit,
+  setGlobalLimitsConfig,
   setUserDrawSaleLimit,
   setUserGlobalNumberLimit,
   setUserRestrictedNumbersLimit,
@@ -26,31 +26,38 @@ router.use(authenticate);
 
 const globalNumberLimitSchema = z.object({
   globalLimit: z.number().positive().nullable(),
+  maxDrawSales: z.number().positive().nullable().optional(),
+  drawTypeId: z.string().optional(),
 });
 
 const userLimitSchema = z.object({
   limit: z.number().positive().nullable(),
+  drawTypeId: z.string().optional(),
 });
 
 const globalNumberRestrictionItemSchema = z.object({
-  number: z.string().regex(/^\d{2}$/, 'El número debe tener exactamente 2 dígitos.'),
-  limit: z.number().positive(),
+  number: z.string().min(1, 'El número es requerido.'),
+  limit: z.number().positive('El límite debe ser mayor a 0.'),
+  drawTypeId: z.string().optional(),
 });
 
 const globalNumberRestrictionUpdateSchema = z.object({
-  limit: z.number().positive(),
+  limit: z.number().positive('El límite debe ser mayor a 0.'),
+  drawTypeId: z.string().optional(),
 });
 
-router.get('/global', authorizeAnyResource('/number-restrictions', '/restrictions/global', '/sales', '/draws/list'), async (_req, res) => {
-  const globalLimit = await getGlobalNumberLimit();
-  res.json({ globalLimit });
+router.get('/global', authorizeAnyResource('/number-restrictions', '/restrictions/global', '/sales', '/draws/list'), async (req, res) => {
+  const drawTypeId = typeof req.query.drawTypeId === 'string' ? req.query.drawTypeId : undefined;
+  const config = await getGlobalLimitsConfig(drawTypeId);
+  res.json(config);
 });
 
 router.get('/me-limits', authorizeAnyResource('/sales', '/restrictions/user-global', '/restrictions/user-sales-limit'), async (req, res) => {
+  const drawTypeId = typeof req.query.drawTypeId === 'string' ? req.query.drawTypeId : undefined;
   const [userGlobalLimit, userDrawSaleLimit, userRestrictedNumbersLimit] = await Promise.all([
-    getUserGlobalNumberLimit(req.user!.sub),
-    getUserDrawSaleLimit(req.user!.sub),
-    getUserRestrictedNumbersLimit(req.user!.sub),
+    getUserGlobalNumberLimit(req.user!.sub, drawTypeId),
+    getUserDrawSaleLimit(req.user!.sub, drawTypeId),
+    getUserRestrictedNumbersLimit(req.user!.sub, drawTypeId),
   ]);
 
   res.json({
@@ -62,23 +69,24 @@ router.get('/me-limits', authorizeAnyResource('/sales', '/restrictions/user-glob
 
 router.patch('/global', authorizeAnyResource('/number-restrictions', '/restrictions:update-global'), validate(globalNumberLimitSchema), async (req, res) => {
   const body = req.body as z.infer<typeof globalNumberLimitSchema>;
-  const globalLimit = await setGlobalNumberLimit(body.globalLimit);
+  const config = await setGlobalLimitsConfig(body.globalLimit, body.maxDrawSales, body.drawTypeId);
 
   await prisma.auditLog.create({
     data: {
-      action: 'UPDATE_GLOBAL_NUMBER_LIMIT',
-      entity: 'SystemSetting',
-      entityId: GLOBAL_NUMBER_LIMIT_SETTING_KEY,
+      action: 'UPDATE_GLOBAL_LIMITS_CONFIG',
+      entity: body.drawTypeId ? 'DrawType' : 'SystemSetting',
+      entityId: body.drawTypeId ? `drawType:${body.drawTypeId}` : GLOBAL_NUMBER_LIMIT_SETTING_KEY,
       userId: req.user!.sub,
-      details: { globalLimit },
+      details: { ...config, drawTypeId: body.drawTypeId },
     },
   });
 
-  res.json({ globalLimit });
+  res.json(config);
 });
 
-router.get('/global-numbers', authorizeAnyResource('/restrictions/global-numbers', '/restrictions/global', '/sales', '/draws/list'), async (_req, res) => {
-  const items = await listGlobalNumberRestrictions();
+router.get('/global-numbers', authorizeAnyResource('/restrictions/global-numbers', '/restrictions/global', '/sales', '/draws/list'), async (req, res) => {
+  const drawTypeId = typeof req.query.drawTypeId === 'string' ? req.query.drawTypeId : undefined;
+  const items = await listGlobalNumberRestrictions(drawTypeId);
   res.json({ items });
 });
 
@@ -88,15 +96,24 @@ router.post(
   validate(globalNumberRestrictionItemSchema),
   async (req, res) => {
     const body = req.body as z.infer<typeof globalNumberRestrictionItemSchema>;
-    const item = await upsertGlobalNumberRestriction(body.number, body.limit);
+
+    if (body.drawTypeId) {
+      const drawType = await prisma.drawType.findUnique({ where: { id: body.drawTypeId } });
+      if (drawType && (body.number.length !== drawType.digits || !/^\d+$/.test(body.number))) {
+        res.status(400).json({ message: `El número debe tener exactamente ${drawType.digits} dígitos para este tipo de sorteo.` });
+        return;
+      }
+    }
+
+    const item = await upsertGlobalNumberRestriction(body.number, body.limit, body.drawTypeId);
 
     await prisma.auditLog.create({
       data: {
         action: 'UPSERT_GLOBAL_NUMBER_RESTRICTION',
-        entity: 'GlobalNumberRestriction',
+        entity: body.drawTypeId ? 'DrawTypeRestrictedNumber' : 'GlobalNumberRestriction',
         entityId: item.number,
         userId: req.user!.sub,
-        details: item,
+        details: { ...item, drawTypeId: body.drawTypeId },
       },
     });
 
@@ -110,21 +127,17 @@ router.patch(
   validate(globalNumberRestrictionUpdateSchema),
   async (req, res) => {
     const number = param(req, 'number');
-    if (!/^\d{2}$/.test(number)) {
-      res.status(400).json({ message: 'El número debe tener exactamente 2 dígitos.' });
-      return;
-    }
-
     const body = req.body as z.infer<typeof globalNumberRestrictionUpdateSchema>;
-    const item = await upsertGlobalNumberRestriction(number, body.limit);
+
+    const item = await upsertGlobalNumberRestriction(number, body.limit, body.drawTypeId);
 
     await prisma.auditLog.create({
       data: {
         action: 'UPDATE_GLOBAL_NUMBER_RESTRICTION',
-        entity: 'GlobalNumberRestriction',
+        entity: body.drawTypeId ? 'DrawTypeRestrictedNumber' : 'GlobalNumberRestriction',
         entityId: item.number,
         userId: req.user!.sub,
-        details: item,
+        details: { ...item, drawTypeId: body.drawTypeId },
       },
     });
 
@@ -134,26 +147,23 @@ router.patch(
 
 router.delete('/global-numbers/:number', authorizeResource('/restrictions:update-global-numbers'), async (req, res) => {
   const number = param(req, 'number');
-  if (!/^\d{2}$/.test(number)) {
-    res.status(400).json({ message: 'El número debe tener exactamente 2 dígitos.' });
-    return;
-  }
+  const drawTypeId = typeof req.query.drawTypeId === 'string' ? req.query.drawTypeId : undefined;
 
-  const existing = await getGlobalNumberRestrictionByNumber(number);
+  const existing = await getGlobalNumberRestrictionByNumber(number, drawTypeId);
   if (!existing) {
     res.status(404).json({ message: 'La restricción no existe.' });
     return;
   }
 
-  await deleteGlobalNumberRestriction(number);
+  await deleteGlobalNumberRestriction(number, drawTypeId);
 
   await prisma.auditLog.create({
     data: {
       action: 'DELETE_GLOBAL_NUMBER_RESTRICTION',
-      entity: 'GlobalNumberRestriction',
+      entity: drawTypeId ? 'DrawTypeRestrictedNumber' : 'GlobalNumberRestriction',
       entityId: number,
       userId: req.user!.sub,
-      details: existing,
+      details: { ...existing, drawTypeId },
     },
   });
 
@@ -162,6 +172,7 @@ router.delete('/global-numbers/:number', authorizeResource('/restrictions:update
 
 router.get('/users-limits', authorizeAnyResource('/restrictions/user-global', '/restrictions/user-sales-limit'), async (req, res) => {
   const search = String(req.query['search'] ?? '').trim();
+  const drawTypeId = typeof req.query.drawTypeId === 'string' ? req.query.drawTypeId : undefined;
 
   const users = await prisma.user.findMany({
     where: search
@@ -184,7 +195,7 @@ router.get('/users-limits', authorizeAnyResource('/restrictions/user-global', '/
     take: 300,
   });
 
-  const limitsByUser = await getAllUserRestrictionLimits();
+  const limitsByUser = await getAllUserRestrictionLimits(drawTypeId);
 
   const items = users.map((user) => {
     const limit = limitsByUser.get(user.id) ?? {
@@ -221,19 +232,20 @@ router.patch(
       return;
     }
 
-    const userGlobalLimit = await setUserGlobalNumberLimit(userId, body.limit);
-    const userDrawSaleLimit = await getUserDrawSaleLimit(userId);
+    const userGlobalLimit = await setUserGlobalNumberLimit(userId, body.limit, body.drawTypeId);
+    const userDrawSaleLimit = await getUserDrawSaleLimit(userId, body.drawTypeId);
 
     await prisma.auditLog.create({
       data: {
         action: 'UPDATE_USER_GLOBAL_NUMBER_LIMIT',
-        entity: 'UserRestrictionLimit',
+        entity: body.drawTypeId ? 'UserDrawTypeLimit' : 'UserRestrictionLimit',
         entityId: userId,
         userId: req.user!.sub,
         details: {
           targetUserId: user.id,
           targetUsername: user.username,
           userGlobalLimit,
+          drawTypeId: body.drawTypeId,
         },
       },
     });
@@ -263,19 +275,20 @@ router.patch(
       return;
     }
 
-    const userDrawSaleLimit = await setUserDrawSaleLimit(userId, body.limit);
-    const userGlobalLimit = await getUserGlobalNumberLimit(userId);
+    const userDrawSaleLimit = await setUserDrawSaleLimit(userId, body.limit, body.drawTypeId);
+    const userGlobalLimit = await getUserGlobalNumberLimit(userId, body.drawTypeId);
 
     await prisma.auditLog.create({
       data: {
         action: 'UPDATE_USER_DRAW_SALE_LIMIT',
-        entity: 'UserRestrictionLimit',
+        entity: body.drawTypeId ? 'UserDrawTypeLimit' : 'UserRestrictionLimit',
         entityId: userId,
         userId: req.user!.sub,
         details: {
           targetUserId: user.id,
           targetUsername: user.username,
           userDrawSaleLimit,
+          drawTypeId: body.drawTypeId,
         },
       },
     });
@@ -305,20 +318,21 @@ router.patch(
       return;
     }
 
-    const userRestrictedNumbersLimit = await setUserRestrictedNumbersLimit(userId, body.limit);
-    const userGlobalLimit = await getUserGlobalNumberLimit(userId);
-    const userDrawSaleLimit = await getUserDrawSaleLimit(userId);
+    const userRestrictedNumbersLimit = await setUserRestrictedNumbersLimit(userId, body.limit, body.drawTypeId);
+    const userGlobalLimit = await getUserGlobalNumberLimit(userId, body.drawTypeId);
+    const userDrawSaleLimit = await getUserDrawSaleLimit(userId, body.drawTypeId);
 
     await prisma.auditLog.create({
       data: {
         action: 'UPDATE_USER_RESTRICTED_NUMBERS_LIMIT',
-        entity: 'UserRestrictionLimit',
+        entity: body.drawTypeId ? 'UserDrawTypeLimit' : 'UserRestrictionLimit',
         entityId: userId,
         userId: req.user!.sub,
         details: {
           targetUserId: user.id,
           targetUsername: user.username,
           userRestrictedNumbersLimit,
+          drawTypeId: body.drawTypeId,
         },
       },
     });

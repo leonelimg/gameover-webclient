@@ -3,6 +3,8 @@ import {
   User,
   Plan,
   Draw,
+  DrawType,
+  DrawTypeRestrictedNumber,
   Ticket,
   Announcement,
   AnnouncementPayload,
@@ -153,63 +155,85 @@ export const rolesApi = {
 // ─── Global Number Restrictions API ─────────────────────────────────────────
 
 export const numberRestrictionsApi = {
-  getGlobal: async (): Promise<GlobalNumberRestrictionSettings> => {
-    const res = await api.get<GlobalNumberRestrictionSettings>('/api/number-restrictions/global');
+  getGlobal: async (drawTypeId?: string): Promise<GlobalNumberRestrictionSettings> => {
+    const res = await api.get<GlobalNumberRestrictionSettings>('/api/number-restrictions/global', {
+      params: drawTypeId ? { drawTypeId } : undefined,
+    });
     return res.data;
   },
-  updateGlobal: async (globalLimit: number | null): Promise<GlobalNumberRestrictionSettings> => {
+  updateGlobal: async (
+    globalLimit: number | null,
+    drawTypeId?: string,
+    maxDrawSales?: number | null
+  ): Promise<GlobalNumberRestrictionSettings> => {
     const res = await api.patch<GlobalNumberRestrictionSettings>('/api/number-restrictions/global', {
       globalLimit,
+      drawTypeId,
+      maxDrawSales,
     });
     return res.data;
   },
-  getMyLimits: async (): Promise<CurrentUserRestrictionSettings> => {
-    const res = await api.get<CurrentUserRestrictionSettings>('/api/number-restrictions/me-limits');
+  getMyLimits: async (drawTypeId?: string): Promise<CurrentUserRestrictionSettings> => {
+    const res = await api.get<CurrentUserRestrictionSettings>('/api/number-restrictions/me-limits', {
+      params: drawTypeId ? { drawTypeId } : undefined,
+    });
     return res.data;
   },
-  listUserLimits: async (search?: string): Promise<UserRestrictionLimitItem[]> => {
+  listUserLimits: async (search?: string, drawTypeId?: string): Promise<UserRestrictionLimitItem[]> => {
     const res = await api.get<{ items: UserRestrictionLimitItem[] }>('/api/number-restrictions/users-limits', {
-      params: search ? { search } : undefined,
+      params: {
+        ...(search ? { search } : {}),
+        ...(drawTypeId ? { drawTypeId } : {}),
+      },
     });
     return res.data.items;
   },
-  updateUserGlobalLimit: async (userId: string, limit: number | null): Promise<UserRestrictionLimitUpdateResult> => {
+  updateUserGlobalLimit: async (userId: string, limit: number | null, drawTypeId?: string): Promise<UserRestrictionLimitUpdateResult> => {
     const res = await api.patch<UserRestrictionLimitUpdateResult>(`/api/number-restrictions/users/${userId}/global-limit`, {
       limit,
+      drawTypeId,
     });
     return res.data;
   },
-  updateUserRestrictedNumbersLimit: async (userId: string, limit: number | null): Promise<UserRestrictionLimitUpdateResult> => {
+  updateUserRestrictedNumbersLimit: async (userId: string, limit: number | null, drawTypeId?: string): Promise<UserRestrictionLimitUpdateResult> => {
     const res = await api.patch<UserRestrictionLimitUpdateResult>(`/api/number-restrictions/users/${userId}/restricted-numbers-limit`, {
       limit,
+      drawTypeId,
     });
     return res.data;
   },
-  updateUserDrawSaleLimit: async (userId: string, limit: number | null): Promise<UserRestrictionLimitUpdateResult> => {
+  updateUserDrawSaleLimit: async (userId: string, limit: number | null, drawTypeId?: string): Promise<UserRestrictionLimitUpdateResult> => {
     const res = await api.patch<UserRestrictionLimitUpdateResult>(`/api/number-restrictions/users/${userId}/draw-sale-limit`, {
       limit,
+      drawTypeId,
     });
     return res.data;
   },
-  listGlobalNumbers: async (): Promise<GlobalNumberRestrictionItem[]> => {
-    const res = await api.get<{ items: GlobalNumberRestrictionItem[] }>('/api/number-restrictions/global-numbers');
+  listGlobalNumbers: async (drawTypeId?: string): Promise<GlobalNumberRestrictionItem[]> => {
+    const res = await api.get<{ items: GlobalNumberRestrictionItem[] }>('/api/number-restrictions/global-numbers', {
+      params: drawTypeId ? { drawTypeId } : undefined,
+    });
     return res.data.items;
   },
-  upsertGlobalNumber: async (number: string, limit: number): Promise<GlobalNumberRestrictionItem> => {
+  upsertGlobalNumber: async (number: string, limit: number, drawTypeId?: string): Promise<GlobalNumberRestrictionItem> => {
     const res = await api.post<GlobalNumberRestrictionItem>('/api/number-restrictions/global-numbers', {
       number,
       limit,
+      drawTypeId,
     });
     return res.data;
   },
-  updateGlobalNumber: async (number: string, limit: number): Promise<GlobalNumberRestrictionItem> => {
+  updateGlobalNumber: async (number: string, limit: number, drawTypeId?: string): Promise<GlobalNumberRestrictionItem> => {
     const res = await api.patch<GlobalNumberRestrictionItem>(`/api/number-restrictions/global-numbers/${encodeURIComponent(number)}`, {
       limit,
+      drawTypeId,
     });
     return res.data;
   },
-  deleteGlobalNumber: async (number: string): Promise<void> => {
-    await api.delete(`/api/number-restrictions/global-numbers/${encodeURIComponent(number)}`);
+  deleteGlobalNumber: async (number: string, drawTypeId?: string): Promise<void> => {
+    await api.delete(`/api/number-restrictions/global-numbers/${encodeURIComponent(number)}`, {
+      params: drawTypeId ? { drawTypeId } : undefined,
+    });
   },
 };
 
@@ -339,9 +363,53 @@ export const plansApi = {
   },
 };
 
+// ─── Draw Types API ────────────────────────────────────────────────────────────
+
+export interface DrawTypePayload {
+  name: string;
+  description?: string | null;
+  digits: number;
+  multiplier: number;
+  maxDrawSales?: number | null;
+  globalNumberLimit?: number | null;
+}
+
+export const drawTypesApi = {
+  list: async (): Promise<DrawType[]> => {
+    const res = await api.get<DrawType[]>('/api/draw-types');
+    return res.data;
+  },
+  get: async (id: string): Promise<DrawType> => {
+    const res = await api.get<DrawType>(`/api/draw-types/${id}`);
+    return res.data;
+  },
+  create: async (data: DrawTypePayload): Promise<DrawType> => {
+    const res = await api.post<DrawType>('/api/draw-types', data);
+    return res.data;
+  },
+  update: async (id: string, data: Partial<DrawTypePayload>): Promise<DrawType> => {
+    const res = await api.patch<DrawType>(`/api/draw-types/${id}`, data);
+    return res.data;
+  },
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/api/draw-types/${id}`);
+  },
+  upsertRestrictedNumber: async (drawTypeId: string, number: string, limit: number): Promise<DrawTypeRestrictedNumber> => {
+    const res = await api.post<DrawTypeRestrictedNumber>(`/api/draw-types/${drawTypeId}/restricted-numbers`, {
+      number,
+      limit,
+    });
+    return res.data;
+  },
+  deleteRestrictedNumber: async (drawTypeId: string, number: string): Promise<void> => {
+    await api.delete(`/api/draw-types/${drawTypeId}/restricted-numbers/${encodeURIComponent(number)}`);
+  },
+};
+
 // ─── Draws API ────────────────────────────────────────────────────────────────
 
 export interface DrawPayload {
+  drawTypeId?: string | null;
   name: string;
   closeTime: string;
   minutosPreviosCierre: number;

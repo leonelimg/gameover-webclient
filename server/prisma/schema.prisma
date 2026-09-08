@@ -36,6 +36,7 @@ model User {
   announcementsCreated     Announcement[]          @relation("AnnouncementCreatedBy")
   announcementDismissals   AnnouncementDismissal[]
   restrictionLimits        UserRestrictionLimit?
+  drawTypeLimits           UserDrawTypeLimit[]
 
   @@index([parentId])
   @@map("users")
@@ -52,6 +53,52 @@ model UserRestrictionLimit {
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_restriction_limits")
+}
+
+model DrawType {
+  id                String                     @id @default(cuid())
+  name              String                     @unique
+  description       String?
+  digits            Int                        @default(2)
+  multiplier        Float                      @default(80)
+  maxDrawSales      Float?
+  globalNumberLimit Float?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  draws             Draw[]
+  restrictedNumbers DrawTypeRestrictedNumber[]
+  userLimits        UserDrawTypeLimit[]
+
+  @@map("draw_types")
+}
+
+model DrawTypeRestrictedNumber {
+  id         String   @id @default(cuid())
+  drawTypeId String
+  number     String
+  limit      Float
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  drawType   DrawType @relation(fields: [drawTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([drawTypeId, number])
+  @@map("draw_type_restricted_numbers")
+}
+
+model UserDrawTypeLimit {
+  id                         String   @id @default(cuid())
+  userId                     String
+  drawTypeId                 String
+  userGlobalLimit            Float?
+  userDrawSaleLimit          Float?
+  userRestrictedNumbersLimit Float?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+  user                       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  drawType                   DrawType @relation(fields: [drawTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, drawTypeId])
+  @@map("user_draw_type_limits")
 }
 
 model RefreshToken {
@@ -103,6 +150,8 @@ model SystemSetting {
 
 model Draw {
   id                  String             @id @default(cuid())
+  drawTypeId          String?
+  drawType            DrawType?          @relation(fields: [drawTypeId], references: [id], onDelete: Restrict)
   name                String
   openTime            DateTime?
   closeTime           DateTime

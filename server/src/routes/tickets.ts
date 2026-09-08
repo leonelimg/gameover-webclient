@@ -241,16 +241,40 @@ router.get('/:id', authorizeAnyResource('/sales', '/ticket-payments', '/reports/
 router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema), async (req, res) => {
   const body = req.body as z.infer<typeof createTicketSchema>;
 
-  const [draw, globalNumberLimit, userGlobalNumberLimit, userDrawSaleLimit, userRestrictedNumbersLimit] = await Promise.all([
-    prisma.draw.findUnique({
-      where: { id: body.drawId },
-    }),
-    getGlobalNumberLimit(),
-    getUserGlobalNumberLimit(req.user!.sub),
-    getUserDrawSaleLimit(req.user!.sub),
-    getUserRestrictedNumbersLimit(req.user!.sub),
-  ]);
+  const draw = await prisma.draw.findUnique({
+    where: { id: body.drawId },
+    include: {
+      drawType: {
+        include: {
+          restrictedNumbers: true,
+        },
+      },
+    },
+  });
   if (!draw) { res.status(404).json({ message: 'Sorteo no encontrado.' }); return; }
+
+  const drawType = draw.drawType;
+  const drawTypeId = draw.drawTypeId ?? undefined;
+
+  if (drawType) {
+    for (const line of body.lines) {
+      const cleanNum = line.number.trim();
+      if (cleanNum.length !== drawType.digits || !/^\d+$/.test(cleanNum)) {
+        res.status(400).json({
+          message: `El número "${line.number}" debe tener exactamente ${drawType.digits} dígitos para el tipo de sorteo "${drawType.name}".`,
+        });
+        return;
+      }
+    }
+  }
+
+  const [globalNumberLimit, userGlobalNumberLimit, userDrawSaleLimit, userRestrictedNumbersLimit, globalRestrictions] = await Promise.all([
+    getGlobalNumberLimit(drawTypeId),
+    getUserGlobalNumberLimit(req.user!.sub, drawTypeId),
+    getUserDrawSaleLimit(req.user!.sub, drawTypeId),
+    getUserRestrictedNumbersLimit(req.user!.sub, drawTypeId),
+    listGlobalNumberRestrictions(drawTypeId),
+  ]);
 
   if (draw.winnerNumber?.trim()) {
     res.status(400).json({ message: 'No se puede vender en un sorteo con ganador establecido.' });
@@ -265,12 +289,31 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
     return;
   }
 
+  const total = body.lines.reduce((s, l) => s + l.amount, 0);
+
+  // Check DrawType maxDrawSales limit if set
+  if (drawType?.maxDrawSales !== null && drawType?.maxDrawSales !== undefined) {
+    const aggDrawSales = await prisma.ticket.aggregate({
+      where: {
+        drawId: body.drawId,
+        canceledAt: null,
+      },
+      _sum: { total: true },
+    });
+    const totalSoldInDraw = aggDrawSales._sum.total ?? 0;
+    if (totalSoldInDraw + total > drawType.maxDrawSales) {
+      const available = Math.max(0, drawType.maxDrawSales - totalSoldInDraw).toFixed(2);
+      res.status(400).json({
+        message: `Límite de venta total del sorteo alcanzado (${drawType.name}). Disponible: C$ ${available}.`,
+      });
+      return;
+    }
+  }
+
   const requestedByNumber = new Map<string, number>();
   for (const line of body.lines) {
     requestedByNumber.set(line.number, (requestedByNumber.get(line.number) ?? 0) + line.amount);
   }
-
-  const total = body.lines.reduce((s, l) => s + l.amount, 0);
 
   if (userDrawSaleLimit !== null) {
     const aggUserDrawSales = await prisma.ticket.aggregate({
@@ -292,7 +335,6 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
     }
   }
 
-  const globalRestrictions = await listGlobalNumberRestrictions();
   const globalRestrictionByNumber = new Map(globalRestrictions.map((item) => [item.number, item.limit]));
 
   const numbersToQuery = Array.from(requestedByNumber.keys());

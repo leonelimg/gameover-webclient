@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Edit, Trash2, Zap, CalendarDays, LayoutGrid, List } from 'lucide-react';
+import { Plus, Edit, Trash2, Zap, CalendarDays, LayoutGrid, List, Layers } from 'lucide-react';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
@@ -7,8 +7,9 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { useAuth } from '@/context/AuthContext';
 import { formatDateTime } from '@/utils/helpers';
-import { Draw, DrawStatus, SpecialMultiplier } from '@/types';
-import { drawsApi, DrawPayload, specialMultipliersApi } from '@/services/api';
+import { Draw, DrawStatus, DrawType, SpecialMultiplier } from '@/types';
+import { drawsApi, DrawPayload, specialMultipliersApi, drawTypesApi } from '@/services/api';
+import { DrawTypesManager } from '@/components/draws/DrawTypesManager';
 
 const STATUS_BADGE: Record<DrawStatus, 'success' | 'warning' | 'danger' | 'secondary'> = {
   abierto: 'success',
@@ -18,6 +19,7 @@ const STATUS_BADGE: Record<DrawStatus, 'success' | 'warning' | 'danger' | 'secon
 };
 
 interface DrawFormData {
+  drawTypeId: string;
   name: string;
   closeTime: string;
   minutosPreviosCierre: string;
@@ -29,6 +31,9 @@ interface DrawHistoryTemplate {
   key: string;
   name: string;
   closeTime: string;
+  drawTypeId?: string;
+  minutosPreviosCierre?: number;
+  specialMultiplierId?: string;
 }
 
 function toHourMinuteLabel(iso: string): string {
@@ -108,11 +113,13 @@ const toDatetimeLocal = (iso: string) => {
 export default function DrawsPage() {
   const { hasPermission } = useAuth();
   const PAGE_SIZE = 12;
-  const HISTORY_LIMIT = 10;
+  const HISTORY_LIMIT = 20;
   const canCreateDraw = hasPermission('/draws:create');
   const canUpdateDraw = hasPermission('/draws:update');
   const canDeleteDraw = hasPermission('/draws:delete');
-  const canOpenDrawModal = canCreateDraw || canUpdateDraw;
+
+  const [activeTab, setActiveTab] = useState<'draws' | 'types'>('draws');
+  const [drawTypes, setDrawTypes] = useState<DrawType[]>([]);
   const [draws, setDraws] = useState<Draw[]>([]);
   const [totalDraws, setTotalDraws] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -143,6 +150,19 @@ export default function DrawsPage() {
     }
     return 'cards';
   });
+
+  const fetchDrawTypesList = useCallback(async () => {
+    try {
+      const data = await drawTypesApi.list();
+      setDrawTypes(data);
+    } catch {
+      setDrawTypes([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDrawTypesList();
+  }, [fetchDrawTypesList]);
 
   const isCustomRangeInvalid = selectedRange === 'custom' &&
     (!customFromDate || !customToDate || customFromDate > customToDate);
@@ -183,12 +203,17 @@ export default function DrawsPage() {
     }
   }, [selectedRange, customFromDate, customToDate, isCustomRangeInvalid]);
 
-  useEffect(() => {
-    specialMultipliersApi.list().then(setSpecialMultipliers).catch(() => {});
-
+  const refreshDrawHistory = useCallback(() => {
     drawsApi.list().then((allDraws) => {
+      const sorted = [...allDraws].sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        if (timeB !== timeA) return timeB - timeA;
+        return new Date(b.closeTime).getTime() - new Date(a.closeTime).getTime();
+      });
+
       const unique = new Map<string, DrawHistoryTemplate>();
-      for (const draw of allDraws) {
+      for (const draw of sorted) {
         const timeLabel = toHourMinuteLabel(draw.closeTime);
         const key = buildHistoryKey(draw.name, timeLabel);
         if (!unique.has(key)) {
@@ -196,6 +221,9 @@ export default function DrawsPage() {
             key,
             name: draw.name.trim(),
             closeTime: draw.closeTime,
+            drawTypeId: draw.drawTypeId || (draw.drawType?.id ?? undefined),
+            minutosPreviosCierre: draw.minutosPreviosCierre,
+            specialMultiplierId: draw.specialMultiplier?.id ?? undefined,
           });
         }
         if (unique.size >= HISTORY_LIMIT) break;
@@ -205,6 +233,11 @@ export default function DrawsPage() {
       setDrawHistory([]);
     });
   }, []);
+
+  useEffect(() => {
+    specialMultipliersApi.list().then(setSpecialMultipliers).catch(() => {});
+    refreshDrawHistory();
+  }, [refreshDrawHistory]);
 
   useEffect(() => {
     setPage(1);
@@ -233,6 +266,7 @@ export default function DrawsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingDraw, setEditingDraw] = useState<Draw | null>(null);
   const [form, setForm] = useState<DrawFormData>({
+    drawTypeId: '',
     name: '',
     closeTime: '',
     minutosPreviosCierre: '10',
@@ -247,6 +281,7 @@ export default function DrawsPage() {
     const close = new Date(now);
     close.setHours(21, 0, 0, 0);
     setForm({
+      drawTypeId: drawTypes.length > 0 ? drawTypes[0].id : '',
       name: '',
       closeTime: toDatetimeLocal(close.toISOString()),
       minutosPreviosCierre: '10',
@@ -261,6 +296,7 @@ export default function DrawsPage() {
   const openEdit = (d: Draw) => {
     setEditingDraw(d);
     setForm({
+      drawTypeId: d.drawTypeId ?? (drawTypes.length > 0 ? drawTypes[0].id : ''),
       name: d.name,
       closeTime: toDatetimeLocal(d.closeTime),
       minutosPreviosCierre: String(d.minutosPreviosCierre ?? 10),
@@ -286,6 +322,9 @@ export default function DrawsPage() {
       ...prev,
       name: template.name,
       closeTime: toDatetimeLocal(targetDate.toISOString()),
+      ...(template.drawTypeId ? { drawTypeId: template.drawTypeId } : {}),
+      ...(template.minutosPreviosCierre !== undefined ? { minutosPreviosCierre: String(template.minutosPreviosCierre) } : {}),
+      ...(template.specialMultiplierId ? { specialMultiplierId: template.specialMultiplierId } : {}),
     }));
   };
 
@@ -308,6 +347,7 @@ export default function DrawsPage() {
     }
 
     const payload: DrawPayload = {
+      drawTypeId: form.drawTypeId || null,
       name: form.name,
       closeTime: close,
       minutosPreviosCierre,
@@ -322,10 +362,11 @@ export default function DrawsPage() {
         await drawsApi.create(payload);
       }
       loadDraws(page);
+      refreshDrawHistory();
       setModalOpen(false);
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setFormError(msg ?? 'Error al guardar el sorteo.');
+      const msg = (err as { response?: { data?: { message?: string; error?: string } } })?.response?.data;
+      setFormError(msg?.message ?? msg?.error ?? 'Error al guardar el sorteo.');
     }
   };
 
@@ -342,15 +383,48 @@ export default function DrawsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Sorteos</h1>
-          <p className="text-sm text-slate-500">Gestión de sorteos</p>
+          <p className="text-sm text-slate-500">Gestión de sorteos y tipos de sorteo</p>
         </div>
-        {canCreateDraw && (
+        {canCreateDraw && activeTab === 'draws' && (
           <Button onClick={openCreate}>
             <Plus size={16} />
             Nuevo Sorteo
           </Button>
         )}
       </div>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab('draws')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
+            activeTab === 'draws'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <CalendarDays size={16} />
+          Sorteos Programados ({totalDraws})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('types')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
+            activeTab === 'types'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Layers size={16} />
+          Tipos de Sorteo ({drawTypes.length})
+        </button>
+      </div>
+
+      {activeTab === 'types' ? (
+        <DrawTypesManager onDrawTypeChanged={fetchDrawTypesList} />
+      ) : (
+        <>
 
       <div className="w-full rounded-2xl border border-slate-300 bg-slate-100/80 p-2 shadow-sm xl:max-w-[760px]">
         <div className="flex flex-col gap-2">
@@ -446,11 +520,16 @@ export default function DrawsPage() {
               <CardBody>
                 <div className="flex items-start justify-between mb-3">
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h3 className="font-semibold text-slate-900">{draw.name}</h3>
                       <Badge variant={STATUS_BADGE[draw.status]} className="capitalize">
                         {draw.status}
                       </Badge>
+                      {draw.drawType && (
+                        <Badge variant="secondary" className="font-mono text-xs">
+                          {draw.drawType.name} ({draw.drawType.digits}D · {draw.drawType.multiplier}x)
+                        </Badge>
+                      )}
                     </div>
                     <div className="space-y-1 text-sm text-slate-500">
                       <p>🔒 Cierre: {formatDateTime(draw.closeTime)}</p>
@@ -499,6 +578,7 @@ export default function DrawsPage() {
               <thead className="bg-slate-50">
                 <tr>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">Sorteo</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">Tipo</th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">Estado</th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">Cierre</th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">Bloqueo previo</th>
@@ -511,6 +591,15 @@ export default function DrawsPage() {
                 {draws.map((draw) => (
                   <tr key={draw.id} className="border-t border-slate-100 align-top">
                     <td className="px-4 py-3 font-medium text-slate-900">{draw.name}</td>
+                    <td className="px-4 py-3">
+                      {draw.drawType ? (
+                        <Badge variant="secondary" className="font-mono text-xs">
+                          {draw.drawType.name} ({draw.drawType.digits}D)
+                        </Badge>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <Badge variant={STATUS_BADGE[draw.status]} className="capitalize">
                         {draw.status}
@@ -591,8 +680,10 @@ export default function DrawsPage() {
           </Button>
         </div>
       </div>
+      </>
+      )}
 
-      {!isLoading && draws.length === 0 && (
+      {!isLoading && activeTab === 'draws' && draws.length === 0 && (
         <div className="text-center py-12 text-slate-500">
           {isCustomRangeInvalid
             ? 'Rango inválido. Ajusta las fechas para ver resultados.'
@@ -601,7 +692,7 @@ export default function DrawsPage() {
       )}
 
       {/* Draw Form Modal */}
-      {canOpenDrawModal && (
+      {(canCreateDraw || canUpdateDraw) && (
         <Modal
           open={modalOpen}
           onClose={() => setModalOpen(false)}
@@ -614,6 +705,21 @@ export default function DrawsPage() {
               {formError}
             </div>
           )}
+
+          <Select
+            label="Tipo de Sorteo *"
+            value={form.drawTypeId}
+            onChange={(e) => setForm({ ...form, drawTypeId: e.target.value })}
+            options={[
+              { value: '', label: 'Selecciona un tipo de sorteo...' },
+              ...drawTypes.map((dt) => ({
+                value: dt.id,
+                label: `${dt.name} (${dt.digits} Dígitos · ×${dt.multiplier})`,
+              })),
+            ]}
+            required
+          />
+
           <Input
             label="Nombre del sorteo"
             value={form.name}
@@ -625,7 +731,7 @@ export default function DrawsPage() {
               <p className="text-sm font-medium text-slate-700">
                 Histórico de sorteos recientes (haz clic para aplicar)
               </p>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto pr-1">
                 {drawHistory.map((item) => {
                   const isSelected = selectedHistoryKey === item.key;
                   return (
@@ -668,9 +774,13 @@ export default function DrawsPage() {
             <Input
               label="Número ganador (opcional)"
               value={form.winnerNumber}
-              onChange={(e) => setForm({ ...form, winnerNumber: e.target.value.replace(/\D/g, '').slice(0, 2) })}
+              onChange={(e) => {
+                const dt = drawTypes.find((t) => t.id === form.drawTypeId);
+                const maxLen = dt?.digits ?? 4;
+                setForm({ ...form, winnerNumber: e.target.value.replace(/\D/g, '').slice(0, maxLen) });
+              }}
               placeholder="Dejar vacío si no hay ganador aún"
-              maxLength={2}
+              maxLength={drawTypes.find((t) => t.id === form.drawTypeId)?.digits ?? 4}
             />
           )}
           <Select

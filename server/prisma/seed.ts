@@ -126,6 +126,90 @@ async function main() {
     )
   );
 
+  // ── Draw Types ────────────────────────────────────────────────────────────
+
+  const drawTypeDiaria = await prisma.drawType.upsert({
+    where: { id: 'draw-type-diaria-2d' },
+    update: {
+      name: 'Diaria 2D',
+      digits: 2,
+      multiplier: 80,
+    },
+    create: {
+      id: 'draw-type-diaria-2d',
+      name: 'Diaria 2D',
+      description: 'Sorteo tradicional de 2 dígitos (00 - 99)',
+      digits: 2,
+      multiplier: 80,
+      globalNumberLimit: 1000,
+    },
+  });
+
+  const drawTypePick3 = await prisma.drawType.upsert({
+    where: { id: 'draw-type-pick3' },
+    update: {
+      name: 'Pick 3',
+      digits: 3,
+      multiplier: 600,
+    },
+    create: {
+      id: 'draw-type-pick3',
+      name: 'Pick 3',
+      description: 'Sorteo de 3 dígitos (000 - 999)',
+      digits: 3,
+      multiplier: 600,
+      globalNumberLimit: 2000,
+    },
+  });
+
+  await prisma.drawType.upsert({
+    where: { id: 'draw-type-super-4d' },
+    update: {
+      name: 'Super 4D',
+      digits: 4,
+      multiplier: 4000,
+    },
+    create: {
+      id: 'draw-type-super-4d',
+      name: 'Super 4D',
+      description: 'Sorteo especial de 4 dígitos (0000 - 9999)',
+      digits: 4,
+      multiplier: 4000,
+      globalNumberLimit: 5000,
+    },
+  });
+
+  // Restricted numbers for DrawType Diaria 2D
+  await prisma.drawTypeRestrictedNumber.upsert({
+    where: {
+      drawTypeId_number: {
+        drawTypeId: drawTypeDiaria.id,
+        number: '00',
+      },
+    },
+    update: { limit: 500 },
+    create: {
+      drawTypeId: drawTypeDiaria.id,
+      number: '00',
+      limit: 500,
+    },
+  });
+
+  await prisma.drawTypeRestrictedNumber.upsert({
+    where: {
+      drawTypeId_number: {
+        drawTypeId: drawTypeDiaria.id,
+        number: '11',
+      },
+    },
+    update: { limit: 300 },
+    create: {
+      drawTypeId: drawTypeDiaria.id,
+      number: '11',
+      limit: 300,
+    },
+  });
+
   // ── Draws ────────────────────────────────────────────────────────────────
 
   const now = new Date();
@@ -134,9 +218,12 @@ async function main() {
 
   await prisma.draw.upsert({
     where: { id: 'draw-matutino' },
-    update: {},
+    update: {
+      drawTypeId: drawTypeDiaria.id,
+    },
     create: {
       id: 'draw-matutino',
+      drawTypeId: drawTypeDiaria.id,
       name: 'Sorteo Matutino',
       closeTime,
       minutosPreviosCierre: 10,
@@ -144,16 +231,10 @@ async function main() {
     },
   });
 
-  await prisma.globalNumberRestriction.upsert({
-    where: { number: '00' },
-    update: { limit: 500 },
-    create: { number: '00', limit: 500 },
-  });
-
-  await prisma.globalNumberRestriction.upsert({
-    where: { number: '11' },
-    update: { limit: 300 },
-    create: { number: '11', limit: 300 },
+  // Assign existing draws without drawTypeId to drawTypeDiaria
+  await prisma.draw.updateMany({
+    where: { drawTypeId: null },
+    data: { drawTypeId: drawTypeDiaria.id },
   });
 
   console.log('✅  Seed complete');
