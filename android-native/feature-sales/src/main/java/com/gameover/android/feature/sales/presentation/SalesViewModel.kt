@@ -190,7 +190,8 @@ class SalesViewModel @Inject constructor(
                 ?: "Caja"
             val appearanceSettings = runCatching { frontendSettingsRepository.getTicketAppearance() }.getOrNull()
             val hasSpecialAmounts = ticket.lines.any { (it.specialAmount ?: 0.0) > 0 }
-            val regularMultiplier = ticket.seller?.planMultiplier
+            val drawTypeMultiplier = draw?.drawType?.multiplier ?: ticket.draw?.drawType?.multiplier
+            val regularMultiplier = drawTypeMultiplier ?: ticket.seller?.planMultiplier
             val specialMultiplier = draw?.specialMultiplier?.value ?: ticket.draw?.specialMultiplier?.value
             val drawUsesSpecial = specialMultiplier?.let { it > 0 } ?: hasSpecialAmounts
             val showSpecialColumn = drawUsesSpecial && hasSpecialAmounts
@@ -237,7 +238,8 @@ class SalesViewModel @Inject constructor(
             ?: "Caja"
         val appearanceSettings = runCatching { frontendSettingsRepository.getTicketAppearance() }.getOrNull()
         val hasSpecialAmounts = ticket.lines.any { (it.specialAmount ?: 0.0) > 0 }
-        val regularMultiplier = ticket.seller?.planMultiplier
+        val drawTypeMultiplier = draw?.drawType?.multiplier ?: ticket.draw?.drawType?.multiplier
+        val regularMultiplier = drawTypeMultiplier ?: ticket.seller?.planMultiplier
         val specialMultiplier = draw?.specialMultiplier?.value ?: ticket.draw?.specialMultiplier?.value
         val drawUsesSpecial = specialMultiplier?.let { it > 0 } ?: hasSpecialAmounts
         val showSpecialColumn = drawUsesSpecial && hasSpecialAmounts
@@ -280,10 +282,11 @@ class SalesViewModel @Inject constructor(
             _uiState.update { it.copy(lines = filteredLines) }
         }
 
-        val numberRegex = Regex("^\\d{2}$")
+        val targetDigits = draw.drawType?.digits ?: 2
+        val numberRegex = Regex("^\\d{$targetDigits}$")
         for (line in filteredLines) {
             if (!numberRegex.matches(line.number.trim())) {
-                _uiState.update { it.copy(saleResult = SaleResult.Error("Todos los números deben tener exactamente 2 dígitos.")) }
+                _uiState.update { it.copy(saleResult = SaleResult.Error("Todos los números deben tener exactamente $targetDigits dígitos.")) }
                 return
             }
             val amt = line.amount.toDoubleOrNull()

@@ -20,9 +20,12 @@ class CreateTicketUseCase @Inject constructor(
             ?: error("Sorteo no encontrado.")
         if (!draw.isOpen()) error("El sorteo no está en horario de venta.")
         if (draw.status == DrawStatus.finalizado) error("No se puede vender en un sorteo finalizado.")
-        val numberRegex = Regex("^\\d{2}$")
+        val targetDigits = draw.drawType?.digits ?: 2
+        val numberRegex = Regex("^\\d{$targetDigits}$")
         for (line in lines) {
-            if (!numberRegex.matches(line.number)) error("El número debe tener exactamente 2 dígitos.")
+            if (!numberRegex.matches(line.number.trim())) {
+                error("El número debe tener exactamente $targetDigits dígitos.")
+            }
             if (line.amount <= 0) error("El monto debe ser mayor a cero.")
             if (draw.specialMultiplier != null) {
                 val special = line.specialAmount ?: 0.0

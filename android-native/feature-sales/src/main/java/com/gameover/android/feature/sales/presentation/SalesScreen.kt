@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -274,6 +275,49 @@ fun SalesScreen(
                         }
                     }
 
+                    // Active DrawType indicator
+                    uiState.selectedDraw?.drawType?.let { dt ->
+                        item {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                shape = MaterialTheme.shapes.medium,
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Info,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text(
+                                            text = "Tipo: ${dt.name} (${dt.digits} Dígitos)",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        )
+                                    }
+                                    Text(
+                                        text = "Multiplicador: ${dt.multiplier}x",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     // Active special multiplier indicator
                     uiState.selectedDraw?.specialMultiplier?.let { sm ->
                         item {
@@ -376,14 +420,17 @@ fun SalesScreen(
                             }
                         }
 
+                        val targetDigits = uiState.targetDigits
                         BetLineRow(
                             line = line,
                             showSpecial = uiState.hasSpecialMultiplier,
                             canDelete = uiState.lines.size > 1,
-                            onNumberChange = {
-                                if (it.length <= 2) {
-                                    viewModel.onLineNumberChanged(line.id, it)
-                                    if (it.length == 2) {
+                            targetDigits = targetDigits,
+                            onNumberChange = { input ->
+                                val digitsOnly = input.filter { it.isDigit() }
+                                if (digitsOnly.length <= targetDigits) {
+                                    viewModel.onLineNumberChanged(line.id, digitsOnly)
+                                    if (digitsOnly.length == targetDigits) {
                                         focusManager.moveFocus(FocusDirection.Next)
                                     }
                                 }
@@ -478,13 +525,17 @@ private fun DrawSelector(
     var expanded by remember { mutableStateOf(false) }
     val selectedDraw = openDraws.find { it.id == selectedDrawId }
 
+    val drawLabel = selectedDraw?.let { draw ->
+        draw.drawType?.let { dt -> "${draw.name} (${dt.digits}D)" } ?: draw.name
+    } ?: if (isLoading) "Cargando..." else "Selecciona un sorteo..."
+
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { expanded = it },
         modifier = modifier
     ) {
         OutlinedTextField(
-            value = selectedDraw?.name ?: if (isLoading) "Cargando..." else "Selecciona un sorteo...",
+            value = drawLabel,
             onValueChange = {},
             readOnly = true,
             label = { Text("Sorteo") },
@@ -502,8 +553,9 @@ private fun DrawSelector(
                 )
             }
             openDraws.forEach { draw ->
+                val itemLabel = draw.drawType?.let { dt -> "${draw.name} (${dt.digits}D)" } ?: draw.name
                 DropdownMenuItem(
-                    text = { Text(draw.name) },
+                    text = { Text(itemLabel) },
                     onClick = {
                         onDrawSelected(draw.id)
                         expanded = false
@@ -519,6 +571,7 @@ private fun BetLineRow(
     line: SaleLine,
     showSpecial: Boolean,
     canDelete: Boolean,
+    targetDigits: Int = 2,
     onNumberChange: (String) -> Unit,
     onAmountChange: (String) -> Unit,
     onSpecialAmountChange: (String) -> Unit,
@@ -541,6 +594,8 @@ private fun BetLineRow(
         specialAmountValue = specialAmountValue.copy(text = line.specialAmount)
     }
 
+    val numFieldWidth = if (targetDigits >= 4) 108.dp else if (targetDigits == 3) 98.dp else 92.dp
+
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -550,8 +605,9 @@ private fun BetLineRow(
                 value = line.number,
                 onValueChange = onNumberChange,
                 label = { Text("Núm.") },
+                placeholder = { Text("0".repeat(targetDigits)) },
                 modifier = Modifier
-                    .width(96.dp)
+                    .width(numFieldWidth)
                     .focusRequester(numberFocusRequester)
                     .onKeyEvent { event ->
                         if ((event.key == Key.Tab || event.key == Key.Enter || event.key == Key.NumPadEnter) && event.type == KeyEventType.KeyDown) {

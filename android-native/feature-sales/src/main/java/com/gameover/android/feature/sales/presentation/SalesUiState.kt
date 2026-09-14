@@ -35,6 +35,7 @@ data class SalesUiState(
 ) {
     val selectedDraw: Draw? get() = draws.find { it.id == selectedDrawId }
     val hasSpecialMultiplier: Boolean get() = selectedDraw?.specialMultiplier != null
+    val targetDigits: Int get() = selectedDraw?.drawType?.digits ?: 2
     val openDraws: List<Draw> get() = draws.filter { it.isOpen() }
     val total: Double get() = lines.sumOf { line ->
         val base = line.amount.toDoubleOrNull() ?: 0.0

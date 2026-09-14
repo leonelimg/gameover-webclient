@@ -17,13 +17,26 @@ fun UserDto.toDomain(): User = User(
     updatedAt = updatedAt,
 )
 
+fun DrawTypeDto.toDomain(): DrawType = DrawType(
+    id = id,
+    name = name,
+    description = description,
+    digits = digits,
+    multiplier = multiplier,
+    maxDrawSales = maxDrawSales,
+    globalNumberLimit = globalNumberLimit,
+    restrictedNumbers = restrictedNumbers.map { RestrictedNumber(it.number, it.limit) },
+)
+
 fun DrawDto.toDomain(): Draw = Draw(
     id = id,
+    drawTypeId = drawTypeId,
     name = name,
     closeTime = closeTime,
     minutosPreviosCierre = minutosPreviosCierre,
     winnerNumber = winnerNumber,
     status = runCatching { DrawStatus.valueOf(status) }.getOrDefault(DrawStatus.pendiente),
+    drawType = drawType?.toDomain(),
     restrictedNumbers = restrictedNumbers.map { RestrictedNumber(it.number, it.limit) },
     specialMultiplier = specialMultiplier?.let { SpecialMultiplier(it.id, it.name, it.value, "", "") },
     createdAt = createdAt,
@@ -52,6 +65,7 @@ fun TicketDto.toDomain(): Ticket = Ticket(
             specialMultiplier = it.specialMultiplier?.let { sm ->
                 SpecialMultiplierSummary(sm.id, sm.name, sm.value)
             },
+            drawType = it.drawType?.toDomain(),
         )
     },
     seller = seller?.let {

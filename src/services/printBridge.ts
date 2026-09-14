@@ -233,7 +233,7 @@ export const mapSaleTicketToPrintBridge = ({
     const regularMultiplier =
       (effectiveDraw && 'drawType' in effectiveDraw && effectiveDraw.drawType?.multiplier)
         ? effectiveDraw.drawType.multiplier
-        : (ticket.draw?.drawType?.multiplier ?? 80);
+        : (ticket.draw?.drawType?.multiplier ?? ticket.seller?.plan?.multiplier ?? 80);
     const specialMultiplier = effectiveDraw?.specialMultiplier?.value;
     const drawUsesSpecial = typeof specialMultiplier === 'number' ? specialMultiplier > 0 : hasSpecialAmounts;
     const showSpecialColumn = drawUsesSpecial && hasSpecialAmounts;

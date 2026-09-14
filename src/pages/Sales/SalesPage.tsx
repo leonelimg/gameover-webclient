@@ -1392,7 +1392,8 @@ function TicketPrintView({
 }) {
   const [ticketSettings, setTicketSettings] = useState(() => getFrontendTicketSettings());
   const hasSpecialAmounts = ticket.lines.some((line) => (line.specialAmount ?? 0) > 0);
-  const regularMultiplier = ticket.seller?.plan?.multiplier;
+  const regularMultiplier =
+    draw?.drawType?.multiplier ?? ticket.draw?.drawType?.multiplier ?? ticket.seller?.plan?.multiplier ?? 80;
   const specialMultiplier = draw?.specialMultiplier?.value ?? ticket.draw?.specialMultiplier?.value;
   const drawUsesSpecial = typeof specialMultiplier === 'number' ? specialMultiplier > 0 : hasSpecialAmounts;
   const showSpecialColumn = drawUsesSpecial && hasSpecialAmounts;

@@ -32,6 +32,7 @@ data class DrawSummaryDto(
     val id: String? = null,
     val name: String,
     val specialMultiplier: SpecialMultiplierDto? = null,
+    val drawType: DrawTypeDto? = null,
 )
 
 data class UserPlanSummaryDto(

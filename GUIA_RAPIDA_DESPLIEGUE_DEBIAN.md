@@ -20,7 +20,7 @@ sudo apt update
 sudo apt install -y ca-certificates curl gnupg
 sudo install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-sudo chmod a+r /etc/apt/keyrings/docker.gpg
+    sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
 echo \
   "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
@@ -108,8 +108,8 @@ sudo apt install -y nodejs
 
 ### 2.2 Base de datos PostgreSQL
 
-```bash
-sudo -u postgres psql -c "CREATE USER gameover WITH PASSWORD 'gameover';"
+```bash 
+sudo -u postgres psql -c "CREATE USER gameover WITH PASSWORD 'ds1jfSP1xZ2UYxF04PJH';"
 sudo -u postgres psql -c "CREATE DATABASE gameover OWNER gameover;"
 ```
 
@@ -121,7 +121,7 @@ sudo git clone <URL_DEL_REPO> gameover-webclient
 sudo chown -R $USER:$USER /opt/gameover-webclient
 
 cd /opt/gameover-webclient/server
-cp .env.example .env
+    cp .env.example .env
 ```
 
 Configura en `server/.env`:
@@ -194,7 +194,7 @@ Crear archivo de configuracion de Nginx (reemplaza `app.tudominio.com` con tu do
 sudo tee /etc/nginx/sites-available/gameover > /dev/null << 'EOF'
 server {
     listen 80;
-    server_name web.pmcomercial.com;
+    server_name pm.siva-apps.com;
 
     root /opt/gameover-webclient/dist;
     index index.html;

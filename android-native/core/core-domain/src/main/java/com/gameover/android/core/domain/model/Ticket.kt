@@ -29,7 +29,12 @@ data class Ticket(
     val seller: UserSummary? = null,
 )
 
-data class DrawSummary(val id: String, val name: String, val specialMultiplier: SpecialMultiplierSummary? = null)
+data class DrawSummary(
+    val id: String,
+    val name: String,
+    val specialMultiplier: SpecialMultiplierSummary? = null,
+    val drawType: DrawType? = null,
+)
 data class SpecialMultiplierSummary(val id: String, val name: String, val value: Int)
 data class UserSummary(
     val id: String,

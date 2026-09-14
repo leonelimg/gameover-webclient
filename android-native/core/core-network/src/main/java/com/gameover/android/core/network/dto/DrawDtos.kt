@@ -1,12 +1,25 @@
 package com.gameover.android.core.network.dto
 
+data class DrawTypeDto(
+    val id: String,
+    val name: String,
+    val description: String? = null,
+    val digits: Int = 2,
+    val multiplier: Double = 80.0,
+    val maxDrawSales: Double? = null,
+    val globalNumberLimit: Double? = null,
+    val restrictedNumbers: List<RestrictedNumberDto> = emptyList(),
+)
+
 data class DrawDto(
     val id: String,
+    val drawTypeId: String? = null,
     val name: String,
     val closeTime: String,
     val minutosPreviosCierre: Int,
     val winnerNumber: String? = null,
     val status: String,
+    val drawType: DrawTypeDto? = null,
     val restrictedNumbers: List<RestrictedNumberDto> = emptyList(),
     val specialMultiplier: SpecialMultiplierDto? = null,
     val createdAt: String,
