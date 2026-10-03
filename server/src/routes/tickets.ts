@@ -278,6 +278,26 @@ router.post('/', authorizeResource('/sales:create'), validate(createTicketSchema
     }
   }
 
+  // Consolidar números iguales: sumar montos y dejar una sola línea por número
+  const mergedLinesMap = new Map<string, (typeof body.lines)[number]>();
+  for (const line of body.lines) {
+    const cleanNum = line.number.trim();
+    const existing = mergedLinesMap.get(cleanNum);
+    if (existing) {
+      existing.amount = Math.round((existing.amount + line.amount) * 100) / 100;
+      if (line.specialAmount !== undefined || existing.specialAmount !== undefined) {
+        existing.specialAmount = Math.round(((existing.specialAmount ?? 0) + (line.specialAmount ?? 0)) * 100) / 100;
+      }
+      existing.isNicaEspecial = existing.isNicaEspecial || line.isNicaEspecial;
+    } else {
+      mergedLinesMap.set(cleanNum, {
+        ...line,
+        number: cleanNum,
+      });
+    }
+  }
+  body.lines = Array.from(mergedLinesMap.values());
+
   const [globalNumberLimit, userGlobalNumberLimit, userDrawSaleLimit, userRestrictedNumbersLimit, globalRestrictions] = await Promise.all([
     getGlobalNumberLimit(drawTypeId),
     getUserGlobalNumberLimit(req.user!.sub, drawTypeId),

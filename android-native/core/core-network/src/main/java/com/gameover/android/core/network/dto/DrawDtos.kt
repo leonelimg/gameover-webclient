@@ -4,11 +4,11 @@ data class DrawTypeDto(
     val id: String,
     val name: String,
     val description: String? = null,
-    val digits: Int = 2,
-    val multiplier: Double = 80.0,
+    val digits: Int? = 2,
+    val multiplier: Double? = 80.0,
     val maxDrawSales: Double? = null,
     val globalNumberLimit: Double? = null,
-    val restrictedNumbers: List<RestrictedNumberDto> = emptyList(),
+    val restrictedNumbers: List<RestrictedNumberDto>? = null,
 )
 
 data class DrawDto(
@@ -20,9 +20,9 @@ data class DrawDto(
     val winnerNumber: String? = null,
     val status: String,
     val drawType: DrawTypeDto? = null,
-    val restrictedNumbers: List<RestrictedNumberDto> = emptyList(),
+    val restrictedNumbers: List<RestrictedNumberDto>? = null,
     val specialMultiplier: SpecialMultiplierDto? = null,
-    val createdAt: String,
+    val createdAt: String? = null,
 )
 
 data class RestrictedNumberDto(val number: String, val limit: Double)

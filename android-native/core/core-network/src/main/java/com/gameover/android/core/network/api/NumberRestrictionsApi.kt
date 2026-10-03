@@ -1,10 +1,13 @@
 package com.gameover.android.core.network.api
 
 import retrofit2.http.GET
+import retrofit2.http.Query
 
 interface NumberRestrictionsApi {
     @GET("api/number-restrictions/global-numbers")
-    suspend fun getGlobalNumbers(): GlobalNumbersResponse
+    suspend fun getGlobalNumbers(
+        @Query("drawTypeId") drawTypeId: String? = null
+    ): GlobalNumbersResponse
 }
 
 data class GlobalNumbersResponse(

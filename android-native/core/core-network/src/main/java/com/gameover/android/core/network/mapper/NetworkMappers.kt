@@ -21,11 +21,11 @@ fun DrawTypeDto.toDomain(): DrawType = DrawType(
     id = id,
     name = name,
     description = description,
-    digits = digits,
-    multiplier = multiplier,
+    digits = digits ?: 2,
+    multiplier = multiplier ?: 80.0,
     maxDrawSales = maxDrawSales,
     globalNumberLimit = globalNumberLimit,
-    restrictedNumbers = restrictedNumbers.map { RestrictedNumber(it.number, it.limit) },
+    restrictedNumbers = restrictedNumbers?.map { RestrictedNumber(it.number, it.limit) } ?: emptyList(),
 )
 
 fun DrawDto.toDomain(): Draw = Draw(
@@ -37,9 +37,9 @@ fun DrawDto.toDomain(): Draw = Draw(
     winnerNumber = winnerNumber,
     status = runCatching { DrawStatus.valueOf(status) }.getOrDefault(DrawStatus.pendiente),
     drawType = drawType?.toDomain(),
-    restrictedNumbers = restrictedNumbers.map { RestrictedNumber(it.number, it.limit) },
+    restrictedNumbers = restrictedNumbers?.map { RestrictedNumber(it.number, it.limit) } ?: emptyList(),
     specialMultiplier = specialMultiplier?.let { SpecialMultiplier(it.id, it.name, it.value, "", "") },
-    createdAt = createdAt,
+    createdAt = createdAt.orEmpty(),
 )
 
 fun TicketDto.toDomain(): Ticket = Ticket(
@@ -47,13 +47,13 @@ fun TicketDto.toDomain(): Ticket = Ticket(
     code = code,
     drawId = drawId,
     sellerId = sellerId,
-    associateId = associateId,
-    customerName = customerName,
+    associateId = associateId.orEmpty(),
+    customerName = customerName.orEmpty(),
     lines = lines?.map { TicketLine(it.number, it.amount, it.specialAmount, it.isNicaEspecial) } ?: emptyList(),
     total = total,
     createdAt = createdAt,
     printedAt = printedAt,
-    paymentStatus = runCatching { PaymentStatus.valueOf(paymentStatus) }.getOrDefault(PaymentStatus.pendiente),
+    paymentStatus = runCatching { PaymentStatus.valueOf(paymentStatus ?: "pendiente") }.getOrDefault(PaymentStatus.pendiente),
     paidAt = paidAt,
     canceledAt = canceledAt,
     canceledById = canceledById,

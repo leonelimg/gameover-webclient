@@ -585,13 +585,47 @@ export default function SalesPage() {
       }
     }
 
+    // Agrupar números duplicados preservando el orden original
+    const mergedLinesMap = new Map<string, { id: string; number: string; amount: number; specialAmount: number }>();
+    for (const line of linesToSell) {
+      const cleanNum = line.number.trim();
+      const amt = parseFloat(line.amount);
+      const specAmt = activeSpecialMultiplier ? (parseFloat(line.specialAmount) || 0) : 0;
+      const existing = mergedLinesMap.get(cleanNum);
+      if (existing) {
+        existing.amount = Math.round((existing.amount + amt) * 100) / 100;
+        existing.specialAmount = Math.round((existing.specialAmount + specAmt) * 100) / 100;
+      } else {
+        mergedLinesMap.set(cleanNum, {
+          id: line.id,
+          number: cleanNum,
+          amount: amt,
+          specialAmount: specAmt,
+        });
+      }
+    }
+
+    const consolidatedLines = Array.from(mergedLinesMap.values());
+
+    // Si había números repetidos, consolidar en el estado para reflejarlo en la tabla
+    if (consolidatedLines.length < linesToSell.length) {
+      setLines(
+        consolidatedLines.map((l) => ({
+          id: l.id,
+          number: l.number,
+          amount: l.amount.toString(),
+          specialAmount: activeSpecialMultiplier && l.specialAmount > 0 ? l.specialAmount.toString() : '',
+        }))
+      );
+    }
+
     const payload: CreateTicketPayload = {
       drawId: selectedDraw.id,
       customerName: customerName.trim() || '',
-      lines: linesToSell.map((l) => ({
-        number: l.number.trim(),
-        amount: parseFloat(l.amount),
-        specialAmount: activeSpecialMultiplier ? (parseFloat(l.specialAmount) || 0) : undefined,
+      lines: consolidatedLines.map((l) => ({
+        number: l.number,
+        amount: l.amount,
+        specialAmount: activeSpecialMultiplier ? l.specialAmount : undefined,
         isNicaEspecial: false,
       })),
     };

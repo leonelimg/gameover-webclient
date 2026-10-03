@@ -31,10 +31,29 @@ class TicketsRepositoryImpl @Inject constructor(
     }
 
     override suspend fun createTicket(drawId: String, customerName: String, lines: List<CreateTicketLine>): Ticket = withContext(Dispatchers.IO) {
+        val groupedLines = linkedMapOf<String, CreateTicketLine>()
+        for (line in lines) {
+            val num = line.number.trim()
+            val existing = groupedLines[num]
+            if (existing != null) {
+                val newAmount = Math.round((existing.amount + line.amount) * 100.0) / 100.0
+                val newSpecial = if (existing.specialAmount != null || line.specialAmount != null) {
+                    Math.round(((existing.specialAmount ?: 0.0) + (line.specialAmount ?: 0.0)) * 100.0) / 100.0
+                } else null
+                groupedLines[num] = existing.copy(
+                    amount = newAmount,
+                    specialAmount = newSpecial
+                )
+            } else {
+                groupedLines[num] = line.copy(number = num)
+            }
+        }
+        val consolidatedLines = groupedLines.values.toList()
+
         val request = CreateTicketRequest(
             drawId = drawId,
             customerName = customerName,
-            lines = lines.map {
+            lines = consolidatedLines.map {
                 CreateTicketLineRequestDto(
                     number = it.number,
                     amount = it.amount,

@@ -3,6 +3,7 @@ package com.gameover.android.feature.sales.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gameover.android.core.data.local.TokenDataStore
+import com.gameover.android.core.domain.model.Draw
 import com.gameover.android.core.domain.repository.CreateTicketLine
 import com.gameover.android.core.domain.repository.AuthRepository
 import com.gameover.android.core.domain.repository.DrawsRepository
@@ -51,7 +52,6 @@ class SalesViewModel @Inject constructor(
 
     init {
         loadDraws()
-        loadRestrictedNumbers()
         viewModelScope.launch {
             networkMonitor.isOnline.collect { online ->
                 _uiState.update { it.copy(isOnline = online) }
@@ -66,33 +66,24 @@ class SalesViewModel @Inject constructor(
 
     fun loadDraws() {
         _uiState.update { it.copy(isLoadingDraws = true) }
-        loadRestrictedNumbers()
         viewModelScope.launch {
             try {
                 val todayStr = java.time.LocalDate.now().toString()
                 val draws = drawsRepository.getDraws(fromDate = todayStr)
+                var resolvedSelectedDraw: Draw? = null
                 _uiState.update { state ->
                     val firstOpen = draws.firstOrNull { it.isOpen() }
                     val selectedId = if (draws.any { it.id == state.selectedDrawId }) state.selectedDrawId
                                      else firstOpen?.id ?: ""
+                    resolvedSelectedDraw = draws.find { it.id == selectedId }
                     if (selectedId.isNotBlank()) {
                         loadDrawSummary(selectedId)
                     }
                     state.copy(draws = draws, selectedDrawId = selectedId, isLoadingDraws = false)
                 }
+                updateRestrictedNumbersForDraw(resolvedSelectedDraw)
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoadingDraws = false) }
-            }
-        }
-    }
-
-    private fun loadRestrictedNumbers() {
-        viewModelScope.launch {
-            try {
-                val restrictions = numberRestrictionsRepository.getGlobalNumbers()
-                _uiState.update { it.copy(restrictedNumbers = restrictions.map { it.number }) }
-            } catch (e: Exception) {
-                // Fail silently
             }
         }
     }
@@ -100,6 +91,41 @@ class SalesViewModel @Inject constructor(
     fun onDrawSelected(drawId: String) {
         _uiState.update { it.copy(selectedDrawId = drawId) }
         loadDrawSummary(drawId)
+        val selectedDraw = _uiState.value.draws.find { it.id == drawId }
+        updateRestrictedNumbersForDraw(selectedDraw)
+    }
+
+    private fun updateRestrictedNumbersForDraw(draw: Draw?) {
+        if (draw == null) {
+            _uiState.update { it.copy(restrictedNumbers = emptyList()) }
+            return
+        }
+
+        val targetDigits = draw.drawType?.digits ?: 2
+
+        // Immediate load from current draw and drawType restrictions
+        val localNumbers = buildList {
+            draw.drawType?.restrictedNumbers?.forEach { add(it.number) }
+            draw.restrictedNumbers.forEach { add(it.number) }
+        }.filter { it.length == targetDigits }.distinct()
+
+        _uiState.update { it.copy(restrictedNumbers = localNumbers) }
+
+        // Fetch fresh restrictions for this drawTypeId from API
+        val currentDrawId = draw.id
+        viewModelScope.launch {
+            try {
+                val apiRestrictions = numberRestrictionsRepository.getGlobalNumbers(draw.drawTypeId)
+                val allNumbers = (apiRestrictions.map { it.number } + localNumbers)
+                    .filter { it.length == targetDigits }
+                    .distinct()
+                if (_uiState.value.selectedDrawId == currentDrawId) {
+                    _uiState.update { it.copy(restrictedNumbers = allNumbers) }
+                }
+            } catch (_: Exception) {
+                // Keep localNumbers if API fails or offline
+            }
+        }
     }
 
     private fun loadDrawSummary(drawId: String) {
@@ -307,13 +333,44 @@ class SalesViewModel @Inject constructor(
             }
         }
 
-        val ticketLines = filteredLines.map { line ->
-            CreateTicketLine(
-                number = line.number.trim(),
-                amount = line.amount.toDouble(),
-                specialAmount = if (draw.specialMultiplier != null) (line.specialAmount.toDoubleOrNull() ?: 0.0) else null,
-                isNicaEspecial = false,
-            )
+        val groupedLines = linkedMapOf<String, CreateTicketLine>()
+        for (line in filteredLines) {
+            val num = line.number.trim()
+            val amt = line.amount.toDouble()
+            val spec = if (draw.specialMultiplier != null) (line.specialAmount.toDoubleOrNull() ?: 0.0) else null
+            val existing = groupedLines[num]
+            if (existing != null) {
+                val newAmount = Math.round((existing.amount + amt) * 100.0) / 100.0
+                val newSpecial = if (draw.specialMultiplier != null) {
+                    Math.round(((existing.specialAmount ?: 0.0) + (spec ?: 0.0)) * 100.0) / 100.0
+                } else null
+                groupedLines[num] = existing.copy(
+                    amount = newAmount,
+                    specialAmount = newSpecial
+                )
+            } else {
+                groupedLines[num] = CreateTicketLine(
+                    number = num,
+                    amount = amt,
+                    specialAmount = spec,
+                    isNicaEspecial = false
+                )
+            }
+        }
+
+        val ticketLines = groupedLines.values.toList()
+
+        if (ticketLines.size < filteredLines.size) {
+            val consolidatedLines = ticketLines.map { tl ->
+                SaleLine(
+                    number = tl.number,
+                    amount = if (tl.amount % 1.0 == 0.0) tl.amount.toLong().toString() else tl.amount.toString(),
+                    specialAmount = tl.specialAmount?.let { sp ->
+                        if (sp <= 0.0) "" else if (sp % 1.0 == 0.0) sp.toLong().toString() else sp.toString()
+                    } ?: ""
+                )
+            }
+            _uiState.update { it.copy(lines = consolidatedLines) }
         }
 
         _uiState.update { it.copy(saleResult = SaleResult.Loading) }

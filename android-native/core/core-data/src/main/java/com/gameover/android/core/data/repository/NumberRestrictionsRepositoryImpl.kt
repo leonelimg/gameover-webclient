@@ -8,8 +8,8 @@ import javax.inject.Inject
 class NumberRestrictionsRepositoryImpl @Inject constructor(
     private val api: NumberRestrictionsApi
 ) : NumberRestrictionsRepository {
-    override suspend fun getGlobalNumbers(): List<GlobalNumberRestriction> {
-        return api.getGlobalNumbers().items.map {
+    override suspend fun getGlobalNumbers(drawTypeId: String?): List<GlobalNumberRestriction> {
+        return api.getGlobalNumbers(drawTypeId).items.map {
             GlobalNumberRestriction(
                 id = it.id ?: "",
                 number = it.number,
